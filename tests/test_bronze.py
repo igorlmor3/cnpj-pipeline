@@ -89,6 +89,22 @@ def test_check_layout_accepts_matching_and_rejects_different(tmp_path):
         check_layout(csv_file, TABLE_COLUMNS["Socios"])
 
 
+def test_check_layout_tolerates_a_few_broken_lines_but_not_a_layout_change(tmp_path):
+    good = GOOD_ROWS[0].encode("latin-1")
+    broken = BAD_ROWS[0].encode("latin-1")
+
+    # Linha quebrada logo no inicio: a maioria das linhas bate com o esquema
+    tolerant = tmp_path / "tolerant.csv"
+    tolerant.write_bytes(broken + b"\n" + (good + b"\n") * 20)
+    check_layout(tolerant, TABLE_COLUMNS["Empresas"])
+
+    # Layout diferente em todas as linhas: deve falhar
+    changed = tmp_path / "changed.csv"
+    changed.write_bytes((broken + b"\n") * 20 + good + b"\n")
+    with pytest.raises(SchemaMismatchError, match="tem 3 colunas"):
+        check_layout(changed, TABLE_COLUMNS["Empresas"])
+
+
 # --------------------------------------------------------------------------- #
 # Conversao
 # --------------------------------------------------------------------------- #
@@ -157,6 +173,32 @@ def test_malformed_lines_go_to_rejects_not_lost_silently(tmp_path):
         .fetchall()
     }
     assert lines == {3, 4}
+
+
+def test_broken_first_line_does_not_break_the_file(tmp_path):
+    zip_path = make_zip(tmp_path / "raw" / "Empresas0.zip", {"m": [BAD_ROWS[0], *GOOD_ROWS]})
+    bronze = tmp_path / "bronze"
+
+    results = process_zip(zip_path, "Empresas", "2026-10", bronze, **kwargs(tmp_path, max_reject_ratio=1.0))
+
+    assert results[0].status == STATUS_CONVERTED
+    assert results[0].rows == 4
+    assert results[0].rejected_lines == 1
+
+
+def test_crlf_line_endings_are_handled(tmp_path):
+    zip_path = tmp_path / "raw" / "Empresas0.zip"
+    zip_path.parent.mkdir(parents=True)
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.writestr("m", ("\r\n".join(GOOD_ROWS) + "\r\n").encode("latin-1"))
+    bronze = tmp_path / "bronze"
+
+    results = process_zip(zip_path, "Empresas", "2026-10", bronze, **kwargs(tmp_path))
+
+    assert results[0].status == STATUS_CONVERTED
+    out = bronze / "empresas" / "reference_month=2026-10" / "Empresas0.parquet"
+    last_column = [row[6] for row in read_parquet(out).fetchall()]
+    assert last_column == [None, None, None, None]  # sem \r sobrando
 
 
 def test_fails_and_removes_output_when_reject_ratio_exceeded(tmp_path):

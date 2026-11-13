@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | raw | Arquivos originais da Receita (zip), com manifesto | Imutável. Nunca editar. |
 | bronze | Parquet com todas as colunas como texto | Sem regras de negócio. Apenas muda o formato e adiciona metadados de ingestão (arquivo de origem, mês de referência). Linhas malformadas vão para `_rejects/`. |
-| silver | Tipos corretos, datas e decimais tratados, sentinelas anuladas | Linhas inválidas vão para quarentena com o motivo da rejeição. |
+| silver | Tipos corretos, datas e decimais tratados, sentinelas anuladas | Regras por coluna em `silver_rules.py`. Linhas com chave inválida ou duplicada vão para `data/silver/_quarantine/` com o motivo (`_reject_reason`). |
 | gold | Modelos analíticos | Construídos a partir da silver. |
 
 ## Princípios
@@ -23,6 +23,7 @@ Cada decisão é registrada aqui com as alternativas consideradas e o motivo.
 | Tema | Alternativas | Status |
 | --- | --- | --- |
 | Motor de transformação | DuckDB, Polars, PySpark | Decidido: DuckDB. Lê CSV maior que a memória, grava Parquet direto e roda local, sem servidor. |
+| Deduplicação na silver | Manter a primeira linha, manter a mais recente, rejeitar todas as repetidas | Decidido provisoriamente: manter uma linha, escolhida pelo hash do conteúdo (determinístico), e quarentenar as demais. Revisar com o profiling real. |
 | Orquestração | Airflow, Prefect, cron + scripts | Em aberto |
 | Modelagem gold | dbt (com DuckDB), SQL puro | Em aberto |
 | Particionamento do Parquet | por UF, por mês de referência, sem partição | Em aberto |

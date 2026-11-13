@@ -41,24 +41,41 @@ O motor de transformação é o DuckDB. Decisões ainda em aberto, registradas e
 ├── data/                  dados locais (não versionados)
 │   ├── raw/
 │   ├── bronze/
-│   ├── silver/
+│   ├── silver/            Parquet tipado, mais _quarantine/ com as linhas rejeitadas
 │   └── gold/
 ├── docs/
 │   ├── architecture.md    decisões de arquitetura
 │   ├── data_quality_rules.md   catálogo de problemas de qualidade e decisões
-│   └── profiling/         relatórios gerados pelo profiling (apenas agregados)
+│   ├── profiling/         relatórios gerados pelo profiling (apenas agregados)
+│   └── silver/            relatório das regras aplicadas na silver (apenas contagens)
 ├── src/cnpj_pipeline/
 │   ├── config.py          caminhos e configuração
 │   ├── download.py        download parametrizado com retomada e manifesto
 │   ├── schemas.py         colunas de cada tabela (layout a validar contra o dicionário do mês)
 │   ├── bronze.py          zip/CSV para Parquet com DuckDB
-│   └── profiling.py       relatórios de qualidade de dados sobre a bronze
+│   ├── profiling.py       relatórios de qualidade de dados sobre a bronze
+│   ├── silver_rules.py    regras de limpeza e tipagem por coluna (provisórias)
+│   ├── silver.py          bronze para silver: tipos, limpeza, quarentena e deduplicação
+│   ├── sample.py          gerador de zips sintéticos com defeitos plantados
+│   └── demo.py            amostra, bronze, profiling e silver de ponta a ponta
 ├── tests/
 ├── .github/workflows/ci.yml
 ├── Dockerfile
 ├── docker-compose.yml
 └── pyproject.toml
 ```
+
+## Demonstração rápida (sem baixar nada)
+
+Para ver o pipeline inteiro funcionando em poucos segundos, sem os 8 GB reais:
+
+```bash
+python -m cnpj_pipeline.demo
+```
+
+O comando gera zips sintéticos no formato dos arquivos da Receita, com defeitos plantados de propósito (espaços nas bordas, `;` e aspas dentro de textos, decimais com ponto, datas zeradas e inválidas, chaves duplicadas, órfãs e inválidas, linhas com número de colunas errado), converte tudo para Parquet na bronze, roda o profiling e constrói a camada silver. A saída fica em `data/sample/`, separada dos dados reais. Os relatórios em `data/sample/profiling/2000-01/` mostram os defeitos sendo encontrados, e `data/sample/silver_report/` mostra o que a silver corrigiu. Todos os dados são inventados e não correspondem a pessoas ou empresas reais.
+
+O mesmo fluxo roda como teste automatizado no CI a cada push.
 
 ## Como executar
 
@@ -123,7 +140,8 @@ Comportamento:
 - O encoding latin-1 é convertido para UTF-8, e campos vazios viram NULL.
 - Cada CSV é extraído do zip em streaming para uma pasta temporária (`data/tmp`, apagada ao final), porque o DuckDB não lê CSV de dentro de zip.
 - Linhas com número de colunas errado ou aspas inválidas não são descartadas em silêncio: vão para `data/bronze/_rejects/` com o número da linha, o texto original e o motivo. Se a fração de rejeitadas passar do limite, o arquivo falha e o Parquet é removido.
-- Antes de converter, o número de colunas do arquivo é comparado com `schemas.py`. Se o layout mudou, o processamento para com uma mensagem clara.
+- Antes de converter, a quantidade de colunas mais frequente entre os primeiros 1000 registros é comparada com `schemas.py`. Algumas linhas quebradas no início não reprovam o arquivo, mas uma mudança real de layout para o processamento com uma mensagem clara.
+- O dialeto do CSV (separador, aspas, colunas, encoding) é informado explicitamente ao DuckDB, sem detecção automática. Isso é mais rápido, determinístico e aceita arquivos com fim de linha LF ou CRLF.
 - Cada Parquet inclui `_source_file`, `_reference_month` e `_ingested_at`. O diretório `reference_month=...` segue a convenção Hive, então o DuckDB também expõe `reference_month` ao ler a pasta inteira.
 - Um manifesto `data/bronze/_manifest_<mes>.json` registra linhas, rejeitadas, tamanhos e tempo de cada arquivo. Esses números alimentam a tabela de resultados abaixo.
 
@@ -148,6 +166,33 @@ Os relatórios contêm apenas agregados. Valores literais aparecem somente para 
 Os achados são candidatos, não veredictos. Um valor como `00000000` em `cnpj_basico`, por exemplo, pode ser legítimo, e cada caso precisa de decisão humana antes de virar regra em `docs/data_quality_rules.md`.
 
 Se uma tabela foi processada só em parte (nem todas as partes), as chaves órfãs refletem a ausência de arquivos e não um problema nos dados.
+
+## Camada silver
+
+`python -m cnpj_pipeline.silver --month AAAA-MM` lê a bronze (tudo texto) e grava `data/silver/<tabela>/reference_month=<mês>/<tabela>.parquet` com tipos corretos.
+
+O que a silver faz, tabela por tabela:
+
+- Datas `AAAAMMDD` viram `DATE`; zeros e datas inexistentes (como 31 de fevereiro) viram NULL.
+- Decimais com vírgula viram `DECIMAL(20,2)`; valores inválidos viram NULL.
+- Indicadores `S`/`N` viram `BOOLEAN`; a lista de CNAEs secundários vira `VARCHAR[]`.
+- Textos são limpos (caracteres de controle, espaços repetidos e nas bordas); vazio vira NULL. Códigos mantêm os zeros à esquerda.
+- UF fora das 27 siglas (mais `EX`) vira NULL; e-mail vai para minúsculas.
+- Chaves obrigatórias inválidas (por exemplo `cnpj_basico` fora de 8 posições alfanuméricas) enviam a linha para `data/silver/_quarantine/` com o motivo em `_reject_reason`.
+- Chaves de negócio duplicadas mantêm uma linha, escolhida de forma determinística (hash do conteúdo, então a ordem de entrada não importa), e as demais vão para a quarentena como `duplicate_key`.
+- Estabelecimentos ganha a coluna derivada `cnpj` (14 posições).
+
+Se a fração de linhas em quarentena de uma tabela passar de `--max-quarantine-ratio` (padrão 1%), a tabela falha e a saída silver é removida; a quarentena fica para inspeção. O manifesto `data/silver/_manifest_<mês>.json` e o relatório `docs/silver/<mês>.md` registram, por coluna, quantos valores foram anulados ou alterados (apenas contagens, sem valores).
+
+| Opção | Descrição |
+| --- | --- |
+| `--tables T [T ...]` | Subconjunto de tabelas (padrão: todas com Parquet na bronze) |
+| `--force` | Refaz tabelas que já existem na silver |
+| `--max-quarantine-ratio` | Fração máxima em quarentena por tabela (padrão: 0.01) |
+| `--memory-limit` | Limite de memória do DuckDB (padrão: 4GB) |
+| `--report-dir` | Pasta do relatório (padrão: `docs/silver`) |
+
+As regras estão em `silver_rules.py` e são provisórias: partem do layout histórico e de hipóteses, e só viram regras definitivas depois de confirmadas pelo profiling do mês real.
 
 ## Qualidade de dados
 
@@ -176,7 +221,9 @@ A ser preenchido após a primeira execução completa, com números reais.
 - [ ] Esquemas das tabelas a partir do dicionário de layout do mês processado
 - [x] Camada bronze (CSV para Parquet em streaming, testada com dados sintéticos)
 - [ ] Validar a bronze com o mês real e registrar as métricas
-- [ ] Camada silver (tipagem, tratamento de sentinelas, quarentena)
+- [x] Camada silver (tipagem, limpeza, quarentena e deduplicação, testada com dados sintéticos)
+- [ ] Confirmar as regras da silver contra o profiling do mês real
+- [x] Gerador de amostra sintética e demo ponta a ponta, testados no CI
 - [ ] Camada gold e análises
 - [ ] Testes de qualidade de dados automatizados
 - [ ] Orquestração

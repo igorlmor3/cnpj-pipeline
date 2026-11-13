@@ -23,6 +23,19 @@ Decisões possíveis: `corrigir` (transformação determinística), `anular` (va
 - Linhas com número de colunas diferente do esquema ou com aspas inválidas são rejeitadas e gravadas em `data/bronze/_rejects/`, nunca descartadas em silêncio.
 - Se o número de colunas do arquivo não bate com `schemas.py`, o processamento para.
 
+## Regras provisórias da camada silver
+
+Implementadas em `src/cnpj_pipeline/silver_rules.py` e cobertas por `tests/test_silver.py`. Todas partem de hipóteses e precisam ser confirmadas contra o profiling do mês real antes de entrarem na tabela de regras confirmadas.
+
+- Texto: caracteres de controle viram espaço, espaços repetidos são juntados, bordas aparadas, vazio vira NULL.
+- Códigos (natureza, qualificação, CNAE, município, país, CEP, DDD, telefone): apenas aparados, para preservar zeros à esquerda.
+- Datas `AAAAMMDD`: formato inválido, zeros e datas inexistentes viram NULL.
+- Decimais: vírgula ou ponto aceitos; valor inválido vira NULL.
+- Indicadores S/N: qualquer outro valor vira NULL.
+- UF: fora das 27 siglas e `EX` vira NULL.
+- Chaves (`cnpj_basico`, `cnpj_ordem`, `cnpj_dv`, `codigo`): formato inválido envia a linha para a quarentena.
+- Chaves duplicadas: uma linha é mantida (hash do conteúdo) e as demais vão para a quarentena. Sócios não têm chave única e não são deduplicados.
+
 ## Hipóteses a verificar
 
 Itens a confirmar contra o dicionário de layout do mês processado e contra os dados.

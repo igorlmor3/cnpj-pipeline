@@ -28,8 +28,10 @@ import sys
 import tempfile
 import time
 import zipfile
+from collections import Counter
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
+from itertools import islice
 from pathlib import Path
 
 import duckdb
@@ -93,15 +95,27 @@ def parquet_path(bronze_dir: Path, table: str, month: str, stem: str) -> Path:
 # --------------------------------------------------------------------------- #
 
 
+LAYOUT_SAMPLE_RECORDS = 1000
+
+
 def check_layout(csv_path: Path, expected_columns: tuple[str, ...]) -> None:
-    """Confere a quantidade de colunas da primeira linha contra o esquema."""
+    """Confere o numero de colunas do arquivo contra o esquema.
+
+    Usa a quantidade de colunas mais frequente entre os primeiros registros, e nao apenas a
+    primeira linha: algumas linhas quebradas no inicio nao reprovam o arquivo, mas uma
+    mudanca real de layout (todas as linhas com outra quantidade de colunas) e detectada.
+    """
+    widths: Counter[int] = Counter()
     with csv_path.open(encoding=CSV_ENCODING, newline="") as fh:
-        first = next(csv.reader(fh, delimiter=CSV_DELIMITER, quotechar=CSV_QUOTE), None)
-    if first is None:
+        reader = csv.reader(fh, delimiter=CSV_DELIMITER, quotechar=CSV_QUOTE)
+        for record in islice(reader, LAYOUT_SAMPLE_RECORDS):
+            widths[len(record)] += 1
+    if not widths:
         raise SchemaMismatchError(f"{csv_path.name}: arquivo vazio")
-    if len(first) != len(expected_columns):
+    modal_width, _ = widths.most_common(1)[0]
+    if modal_width != len(expected_columns):
         raise SchemaMismatchError(
-            f"{csv_path.name}: o arquivo tem {len(first)} colunas, mas schemas.py define "
+            f"{csv_path.name}: o arquivo tem {modal_width} colunas, mas schemas.py define "
             f"{len(expected_columns)}. O layout pode ter mudado; confira o dicionario do mes."
         )
 
@@ -143,6 +157,7 @@ def convert_csv(
                 header=false,
                 columns={{{column_types}}},
                 encoding={_q(CSV_ENCODING)},
+                auto_detect=false,
                 ignore_errors=true,
                 store_rejects=true
             )

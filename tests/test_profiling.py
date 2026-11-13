@@ -5,6 +5,7 @@ from pathlib import Path
 
 import duckdb
 import pytest
+from helpers import MONTH, write_bronze
 
 from cnpj_pipeline.profiling import (
     check_relations,
@@ -14,26 +15,6 @@ from cnpj_pipeline.profiling import (
     render_table_markdown,
     run,
 )
-from cnpj_pipeline.schemas import columns_for
-
-MONTH = "2026-10"
-
-
-def write_bronze(bronze: Path, table: str, rows: list[dict], name: str | None = None) -> Path:
-    """Cria um Parquet de teste na estrutura da bronze. Colunas ausentes ficam NULL."""
-    columns = list(columns_for(table))
-    out = bronze / table.lower() / f"reference_month={MONTH}" / f"{name or table + '0'}.parquet"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    con = duckdb.connect()
-    con.execute("CREATE TABLE t (" + ", ".join(f'"{c}" VARCHAR' for c in columns) + ")")
-    placeholders = ", ".join("?" for _ in columns)
-    con.executemany(
-        f"INSERT INTO t VALUES ({placeholders})",
-        [[row.get(c) for c in columns] for row in rows],
-    )
-    con.execute(f"COPY t TO '{out.as_posix()}' (FORMAT parquet)")
-    con.close()
-    return out
 
 
 def profile(bronze: Path, table: str, sample_percent: float = 100.0) -> dict:
