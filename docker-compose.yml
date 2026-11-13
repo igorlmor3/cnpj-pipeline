@@ -1,0 +1,19 @@
+services:
+  pipeline:
+    build: .
+    image: cnpj-pipeline:dev
+    working_dir: /app
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      CNPJ_DATA_DIR: /app/data
+    volumes:
+      - ./data:/app/data
+      - ./src:/app/src
+      - ./tests:/app/tests
+      - ./docs:/app/docs
+    # Uso:
+    #   docker compose run --rm pipeline python -m cnpj_pipeline.download --month 2026-11 --dry-run
+    #   docker compose run --rm pipeline pytest
+    command: ["python", "-m", "cnpj_pipeline.download", "--help"]

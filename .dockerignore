@@ -1,0 +1,17 @@
+.git
+.github
+.venv
+venv
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.env
+data/raw
+data/bronze
+data/silver
+data/gold
+*.zip
+*.csv
+*.parquet
+*.duckdb

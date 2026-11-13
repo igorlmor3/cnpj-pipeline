@@ -1,0 +1,40 @@
+# Dados: nunca versionar (os arquivos sao grandes e publicos; use o script de download)
+data/raw/*
+data/bronze/*
+data/silver/*
+data/gold/*
+!data/**/.gitkeep
+
+*.zip
+*.csv
+*.parquet
+*.duckdb
+*.duckdb.wal
+*.db
+*.sqlite
+
+# Segredos e configuracao local
+.env
+*.json.key
+credentials*.json
+service-account*.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# IDE e sistema operacional
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
