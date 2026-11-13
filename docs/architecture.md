@@ -31,16 +31,18 @@ Cada decisão é registrada aqui com as alternativas consideradas e o motivo.
 
 ## Decisões de plataforma e de produto
 
-Estas decisões foram tomadas no planejamento e ainda não estão implementadas. Cada uma registra o motivo, para ser revisada quando houver dado medido.
+Estas decisões foram tomadas no planejamento. O nível 1 da AWS (Terraform, publicação no S3 e tabelas no Athena) já tem código e testes com clientes simulados, mas ainda não foi aplicado em uma conta real; o nível 2, o agente, a análise e o site ainda não foram iniciados. Cada decisão registra o motivo, para ser revisada quando houver dado medido.
 
 | Tema | Alternativas | Decisão e motivo |
 | --- | --- | --- |
 | Nuvem | AWS, Azure, GCP | AWS. É a mais pedida em vagas de engenharia de dados no Brasil e amplia o portfólio com um serviço de armazenamento, catálogo e consulta serverless. |
 | Escopo na nuvem | Só publicar os dados (nível 1), rodar o pipeline na nuvem (nível 2) | Nível 1 primeiro, nível 2 depois. O nível 1 entrega valor com pouco retrabalho, e quase tudo dele (bucket, catálogo, IAM) é reaproveitado no nível 2. |
 | Infraestrutura | Console manual, Terraform, CloudFormation | Terraform desde o nível 1, para que o nível 2 apenas acrescente recursos ao mesmo código. |
-| Camada de armazenamento no código | `Path` local espalhado, módulo de armazenamento | Módulo único de armazenamento (local e `s3://`), para o nível 2 não exigir mudanças na lógica das camadas. |
+| Camada de armazenamento no código | `Path` local espalhado, módulo de armazenamento | Módulo único de armazenamento (local e `s3://`), para o nível 2 não exigir mudanças na lógica das camadas. No nível 1 a publicação ficou isolada em `cloud/publish.py`, sem alterar as camadas; o módulo de armazenamento fica para o nível 2. |
 | Credenciais | Chaves no código ou no `.env`, perfil local, papel IAM | Perfil local no nível 1 e papel IAM da tarefa no nível 2. Nenhuma credencial no repositório. |
 | Consulta na nuvem | Athena, Redshift, DuckDB sobre S3 | Athena com catálogo Glue: serverless, sem custo fixo, cobrança por dado lido. Parquet particionado reduz o que é lido. |
+| Descoberta de partições | Crawler do Glue, MSCK REPAIR, partition projection | Partition projection em `reference_month`: sem crawler (que cobra por tempo) e sem passo manual a cada mês novo. |
+| Chaves do usuário do pipeline | Criadas pelo Terraform, criadas no console | Criadas no console, para que nunca fiquem no arquivo de estado do Terraform. |
 | Controle de custo | Sem controle, alertas, limites | Alerta de orçamento no primeiro dia, região de menor custo, sem NAT Gateway, limite de dados lidos por consulta e destruição do ambiente quando não estiver em uso. |
 | Agente de IA | RAG clássico com embeddings, texto para SQL | Texto para SQL. O dado é tabular e as perguntas pedem contagens exatas, que embeddings não fornecem. Embeddings só para partes pequenas, como descrições de CNAE e natureza jurídica. |
 | Segurança do agente | Executar qualquer SQL, validar antes de executar | Somente leitura, apenas tabelas permitidas da gold, com tempo e número de linhas máximos e validação da consulta antes de executar. |

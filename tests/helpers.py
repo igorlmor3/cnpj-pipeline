@@ -21,7 +21,9 @@ def write_bronze(bronze: Path, table: str, rows: list[dict], name: str | None = 
     out = bronze / table.lower() / f"reference_month={MONTH}" / f"{name or table + '0'}.parquet"
     out.parent.mkdir(parents=True, exist_ok=True)
     con = duckdb.connect()
-    con.execute("CREATE TABLE t (" + ", ".join(f'"{c}" VARCHAR' for c in columns) + ")")
+    # _ingested_at e TIMESTAMP na bronze real; as demais colunas sao texto.
+    types = {c: "TIMESTAMP" if c == "_ingested_at" else "VARCHAR" for c in columns}
+    con.execute("CREATE TABLE t (" + ", ".join(f'"{c}" {types[c]}' for c in columns) + ")")
     placeholders = ", ".join("?" for _ in columns)
     defaults = {
         "_source_file": f"{table}0.zip",

@@ -40,3 +40,11 @@ htmlcov/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Terraform: estado e variaveis locais nunca vao para o repositorio
+infra/.terraform/
+infra/*.tfstate
+infra/*.tfstate.*
+infra/*.tfvars
+!infra/terraform.tfvars.example
+infra/crash.log

@@ -39,8 +39,8 @@ O motor de transformação é o DuckDB. As decisões tomadas e as ainda em abert
 O projeto está planejado em cinco frentes. A primeira está implementada; as demais são planejadas e ainda não existem no repositório.
 
 1. **Pipeline de dados (implementado até a silver).** Download com retomada, bronze, profiling e silver, todos testados com dados sintéticos e executados no CI. Falta validar com o mês real.
-2. **Publicação na AWS (planejada).** Será feita em dois níveis, nesta ordem:
-   - Nível 1: o pipeline continua rodando localmente e publica o Parquet (bronze, silver e gold) em um bucket S3, com o mesmo particionamento por `reference_month`. Um catálogo no AWS Glue e consultas no Athena permitem rodar SQL sobre os dados na nuvem. A infraestrutura será descrita em Terraform (`infra/`) desde o início, com um usuário IAM restrito ao bucket e alerta de orçamento.
+2. **Publicação na AWS (nível 1 escrito, ainda não aplicado; nível 2 planejado).** Será feita em dois níveis, nesta ordem:
+   - Nível 1: o pipeline continua rodando localmente e publica o Parquet (bronze, silver e gold) em um bucket S3, com o mesmo particionamento por `reference_month`. Um catálogo no AWS Glue e consultas no Athena permitem rodar SQL sobre os dados na nuvem. A infraestrutura é descrita em Terraform (`infra/`), com um usuário IAM restrito ao bucket e alerta de orçamento. O código e os testes com clientes simulados já existem, mas o ambiente ainda não foi aplicado em uma conta real. Veja [Publicação na AWS (nível 1)](#publicação-na-aws-nível-1).
    - Nível 2: o pipeline passa a rodar na nuvem, em um container no ECS Fargate (a imagem Docker já existe), lendo e gravando `s3://` diretamente. O acesso passa a ser feito por papel IAM da tarefa, sem chaves.
 3. **Análise e insights (planejada).** Um relatório com os principais achados sobre o cadastro de empresas (por exemplo, abertura de empresas por ano e UF, situação cadastral por atividade econômica, distribuição de porte e capital social), gerado a partir da camada gold.
 4. **Agente de IA para perguntas sobre os dados (planejado).** Um agente de texto para SQL: o modelo recebe o esquema da gold, escreve uma consulta, ela roda em modo somente leitura e o resultado é explicado em linguagem natural. Embeddings ficam restritos a partes pequenas, como busca por descrição de CNAE ou natureza jurídica. O agente só enxerga tabelas permitidas e toda consulta passa por validação antes de executar.
@@ -76,8 +76,10 @@ As escolhas feitas para cada decisão, com as alternativas consideradas, estão 
 │   ├── profiling.py       relatórios de qualidade de dados sobre a bronze
 │   ├── silver_rules.py    regras de limpeza e tipagem por coluna (provisórias)
 │   ├── silver.py          bronze para silver: tipos, limpeza, quarentena e deduplicação
+│   ├── cloud/             publicação no S3 (publish.py) e tabelas/consultas no Athena (athena.py)
 │   ├── sample.py          gerador de zips sintéticos com defeitos plantados
 │   └── demo.py            amostra, bronze, profiling e silver de ponta a ponta
+├── infra/                 Terraform da AWS (bucket, Glue, Athena, IAM, orçamento)
 ├── tests/
 ├── .github/workflows/ci.yml
 ├── Dockerfile
@@ -214,6 +216,16 @@ Se a fração de linhas em quarentena de uma tabela passar de `--max-quarantine-
 
 As regras estão em `silver_rules.py` e são provisórias: partem do layout histórico e de hipóteses, e só viram regras definitivas depois de confirmadas pelo profiling do mês real.
 
+## Publicação na AWS (nível 1)
+
+O nível 1 mantém o processamento local e leva o resultado para a nuvem. O passo a passo completo, com pré-requisitos, custos e como desmontar tudo, está em [infra/README.md](infra/README.md).
+
+- `infra/` (Terraform): bucket S3 privado e criptografado, banco no Glue, workgroup do Athena com limite de dados lidos por consulta, usuário IAM de menor privilégio e alerta de orçamento. As chaves de acesso não passam pelo Terraform.
+- `python -m cnpj_pipeline.cloud.publish --month AAAA-MM`: envia o Parquet ao S3 de forma idempotente (pula arquivos idênticos por tamanho e SHA-256) e confere o tamanho de cada envio. Por padrão envia só a silver; quarentena e rejeitados, que contêm linhas originais, só com `--include-quarantine`. Aceita `--dry-run`.
+- `python -m cnpj_pipeline.cloud.athena create-tables`: cria as tabelas externas da silver com partition projection em `reference_month` (sem crawler e sem `MSCK REPAIR`). Um teste confere que as colunas do DDL batem com o Parquet que a silver realmente grava. O subcomando `query` executa consultas.
+
+O suporte à AWS é opcional: `python -m pip install -e ".[aws]"`. Os testes usam clientes simulados e não exigem conta nem rede.
+
 ## Qualidade de dados
 
 Cada problema encontrado nos dados é registrado em [docs/data_quality_rules.md](docs/data_quality_rules.md) com a decisão tomada (corrigir, anular ou rejeitar), a camada em que a regra é aplicada e o teste que a cobre. O catálogo é preenchido durante o profiling e não parte de suposições.
@@ -247,7 +259,8 @@ A ser preenchido após a primeira execução completa, com números reais.
 - [ ] Camada gold (tabelas analíticas a partir da silver)
 - [ ] Testes de qualidade de dados automatizados (unicidade de chaves, contagens entre camadas, formato do CNPJ)
 - [ ] Benchmarks documentados (amostra grande e mês real)
-- [ ] AWS nível 1: Terraform, publicação do Parquet no S3, catálogo Glue e consultas no Athena
+- [x] AWS nível 1, código: Terraform, publicação no S3 e tabelas no Athena (testados com clientes simulados)
+- [ ] AWS nível 1, aplicar em conta real, publicar o mês real e registrar custo e tempo
 - [ ] AWS nível 2: pipeline rodando em container no ECS Fargate com acesso por papel IAM
 - [ ] Orquestração do fluxo completo
 - [ ] Análise e principais insights sobre o cadastro de empresas

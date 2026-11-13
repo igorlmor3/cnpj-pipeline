@@ -1,0 +1,10 @@
+# Copie para terraform.tfvars (que nao e versionado) e ajuste os valores.
+bucket_name = "cnpj-pipeline-SEU-NOME-2026"
+alert_email = "seu-email@exemplo.com"
+
+# Opcionais (valores padrao abaixo)
+# region                        = "us-east-1"
+# profile                       = "cnpj-admin"
+# monthly_budget_usd            = 5
+# athena_scan_limit_gb          = 5
+# athena_results_retention_days = 7
