@@ -45,12 +45,14 @@ O motor de transformação é o DuckDB. Decisões ainda em aberto, registradas e
 │   └── gold/
 ├── docs/
 │   ├── architecture.md    decisões de arquitetura
-│   └── data_quality_rules.md   catálogo de problemas de qualidade e decisões
+│   ├── data_quality_rules.md   catálogo de problemas de qualidade e decisões
+│   └── profiling/         relatórios gerados pelo profiling (apenas agregados)
 ├── src/cnpj_pipeline/
 │   ├── config.py          caminhos e configuração
 │   ├── download.py        download parametrizado com retomada e manifesto
 │   ├── schemas.py         colunas de cada tabela (layout a validar contra o dicionário do mês)
-│   └── bronze.py          zip/CSV para Parquet com DuckDB
+│   ├── bronze.py          zip/CSV para Parquet com DuckDB
+│   └── profiling.py       relatórios de qualidade de dados sobre a bronze
 ├── tests/
 ├── .github/workflows/ci.yml
 ├── Dockerfile
@@ -127,6 +129,26 @@ Comportamento:
 
 Os nomes das colunas em `schemas.py` seguem o layout histórico e precisam ser conferidos contra o dicionário de layout do mês processado.
 
+## Profiling
+
+`python -m cnpj_pipeline.profiling --month AAAA-MM` lê a camada bronze e gera, para cada tabela, `docs/profiling/<mês>/<tabela>.md` e `.json`, mais `referential.md` e `.json`.
+
+Por coluna, o relatório mede nulos, valores distintos (aproximado), tamanho do texto, espaços nas bordas, caracteres de controle e de substituição (problema de encoding), padrões de formato (dígitos viram `9`, letras viram `A`), valores candidatos a sentinela, validade de datas `AAAAMMDD` e formato de decimais com vírgula. Por tabela, mede duplicidade da chave de negócio presumida e, entre tabelas, chaves órfãs nas relações presumidas (por exemplo, estabelecimentos sem empresa correspondente).
+
+| Opção | Descrição |
+| --- | --- |
+| `--tables T [T ...]` | Subconjunto de tabelas (padrão: todas com Parquet na bronze) |
+| `--sample-percent N` | Perfila só N% das linhas, para tabelas grandes (resultados aproximados) |
+| `--skip-referential` | Pula a checagem de integridade referencial, que é a etapa mais pesada |
+| `--memory-limit` | Limite de memória do DuckDB (padrão: 4GB) |
+| `--out-dir` | Pasta dos relatórios (padrão: `docs/profiling`) |
+
+Os relatórios contêm apenas agregados. Valores literais aparecem somente para colunas categóricas de baixa sensibilidade (códigos e indicadores). Nomes, documentos, endereços e contatos aparecem só como padrões mascarados e contagens, então os relatórios podem ser versionados.
+
+Os achados são candidatos, não veredictos. Um valor como `00000000` em `cnpj_basico`, por exemplo, pode ser legítimo, e cada caso precisa de decisão humana antes de virar regra em `docs/data_quality_rules.md`.
+
+Se uma tabela foi processada só em parte (nem todas as partes), as chaves órfãs refletem a ausência de arquivos e não um problema nos dados.
+
 ## Qualidade de dados
 
 Cada problema encontrado nos dados é registrado em [docs/data_quality_rules.md](docs/data_quality_rules.md) com a decisão tomada (corrigir, anular ou rejeitar), a camada em que a regra é aplicada e o teste que a cobre. O catálogo é preenchido durante o profiling e não parte de suposições.
@@ -149,7 +171,8 @@ A ser preenchido após a primeira execução completa, com números reais.
 
 - [x] Estrutura do repositório, CI, Docker
 - [x] Download parametrizado com retomada e manifesto
-- [ ] Profiling das tabelas e preenchimento do catálogo de qualidade de dados
+- [x] Módulo de profiling (testado com dados sintéticos)
+- [ ] Rodar o profiling no mês real e preencher o catálogo de qualidade de dados
 - [ ] Esquemas das tabelas a partir do dicionário de layout do mês processado
 - [x] Camada bronze (CSV para Parquet em streaming, testada com dados sintéticos)
 - [ ] Validar a bronze com o mês real e registrar as métricas

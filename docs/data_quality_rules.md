@@ -4,7 +4,7 @@ Este documento registra cada problema de qualidade encontrado nos dados do CNPJ 
 
 ## Como usar
 
-1. Rode o profiling da tabela (contagem de nulos, valores distintos, mínimos e máximos, padrões de formato).
+1. Rode o profiling: `python -m cnpj_pipeline.profiling --month AAAA-MM`. Os relatórios ficam em `docs/profiling/<mês>/`. Cada achado automático é um candidato e exige decisão humana.
 2. Para cada problema confirmado, crie uma linha na tabela de regras com um identificador (`DQ-001`, `DQ-002`, ...).
 3. Registre a decisão, a camada em que a regra é aplicada e o teste que a cobre.
 4. Registre quantas linhas foram afetadas na última execução.
