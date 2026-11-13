@@ -28,3 +28,23 @@ Cada decisão é registrada aqui com as alternativas consideradas e o motivo.
 | Modelagem gold | dbt (com DuckDB), SQL puro | Em aberto |
 | Particionamento do Parquet | por UF, por mês de referência, sem partição | Em aberto |
 | Testes de qualidade | dbt tests, Great Expectations, pytest | Em aberto |
+
+## Decisões de plataforma e de produto
+
+Estas decisões foram tomadas no planejamento e ainda não estão implementadas. Cada uma registra o motivo, para ser revisada quando houver dado medido.
+
+| Tema | Alternativas | Decisão e motivo |
+| --- | --- | --- |
+| Nuvem | AWS, Azure, GCP | AWS. É a mais pedida em vagas de engenharia de dados no Brasil e amplia o portfólio com um serviço de armazenamento, catálogo e consulta serverless. |
+| Escopo na nuvem | Só publicar os dados (nível 1), rodar o pipeline na nuvem (nível 2) | Nível 1 primeiro, nível 2 depois. O nível 1 entrega valor com pouco retrabalho, e quase tudo dele (bucket, catálogo, IAM) é reaproveitado no nível 2. |
+| Infraestrutura | Console manual, Terraform, CloudFormation | Terraform desde o nível 1, para que o nível 2 apenas acrescente recursos ao mesmo código. |
+| Camada de armazenamento no código | `Path` local espalhado, módulo de armazenamento | Módulo único de armazenamento (local e `s3://`), para o nível 2 não exigir mudanças na lógica das camadas. |
+| Credenciais | Chaves no código ou no `.env`, perfil local, papel IAM | Perfil local no nível 1 e papel IAM da tarefa no nível 2. Nenhuma credencial no repositório. |
+| Consulta na nuvem | Athena, Redshift, DuckDB sobre S3 | Athena com catálogo Glue: serverless, sem custo fixo, cobrança por dado lido. Parquet particionado reduz o que é lido. |
+| Controle de custo | Sem controle, alertas, limites | Alerta de orçamento no primeiro dia, região de menor custo, sem NAT Gateway, limite de dados lidos por consulta e destruição do ambiente quando não estiver em uso. |
+| Agente de IA | RAG clássico com embeddings, texto para SQL | Texto para SQL. O dado é tabular e as perguntas pedem contagens exatas, que embeddings não fornecem. Embeddings só para partes pequenas, como descrições de CNAE e natureza jurídica. |
+| Segurança do agente | Executar qualquer SQL, validar antes de executar | Somente leitura, apenas tabelas permitidas da gold, com tempo e número de linhas máximos e validação da consulta antes de executar. |
+| Abuso e custo do agente público | Aberto, com limites | Limite de perguntas por IP, teto mensal de gasto no provedor do modelo e perguntas de exemplo que funcionam sem chamar o modelo. |
+| Privacidade | Expor tudo, expor agregados | Apenas agregados nas saídas públicas. Sem consulta por pessoa física e sem nomes de sócios. |
+| Site | React com Tailwind, outras opções | React com Tailwind, com gráficos a partir de agregados pré-calculados (JSON) gerados pelo pipeline, o que dispensa servidor por visita. |
+| Hospedagem do site | S3 e CloudFront, GitHub Pages, Vercel, Cloudflare Pages | Hospedagem estática com plano gratuito fora da AWS, porque o plano gratuito da AWS encerra a conta em 6 meses e o site precisa continuar no ar. |

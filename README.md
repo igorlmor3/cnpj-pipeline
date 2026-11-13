@@ -2,7 +2,7 @@
 
 Pipeline ETL em lote sobre os dados abertos do CNPJ da Receita Federal do Brasil. O objetivo do projeto é tratar um dataset público grande (alvo de 5 a 10 GB de dado bruto) com problemas reais de qualidade: arquivos sem cabeçalho, separador `;`, encoding `ISO-8859-1`, vírgula decimal, datas em texto e valores sentinela.
 
-Status: em desenvolvimento. A seção [Roadmap](#roadmap) mostra o que já existe e o que falta.
+Status: em desenvolvimento. As camadas raw, bronze e silver, o profiling e a demonstração com dados sintéticos estão implementados e testados. A validação com o mês real, a camada gold, a publicação na AWS, a análise, o agente de IA e o site são as próximas etapas e estão descritas em [Visão geral do projeto](#visão-geral-do-projeto). A seção [Roadmap](#roadmap) mostra o que já existe e o que falta.
 
 ## Fonte dos dados
 
@@ -32,7 +32,27 @@ data/silver   tipos corrigidos, datas e decimais tratados, sentinelas viram nulo
 data/gold     modelos analíticos (por exemplo, empresas ativas por município e CNAE)
 ```
 
-O motor de transformação é o DuckDB. Decisões ainda em aberto, registradas em [docs/architecture.md](docs/architecture.md): orquestração (Airflow ou Prefect) e uso de dbt na camada gold.
+O motor de transformação é o DuckDB. As decisões tomadas e as ainda em aberto estão registradas em [docs/architecture.md](docs/architecture.md).
+
+## Visão geral do projeto
+
+O projeto está planejado em cinco frentes. A primeira está implementada; as demais são planejadas e ainda não existem no repositório.
+
+1. **Pipeline de dados (implementado até a silver).** Download com retomada, bronze, profiling e silver, todos testados com dados sintéticos e executados no CI. Falta validar com o mês real.
+2. **Publicação na AWS (planejada).** Será feita em dois níveis, nesta ordem:
+   - Nível 1: o pipeline continua rodando localmente e publica o Parquet (bronze, silver e gold) em um bucket S3, com o mesmo particionamento por `reference_month`. Um catálogo no AWS Glue e consultas no Athena permitem rodar SQL sobre os dados na nuvem. A infraestrutura será descrita em Terraform (`infra/`) desde o início, com um usuário IAM restrito ao bucket e alerta de orçamento.
+   - Nível 2: o pipeline passa a rodar na nuvem, em um container no ECS Fargate (a imagem Docker já existe), lendo e gravando `s3://` diretamente. O acesso passa a ser feito por papel IAM da tarefa, sem chaves.
+3. **Análise e insights (planejada).** Um relatório com os principais achados sobre o cadastro de empresas (por exemplo, abertura de empresas por ano e UF, situação cadastral por atividade econômica, distribuição de porte e capital social), gerado a partir da camada gold.
+4. **Agente de IA para perguntas sobre os dados (planejado).** Um agente de texto para SQL: o modelo recebe o esquema da gold, escreve uma consulta, ela roda em modo somente leitura e o resultado é explicado em linguagem natural. Embeddings ficam restritos a partes pequenas, como busca por descrição de CNAE ou natureza jurídica. O agente só enxerga tabelas permitidas e toda consulta passa por validação antes de executar.
+5. **Site em React com Tailwind (planejado).** Uma página pública com a análise, gráficos a partir de agregados pré-calculados e o agente de perguntas. Hospedagem estática, fora da AWS, para não depender do prazo do plano gratuito.
+
+Princípios que valem para todas as frentes:
+
+- **Privacidade.** O cadastro de sócios contém nomes de pessoas físicas. Qualquer saída pública (análise, site e agente) usa apenas agregados e não permite consulta por pessoa.
+- **Custo baixo e controlado.** Nuvem com alerta de orçamento desde o primeiro dia, região de menor custo, sem NAT Gateway, limite de leitura de dados por consulta no Athena e `terraform destroy` para desmontar o ambiente. O agente público terá limite de perguntas por IP, teto mensal de gasto no provedor do modelo e perguntas de exemplo que funcionam sem chamar o modelo.
+- **Honestidade sobre o estado.** Este README distingue o que está implementado do que é planejado, e os números só entram na seção de resultados depois de medidos.
+
+As escolhas feitas para cada decisão, com as alternativas consideradas, estão em [docs/architecture.md](docs/architecture.md).
 
 ## Estrutura do repositório
 
@@ -224,11 +244,18 @@ A ser preenchido após a primeira execução completa, com números reais.
 - [x] Camada silver (tipagem, limpeza, quarentena e deduplicação, testada com dados sintéticos)
 - [ ] Confirmar as regras da silver contra o profiling do mês real
 - [x] Gerador de amostra sintética e demo ponta a ponta, testados no CI
-- [ ] Camada gold e análises
-- [ ] Testes de qualidade de dados automatizados
-- [ ] Orquestração
-- [ ] Benchmarks documentados
+- [ ] Camada gold (tabelas analíticas a partir da silver)
+- [ ] Testes de qualidade de dados automatizados (unicidade de chaves, contagens entre camadas, formato do CNPJ)
+- [ ] Benchmarks documentados (amostra grande e mês real)
+- [ ] AWS nível 1: Terraform, publicação do Parquet no S3, catálogo Glue e consultas no Athena
+- [ ] AWS nível 2: pipeline rodando em container no ECS Fargate com acesso por papel IAM
+- [ ] Orquestração do fluxo completo
+- [ ] Análise e principais insights sobre o cadastro de empresas
+- [ ] Agente de IA de texto para SQL com validação de consultas e limites de uso
+- [ ] Site em React com Tailwind publicando a análise e o agente
 
 ## Dados e licença
 
 Os dados são públicos e pertencem à Receita Federal do Brasil. Este repositório não contém dados, apenas código. A licença do código ainda será definida.
+
+O cadastro inclui nomes de pessoas físicas (sócios), com documentos parcialmente mascarados. Os relatórios de profiling versionados aqui contêm apenas agregados, e as saídas públicas planejadas (análise, site e agente) também usarão apenas agregados.
