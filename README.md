@@ -32,7 +32,7 @@ data/silver   tipos corrigidos, datas e decimais tratados, sentinelas viram nulo
 data/gold     modelos analíticos (por exemplo, empresas ativas por município e CNAE)
 ```
 
-Decisões em aberto, registradas em [docs/architecture.md](docs/architecture.md): motor de transformação (DuckDB, Polars ou PySpark), orquestração (Airflow ou Prefect) e uso de dbt na camada gold.
+O motor de transformação é o DuckDB. Decisões ainda em aberto, registradas em [docs/architecture.md](docs/architecture.md): orquestração (Airflow ou Prefect) e uso de dbt na camada gold.
 
 ## Estrutura do repositório
 
@@ -48,7 +48,9 @@ Decisões em aberto, registradas em [docs/architecture.md](docs/architecture.md)
 │   └── data_quality_rules.md   catálogo de problemas de qualidade e decisões
 ├── src/cnpj_pipeline/
 │   ├── config.py          caminhos e configuração
-│   └── download.py        download parametrizado com retomada e manifesto
+│   ├── download.py        download parametrizado com retomada e manifesto
+│   ├── schemas.py         colunas de cada tabela (layout a validar contra o dicionário do mês)
+│   └── bronze.py          zip/CSV para Parquet com DuckDB
 ├── tests/
 ├── .github/workflows/ci.yml
 ├── Dockerfile
@@ -100,6 +102,31 @@ O script retoma downloads interrompidos (arquivo `.part` e cabeçalho HTTP `Rang
 
 Se os arquivos já foram baixados manualmente, coloque-os em `data/raw/<AAAA-MM>/` e rode `python -m cnpj_pipeline.download --month AAAA-MM --manifest-only` para gerar o manifesto sem acessar a rede. Rodar o download normal com o mesmo mês também funciona: arquivos completos são reconhecidos, pulados e incluídos no manifesto.
 
+## Camada bronze
+
+`python -m cnpj_pipeline.bronze --month AAAA-MM` lê os zips de `data/raw/<AAAA-MM>/` e grava Parquet em `data/bronze/<tabela>/reference_month=<AAAA-MM>/`.
+
+| Opção | Descrição |
+| --- | --- |
+| `--month AAAA-MM` | Mês de referência (obrigatório) |
+| `--tables T [T ...]` | Subconjunto de tabelas (padrão: todas as que tiverem zip na pasta) |
+| `--force` | Refaz arquivos que já existem na bronze (por padrão são pulados) |
+| `--memory-limit` | Limite de memória do DuckDB; o excedente vai para disco (padrão: 4GB) |
+| `--threads N` | Threads do DuckDB (padrão: automático) |
+| `--max-reject-ratio` | Fração máxima de linhas rejeitadas por arquivo antes de falhar (padrão: 0,001) |
+
+Comportamento:
+
+- Todas as colunas são gravadas como texto. Tipagem e regras de negócio ficam para a camada silver.
+- O encoding latin-1 é convertido para UTF-8, e campos vazios viram NULL.
+- Cada CSV é extraído do zip em streaming para uma pasta temporária (`data/tmp`, apagada ao final), porque o DuckDB não lê CSV de dentro de zip.
+- Linhas com número de colunas errado ou aspas inválidas não são descartadas em silêncio: vão para `data/bronze/_rejects/` com o número da linha, o texto original e o motivo. Se a fração de rejeitadas passar do limite, o arquivo falha e o Parquet é removido.
+- Antes de converter, o número de colunas do arquivo é comparado com `schemas.py`. Se o layout mudou, o processamento para com uma mensagem clara.
+- Cada Parquet inclui `_source_file`, `_reference_month` e `_ingested_at`. O diretório `reference_month=...` segue a convenção Hive, então o DuckDB também expõe `reference_month` ao ler a pasta inteira.
+- Um manifesto `data/bronze/_manifest_<mes>.json` registra linhas, rejeitadas, tamanhos e tempo de cada arquivo. Esses números alimentam a tabela de resultados abaixo.
+
+Os nomes das colunas em `schemas.py` seguem o layout histórico e precisam ser conferidos contra o dicionário de layout do mês processado.
+
 ## Qualidade de dados
 
 Cada problema encontrado nos dados é registrado em [docs/data_quality_rules.md](docs/data_quality_rules.md) com a decisão tomada (corrigir, anular ou rejeitar), a camada em que a regra é aplicada e o teste que a cobre. O catálogo é preenchido durante o profiling e não parte de suposições.
@@ -124,7 +151,8 @@ A ser preenchido após a primeira execução completa, com números reais.
 - [x] Download parametrizado com retomada e manifesto
 - [ ] Profiling das tabelas e preenchimento do catálogo de qualidade de dados
 - [ ] Esquemas das tabelas a partir do dicionário de layout do mês processado
-- [ ] Camada bronze (CSV para Parquet, leitura em streaming)
+- [x] Camada bronze (CSV para Parquet em streaming, testada com dados sintéticos)
+- [ ] Validar a bronze com o mês real e registrar as métricas
 - [ ] Camada silver (tipagem, tratamento de sentinelas, quarentena)
 - [ ] Camada gold e análises
 - [ ] Testes de qualidade de dados automatizados

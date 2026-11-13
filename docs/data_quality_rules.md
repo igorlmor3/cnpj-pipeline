@@ -17,6 +17,12 @@ Este documento registra cada problema de qualidade encontrado nos dados do CNPJ 
 
 Decisões possíveis: `corrigir` (transformação determinística), `anular` (valor vira nulo), `rejeitar` (linha vai para a quarentena), `manter` (documentado, sem ação).
 
+## Decisões já aplicadas na camada bronze
+
+- Campos vazios são gravados como NULL, porque o CSV não distingue vazio de ausente.
+- Linhas com número de colunas diferente do esquema ou com aspas inválidas são rejeitadas e gravadas em `data/bronze/_rejects/`, nunca descartadas em silêncio.
+- Se o número de colunas do arquivo não bate com `schemas.py`, o processamento para.
+
 ## Hipóteses a verificar
 
 Itens a confirmar contra o dicionário de layout do mês processado e contra os dados.
