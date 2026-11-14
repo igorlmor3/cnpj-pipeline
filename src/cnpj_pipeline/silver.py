@@ -123,13 +123,24 @@ def reject_reason_case(table: str) -> str:
 
 
 def rank_expression(table: str, has_duplicates: bool) -> str:
-    """Posicao da linha dentro da sua chave. Desempate deterministico pelo hash do conteudo."""
+    """Posicao da linha dentro da sua chave.
+
+    Fica a linha mais preenchida (mais colunas nao nulas depois da limpeza). Se houver empate, o
+    desempate e deterministico, pelo hash do conteudo. So o hash escolhia, na pratica, ao acaso:
+    em Empresas ele manteve um registro vazio e mandou o completo para a quarentena.
+    """
     keys = DEDUP_KEYS.get(table)
     if not keys or not has_duplicates:
         return "1"
     partition = ", ".join(_clean(table, k) for k in keys)
     content = ", ".join(_src(c) for c in columns_for(table))
-    return f"row_number() OVER (PARTITION BY {partition} ORDER BY md5(concat_ws('|', {content})))"
+    filled = " + ".join(
+        f"CASE WHEN ({_clean(table, c)}) IS NULL THEN 0 ELSE 1 END" for c in columns_for(table)
+    )
+    return (
+        f"row_number() OVER (PARTITION BY {partition} "
+        f"ORDER BY ({filled}) DESC, md5(concat_ws('|', {content})))"
+    )
 
 
 def select_list(table: str, processed_at: str) -> str:

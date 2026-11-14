@@ -349,6 +349,49 @@ def test_duplicates_keep_one_row_deterministically(tmp_path):
     assert len(outputs[0]) == 2
 
 
+def test_duplicate_key_keeps_the_most_filled_row_whatever_the_hash(tmp_path):
+    # Varios pares, para que um desempate so pelo hash nao acerte por coincidencia.
+    complete, empty = [], []
+    for i in range(1, 9):
+        key = f"{i:08d}"
+        complete.append(
+            {
+                "cnpj_basico": key,
+                "razao_social": f"EMPRESA {i}",
+                "natureza_juridica": "2062",
+                "qualificacao_responsavel": "49",
+                "capital_social": "1000,00",
+                "porte_empresa": "01",
+            }
+        )
+        empty.append({"cnpj_basico": key, "natureza_juridica": "0000"})
+
+    for name, rows in (("a", empty + complete), ("b", complete + empty)):
+        base = tmp_path / name
+        write_bronze(base / "bronze", "Empresas", rows)
+        assert run_silver(base, ["Empresas"]) == 0
+        kept = silver_rows(base, "Empresas")
+        assert len(kept) == 8
+        assert all(r["razao_social"] and r["porte_empresa"] for r in kept)
+        lost = quarantine_rows(base, "Empresas")
+        assert len(lost) == 8
+        assert all(r["razao_social"] is None for r in lost)
+
+
+def test_duplicate_key_with_equal_fill_still_tiebreaks_by_hash(tmp_path):
+    rows = [
+        {"cnpj_basico": "00000001", "razao_social": "A", "natureza_juridica": "2062"},
+        {"cnpj_basico": "00000001", "razao_social": "B", "natureza_juridica": "2062"},
+    ]
+    kept_by_order = []
+    for name, ordering in (("a", rows), ("b", list(reversed(rows)))):
+        base = tmp_path / name
+        write_bronze(base / "bronze", "Empresas", ordering)
+        assert run_silver(base, ["Empresas"]) == 0
+        kept_by_order.append(silver_rows(base, "Empresas")[0]["razao_social"])
+    assert kept_by_order[0] == kept_by_order[1]
+
+
 def test_socios_are_not_deduplicated(tmp_path):
     same = {"cnpj_basico": "00000001", "identificador_socio": "2", "nome_socio": "FULANO"}
     write_bronze(tmp_path / "bronze", "Socios", [same, same])

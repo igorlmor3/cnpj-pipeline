@@ -38,12 +38,12 @@ Implementadas em `src/cnpj_pipeline/silver_rules.py` e cobertas por `tests/test_
 - Indicadores S/N: qualquer outro valor vira NULL.
 - UF: fora das 27 siglas e `EX` vira NULL.
 - Chaves (`cnpj_basico`, `cnpj_ordem`, `cnpj_dv`, `codigo`): formato inválido envia a linha para a quarentena.
-- Chaves duplicadas: uma linha é mantida (hash do conteúdo) e as demais vão para a quarentena. Sócios não têm chave única e não são deduplicados.
+- Chaves duplicadas: uma linha é mantida (a mais preenchida depois da limpeza; no empate, o hash do conteúdo) e as demais vão para a quarentena. Sócios não têm chave única e não são deduplicados.
 
 ## Achados do mês real (2026-10)
 
 - `cnpj_basico = 00000000` não é sentinela: é o Banco do Brasil. O mesmo vale para `cnpj_dv = 00` (dígito verificador válido) e `motivo_situacao_cadastral = 00` ("sem motivo", presente em todos os estabelecimentos ativos). O profiler os marca como candidatos a sentinela, e nenhum deve ser anulado.
-- Empresas tem 1 chave `cnpj_basico` duplicada, no arquivo `Empresas2`, com conteúdo diferente em todas as demais colunas. Não é cópia exata: são duas empresas distintas com a mesma chave. A silver mantém uma, escolhida pelo hash do conteúdo (determinística, mas arbitrária), e envia a outra para a quarentena como `duplicate_key`. Decisão pendente: manter assim ou registrar o conflito de forma explícita.
+- Empresas tem 1 chave `cnpj_basico` duplicada, no arquivo `Empresas2`, com conteúdo diferente em todas as demais colunas, exceto o ente federativo, vazio nas duas. Não é cópia exata. Uma das linhas é um registro praticamente vazio (sem razão social nem porte, natureza 0000 "não informada" e capital zero) e a outra é completa. A primeira versão da silver escolhia pelo hash do conteúdo e manteve a vazia, o que deixava 51 estabelecimentos (2 matrizes, 6 ativos) com natureza "não informada", porte vazio e capital zero na gold. A regra atual mantém a linha mais preenchida e usa o hash só para desempatar; a vazia vai para a quarentena como `duplicate_key`. O cadastro sozinho não mostra qual das duas é a empresa "verdadeira"; a regra assume que a linha com mais informação é a melhor.
 - Estabelecimentos: com as regras de espaço reservado, a silver anulou, entre outros, 842 mil números (`0`, `000000`...), 2,7 milhões de `ddd_1` e 2,9 milhões de `telefone_1` só de zeros, e 286 mil bairros. Em um dos arquivos, o valor de bairro mais anulado é `NÃO INFORMADO` com acento, variante que a lista de sentinelas do profiling não detecta (ela reconhece só `NAO INFORMADO`).
 - Sócios: `cnpj_cpf_socio` e `representante_legal` vêm mascarados pela própria Receita (`***999999**`). Para pessoa jurídica, `cnpj_cpf_socio` tem 8 dígitos.
 - Sócios: `qualificacao_representante_legal = 00` (97%) e `faixa_etaria = 0` (2,6%) são códigos de "não se aplica", não erros.

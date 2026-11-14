@@ -23,7 +23,7 @@ Cada decisão é registrada aqui com as alternativas consideradas e o motivo.
 | Tema | Alternativas | Status |
 | --- | --- | --- |
 | Motor de transformação | DuckDB, Polars, PySpark | Decidido: DuckDB. Lê CSV maior que a memória, grava Parquet direto e roda local, sem servidor. |
-| Deduplicação na silver | Manter a primeira linha, manter a mais recente, rejeitar todas as repetidas | Decidido provisoriamente: manter uma linha, escolhida pelo hash do conteúdo (determinístico), e quarentenar as demais. Revisar com o profiling real. |
+| Deduplicação na silver | Manter a primeira linha, manter a mais recente, rejeitar todas as repetidas | Manter uma linha, a mais preenchida (mais colunas não nulas depois da limpeza), com desempate pelo hash do conteúdo (determinístico), e quarentenar as demais. Só o hash mantinha, em Empresas, um registro vazio e descartava o completo; a regra de preenchimento corrige isso. |
 | Orquestração | Airflow, Prefect, cron + scripts | Em aberto |
 | Modelagem gold | dbt (com DuckDB), SQL puro | Decidido: SQL puro do DuckDB, em um módulo Python, com o mesmo padrão de manifesto e execução da silver. Menos peças para um projeto de um mês de dados e um autor; dbt pode entrar se a quantidade de modelos crescer. |
 | Particionamento do Parquet | por UF, por mês de referência, sem partição | Em aberto |

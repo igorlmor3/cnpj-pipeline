@@ -212,7 +212,7 @@ O que a silver faz, tabela por tabela:
 - Valores que significam "não informado" viram NULL: nos campos de endereço e no nome fantasia, textos só de zeros, pontos ou hífens, `N/A`, `NULL`, `NAO INFORMADO` e `SEM INFORMACAO`; em telefone, DDD, fax e CEP, valores só de zeros. Essas regras vieram do profiling do mês real (2026-10). `S/N` no número é mantido, porque é o valor padrão de "sem número".
 - UF fora das 27 siglas (mais `EX`) vira NULL; e-mail vai para minúsculas.
 - Chaves obrigatórias inválidas (por exemplo `cnpj_basico` fora de 8 posições alfanuméricas) enviam a linha para `data/silver/_quarantine/` com o motivo em `_reject_reason`.
-- Chaves de negócio duplicadas mantêm uma linha, escolhida de forma determinística (hash do conteúdo, então a ordem de entrada não importa), e as demais vão para a quarentena como `duplicate_key`.
+- Chaves de negócio duplicadas mantêm uma linha, escolhida de forma determinística (a mais preenchida depois da limpeza; no empate, o hash do conteúdo, então a ordem de entrada não importa), e as demais vão para a quarentena como `duplicate_key`.
 - Estabelecimentos ganha a coluna derivada `cnpj` (14 posições).
 
 Se a fração de linhas em quarentena de uma tabela passar de `--max-quarantine-ratio` (padrão 1%), a tabela falha e a saída silver é removida; a quarentena fica para inspeção. O manifesto `data/silver/_manifest_<mês>.json` e o relatório `docs/silver/<mês>.md` registram, por coluna, quantos valores foram anulados ou alterados (apenas contagens, sem valores).
@@ -308,7 +308,7 @@ Primeira execução completa, sobre o mês de referência 2026-10 (arquivos `K32
 | Tabela | Linhas | CSV | Bronze (conversão) | Silver |
 | --- | ---: | ---: | ---: | ---: |
 | Estabelecimentos | 73.809.379 | 16,05 GiB | 208 s | 1.129 s |
-| Empresas | 70.517.438 | 5,13 GiB | 40 s | 474 s |
+| Empresas | 70.517.438 | 5,13 GiB | 40 s | 509 s |
 | Simples | 50.806.102 | 2,98 GiB | 30 s | 50 s |
 | Sócios | 28.495.961 | 2,72 GiB | 37 s | 89 s |
 | Tabelas de domínio (6) | 7.409 | menos de 1 MiB | menos de 1 s | menos de 1 s |
@@ -316,6 +316,7 @@ Primeira execução completa, sobre o mês de referência 2026-10 (arquivos `K32
 Observações:
 
 - O tempo da bronze é só o da conversão no DuckDB. A extração do zip e a conversão de latin-1 para UTF-8, feitas em Python, somam um tempo a mais que não foi medido separadamente.
+- O tempo da silver de Empresas (509 s) é o da reconstrução com a regra de desempate por preenchimento; a primeira execução levou 474 s.
 - O tempo da silver de Estabelecimentos é o da segunda execução, já com as regras de valores de espaço reservado (1.129 s). A primeira execução, sem essas regras, levou 463 s. A diferença não vem só das regras: a repetição rodou com o computador em uso para outras coisas, e um teste sintético de 8 milhões de linhas mostrou cerca de 10% de custo adicional da regra. Convém medir de novo, com a máquina parada, antes de citar o tempo como referência.
 - A parte 0 de cada tabela grande é bem maior que as demais (por exemplo, Estabelecimentos0 tem 6,9 GiB de CSV, e as outras nove partes têm cerca de 1 GiB cada). O particionamento do arquivo oficial não é uniforme.
 - A máquina está descrita em [Verificações de qualidade](#verificações-de-qualidade-e-máquina). O pico de memória desta execução não foi medido.
@@ -326,9 +327,9 @@ Gold do mesmo mês construída sobre a silver, na versão com a marcação de or
 
 | Modelo | Linhas | Parquet | Tempo |
 | --- | ---: | ---: | ---: |
-| `fato_estabelecimento` | 73.809.379 | 1,48 GiB | 693,7 s |
-| `mart_estabelecimentos_ativos` | 303.382 | 1,4 MiB | 2,7 s |
-| `mart_aberturas_mensal` | 330.914 | 1,2 MiB | 2,1 s |
+| `fato_estabelecimento` | 73.809.379 | 1,48 GiB | 1.023,3 s |
+| `mart_estabelecimentos_ativos` | 303.382 | 1,4 MiB | 4,5 s |
+| `mart_aberturas_mensal` | 330.914 | 1,2 MiB | 2,0 s |
 | `mart_perfil_porte_natureza` | 148 | menos de 1 MiB | 1,7 s |
 | `mart_simples_mei_uf` | 56 | menos de 1 MiB | 0,6 s |
 | `mart_socios_qualificacao` | 88 | menos de 1 MiB | 0,5 s |
@@ -337,7 +338,7 @@ Gold do mesmo mês construída sobre a silver, na versão com a marcação de or
 - As 17 verificações bloqueantes passaram: o fato tem as mesmas 73.809.379 linhas de Estabelecimentos na silver e nenhum CNPJ repetido, 3.326.186 estabelecimentos marcados como organização política (o mesmo número do CNAE 9492800 na silver, também conferido na soma das aberturas), a soma de cada mart bate com o fato (28.380.653 estabelecimentos ativos; 27.049.049 empresas ativas, das quais 21.047.359 optantes pelo Simples; 28.495.961 sócios) e as dimensões não repetem código.
 - Nenhuma chave ficou sem correspondência: todo estabelecimento tem UF, data de início, empresa, CNAE na dimensão de CNAE e município na dimensão de municípios.
 - A gold inteira ocupa cerca de 1,5 GiB, quase tudo no fato. A construção do fato (junção com Empresas e Simples e gravação) responde por mais de 95% do tempo; os marts levam segundos porque leem o fato já em Parquet.
-- A diferença de tempo do fato entre a primeira execução (1.308,5 s) e esta (693,7 s) não foi investigada; a carga do computador entre as duas não foi controlada. A máquina está descrita em [Verificações de qualidade](#verificações-de-qualidade-e-máquina); o pico de memória desta execução não foi medido, e o limite de memória do DuckDB era o padrão de 4 GB, então a junção pode ter usado disco para transbordo.
+- O fato levou 1.308,5 s na primeira execução e 693,7 s e 1.023,3 s nas duas reconstruções seguintes (a última, depois da correção da chave duplicada em Empresas). A variação não foi investigada e a carga do computador entre as execuções não foi controlada, então esses tempos servem como ordem de grandeza, não como medida de desempenho. A máquina está descrita em [Verificações de qualidade](#verificações-de-qualidade-e-máquina); o pico de memória desta execução não foi medido, e o limite de memória do DuckDB era o padrão de 4 GB, então a junção pode ter usado disco para transbordo.
 
 ### Publicação da gold na AWS
 
