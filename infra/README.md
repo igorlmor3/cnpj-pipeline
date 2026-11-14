@@ -70,7 +70,7 @@ As chaves de acesso do usuário `cnpj-pipeline-publisher` não são criadas pelo
 # Veja o que seria enviado, sem enviar nada
 python -m cnpj_pipeline.cloud.publish --month 2026-10 --dry-run
 
-# Envie a silver (padrão). Use --layers silver gold para incluir a gold quando existir
+# Envie a silver (padrão). Use --layers silver gold para incluir a gold (python -m cnpj_pipeline.gold --month AAAA-MM)
 python -m cnpj_pipeline.cloud.publish --month 2026-10
 
 # Crie as tabelas no Athena (uma vez) e consulte

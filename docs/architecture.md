@@ -7,7 +7,7 @@
 | raw | Arquivos originais da Receita (zip), com manifesto | Imutável. Nunca editar. |
 | bronze | Parquet com todas as colunas como texto | Sem regras de negócio. Apenas muda o formato e adiciona metadados de ingestão (arquivo de origem, mês de referência). Linhas malformadas vão para `_rejects/`. |
 | silver | Tipos corretos, datas e decimais tratados, sentinelas anuladas | Regras por coluna em `silver_rules.py`. Linhas com chave inválida ou duplicada vão para `data/silver/_quarantine/` com o motivo (`_reject_reason`). |
-| gold | Modelos analíticos | Construídos a partir da silver. |
+| gold | Dimensões, fato por estabelecimento e marts agregados | Construída a partir da silver por consultas SQL em `gold_models.py`. Sem dados de contato, endereço nem nomes. Verificações de qualidade bloqueantes ao final (chave única, contagens contra a silver, soma dos marts). |
 
 ## Princípios
 
@@ -25,9 +25,9 @@ Cada decisão é registrada aqui com as alternativas consideradas e o motivo.
 | Motor de transformação | DuckDB, Polars, PySpark | Decidido: DuckDB. Lê CSV maior que a memória, grava Parquet direto e roda local, sem servidor. |
 | Deduplicação na silver | Manter a primeira linha, manter a mais recente, rejeitar todas as repetidas | Decidido provisoriamente: manter uma linha, escolhida pelo hash do conteúdo (determinístico), e quarentenar as demais. Revisar com o profiling real. |
 | Orquestração | Airflow, Prefect, cron + scripts | Em aberto |
-| Modelagem gold | dbt (com DuckDB), SQL puro | Em aberto |
+| Modelagem gold | dbt (com DuckDB), SQL puro | Decidido: SQL puro do DuckDB, em um módulo Python, com o mesmo padrão de manifesto e execução da silver. Menos peças para um projeto de um mês de dados e um autor; dbt pode entrar se a quantidade de modelos crescer. |
 | Particionamento do Parquet | por UF, por mês de referência, sem partição | Em aberto |
-| Testes de qualidade | dbt tests, Great Expectations, pytest | Em aberto |
+| Testes de qualidade | dbt tests, Great Expectations, pytest | Parcial: a gold roda verificações próprias a cada execução e os testes unitários usam pytest. Cobertura dos dados da silver e do mês real em aberto. |
 
 ## Decisões de plataforma e de produto
 

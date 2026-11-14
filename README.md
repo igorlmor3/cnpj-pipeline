@@ -2,7 +2,7 @@
 
 Pipeline ETL em lote sobre os dados abertos do CNPJ da Receita Federal do Brasil. O objetivo do projeto é tratar um dataset público grande (alvo de 5 a 10 GB de dado bruto) com problemas reais de qualidade: arquivos sem cabeçalho, separador `;`, encoding `ISO-8859-1`, vírgula decimal, datas em texto e valores sentinela.
 
-Status: em desenvolvimento. As camadas raw, bronze e silver, o profiling e a demonstração com dados sintéticos estão implementados e testados. A validação com o mês real, a camada gold, a publicação na AWS, a análise, o agente de IA e o site são as próximas etapas e estão descritas em [Visão geral do projeto](#visão-geral-do-projeto). A seção [Roadmap](#roadmap) mostra o que já existe e o que falta.
+Status: em desenvolvimento. As camadas raw, bronze e silver, o profiling e a demonstração com dados sintéticos foram validados com o mês real 2026-10. A camada gold também foi executada sobre o mês real, com todas as verificações de qualidade passando. A publicação na AWS, a análise, o agente de IA e o site são as próximas etapas e estão descritas em [Visão geral do projeto](#visão-geral-do-projeto). A seção [Roadmap](#roadmap) mostra o que já existe e o que falta.
 
 ## Fonte dos dados
 
@@ -29,7 +29,8 @@ data/silver   tipos corrigidos, datas e decimais tratados, sentinelas viram nulo
               registros rejeitados vão para uma tabela de quarentena
         |
         v
-data/gold     modelos analíticos (por exemplo, empresas ativas por município e CNAE)
+data/gold     dimensões, fato por estabelecimento e marts agregados (por exemplo,
+              estabelecimentos ativos por município e CNAE)
 ```
 
 O motor de transformação é o DuckDB. As decisões tomadas e as ainda em aberto estão registradas em [docs/architecture.md](docs/architecture.md).
@@ -38,7 +39,7 @@ O motor de transformação é o DuckDB. As decisões tomadas e as ainda em abert
 
 O projeto está planejado em cinco frentes. A primeira está implementada; as demais são planejadas e ainda não existem no repositório.
 
-1. **Pipeline de dados (implementado até a silver).** Download com retomada, bronze, profiling e silver, todos testados com dados sintéticos e executados no CI. Falta validar com o mês real.
+1. **Pipeline de dados (implementado até a gold).** Download com retomada, bronze, profiling, silver e gold, todos testados com dados sintéticos e executados no CI. O fluxo completo já rodou sobre o mês real 2026-10.
 2. **Publicação na AWS (nível 1 escrito, ainda não aplicado; nível 2 planejado).** Será feita em dois níveis, nesta ordem:
    - Nível 1: o pipeline continua rodando localmente e publica o Parquet (bronze, silver e gold) em um bucket S3, com o mesmo particionamento por `reference_month`. Um catálogo no AWS Glue e consultas no Athena permitem rodar SQL sobre os dados na nuvem. A infraestrutura é descrita em Terraform (`infra/`), com um usuário IAM restrito ao bucket e alerta de orçamento. O código e os testes com clientes simulados já existem, mas o ambiente ainda não foi aplicado em uma conta real. Veja [Publicação na AWS (nível 1)](#publicação-na-aws-nível-1).
    - Nível 2: o pipeline passa a rodar na nuvem, em um container no ECS Fargate (a imagem Docker já existe), lendo e gravando `s3://` diretamente. O acesso passa a ser feito por papel IAM da tarefa, sem chaves.
@@ -62,12 +63,13 @@ As escolhas feitas para cada decisão, com as alternativas consideradas, estão 
 │   ├── raw/
 │   ├── bronze/
 │   ├── silver/            Parquet tipado, mais _quarantine/ com as linhas rejeitadas
-│   └── gold/
+│   └── gold/              dimensões, fato e marts em Parquet, mais o manifesto do mês
 ├── docs/
 │   ├── architecture.md    decisões de arquitetura
 │   ├── data_quality_rules.md   catálogo de problemas de qualidade e decisões
 │   ├── profiling/         relatórios gerados pelo profiling (apenas agregados)
-│   └── silver/            relatório das regras aplicadas na silver (apenas contagens)
+│   ├── silver/            relatório das regras aplicadas na silver (apenas contagens)
+│   └── gold/              relatório dos modelos e das verificações da gold (apenas contagens)
 ├── src/cnpj_pipeline/
 │   ├── config.py          caminhos e configuração
 │   ├── download.py        download parametrizado com retomada e manifesto
@@ -76,9 +78,11 @@ As escolhas feitas para cada decisão, com as alternativas consideradas, estão 
 │   ├── profiling.py       relatórios de qualidade de dados sobre a bronze
 │   ├── silver_rules.py    regras de limpeza e tipagem por coluna (provisórias)
 │   ├── silver.py          bronze para silver: tipos, limpeza, quarentena e deduplicação
+│   ├── gold_models.py    modelos da gold em SQL: dimensões, fato e marts
+│   ├── gold.py            silver para gold: construção, verificações de qualidade e manifesto
 │   ├── cloud/             publicação no S3 (publish.py) e tabelas/consultas no Athena (athena.py)
 │   ├── sample.py          gerador de zips sintéticos com defeitos plantados
-│   └── demo.py            amostra, bronze, profiling e silver de ponta a ponta
+│   └── demo.py            amostra, bronze, profiling, silver e gold de ponta a ponta
 ├── infra/                 Terraform da AWS (bucket, Glue, Athena, IAM, orçamento)
 ├── tests/
 ├── .github/workflows/ci.yml
@@ -95,7 +99,7 @@ Para ver o pipeline inteiro funcionando em poucos segundos, sem os 8 GB reais:
 python -m cnpj_pipeline.demo
 ```
 
-O comando gera zips sintéticos no formato dos arquivos da Receita, com defeitos plantados de propósito (espaços nas bordas, `;` e aspas dentro de textos, decimais com ponto, datas zeradas e inválidas, chaves duplicadas, órfãs e inválidas, linhas com número de colunas errado), converte tudo para Parquet na bronze, roda o profiling e constrói a camada silver. A saída fica em `data/sample/`, separada dos dados reais. Os relatórios em `data/sample/profiling/2000-01/` mostram os defeitos sendo encontrados, e `data/sample/silver_report/` mostra o que a silver corrigiu. Todos os dados são inventados e não correspondem a pessoas ou empresas reais.
+O comando gera zips sintéticos no formato dos arquivos da Receita, com defeitos plantados de propósito (espaços nas bordas, `;` e aspas dentro de textos, decimais com ponto, datas zeradas e inválidas, chaves duplicadas, órfãs e inválidas, linhas com número de colunas errado), converte tudo para Parquet na bronze, roda o profiling e constrói as camadas silver e gold. A saída fica em `data/sample/`, separada dos dados reais. Os relatórios em `data/sample/profiling/2000-01/` mostram os defeitos sendo encontrados, `data/sample/silver_report/` mostra o que a silver corrigiu e `data/sample/gold_report/` mostra os modelos da gold e as verificações. Todos os dados são inventados e não correspondem a pessoas ou empresas reais.
 
 O mesmo fluxo roda como teste automatizado no CI a cada push.
 
@@ -220,6 +224,42 @@ Se a fração de linhas em quarentena de uma tabela passar de `--max-quarantine-
 
 As regras estão em `silver_rules.py`. Parte delas já foi ajustada com o profiling do mês real (2026-10), como o tratamento de bytes de controle e de valores de espaço reservado, mas o catálogo em [docs/data_quality_rules.md](docs/data_quality_rules.md) ainda precisa ser fechado regra a regra.
 
+## Camada gold
+
+`python -m cnpj_pipeline.gold --month AAAA-MM` lê a silver e grava `data/gold/<modelo>/reference_month=<mês>/<modelo>.parquet`. Os modelos são consultas SQL do DuckDB em `gold_models.py`.
+
+| Modelo | Conteúdo |
+| --- | --- |
+| `dim_cnae`, `dim_cnae_secao` | Subclasses da CNAE com divisão e seção; as 21 seções (A a U) do IBGE |
+| `dim_natureza_juridica` | Natureza jurídica com o grupo (primeiro dígito do código) |
+| `dim_municipio`, `dim_qualificacao_socio` | Municípios e qualificações de sócio, vindos das tabelas de domínio |
+| `dim_situacao_cadastral`, `dim_porte` | Rótulos dos códigos documentados no layout da Receita |
+| `fato_estabelecimento` | Uma linha por CNPJ de 14 posições: situação, datas, CNAE principal e seção, UF, município, natureza, porte, capital social e indicadores de Simples e MEI |
+| `mart_aberturas_mensal` | Estabelecimentos abertos por mês, UF e seção da CNAE |
+| `mart_estabelecimentos_ativos` | Estabelecimentos ativos por UF, município e divisão da CNAE |
+| `mart_perfil_porte_natureza` | Empresas ativas, capital social total e mediano por porte e natureza jurídica |
+| `mart_simples_mei_uf` | Empresas ativas e participação de Simples e MEI por UF |
+| `mart_socios_qualificacao` | Sócios por qualificação e tipo (pessoa física, jurídica ou estrangeiro) |
+
+Decisões de modelagem:
+
+- O fato não tem razão social, nome fantasia, endereço, telefone, e-mail nem nomes de sócios. A gold é a base das saídas públicas (site e agente), que usam apenas agregados, e um teste confere que nenhuma dessas colunas nem valores de exemplo aparecem nos arquivos.
+- "Empresa ativa" nos marts é a matriz com situação cadastral ativa, o que conta cada empresa uma só vez, mesmo com várias filiais.
+- Empresa sem linha em Simples é tratada como não optante pelo Simples nem pelo MEI.
+- Os marts de aberturas mostram o que existe no cadastro do mês: estabelecimentos já removidos do cadastro não aparecem, então a série histórica pode subestimar aberturas antigas.
+- Os rótulos de códigos (situação, porte, tipo de sócio) e as seções da CNAE são tabelas fixas em `gold_models.py`, e não vêm dos arquivos da Receita.
+
+Depois de construir, a gold roda verificações. As bloqueantes fazem o comando falhar (código de saída 1) e indicam que a gold não deve ser publicada: o CNPJ de 14 posições não se repete no fato, o fato tem as mesmas linhas que Estabelecimentos na silver, a soma de cada mart bate com a contagem correspondente no fato (e a de sócios, com a silver) e as dimensões não repetem código. A informativa registra, sem falhar, quantos estabelecimentos têm UF ou data de início nulas, natureza nula ou sem empresa correspondente e chaves sem correspondência nas dimensões de CNAE, município e natureza. O manifesto `data/gold/_manifest_<mês>.json` e o relatório `docs/gold/<mês>.md` trazem apenas contagens.
+
+| Opção | Descrição |
+| --- | --- |
+| `--models M [M ...]` | Subconjunto de modelos (padrão: todos) |
+| `--force` | Refaz modelos que já existem; modelos que dependem de um modelo refeito são refeitos junto |
+| `--memory-limit` | Limite de memória do DuckDB (padrão: 4GB) |
+| `--report-dir` | Pasta do relatório (padrão: `docs/gold`) |
+
+Um modelo cuja silver ou cujo modelo de origem não existe é pulado com aviso. Os números da primeira execução sobre o mês real estão em [Resultados medidos](#resultados-medidos).
+
 ## Publicação na AWS (nível 1)
 
 O nível 1 mantém o processamento local e leva o resultado para a nuvem. O passo a passo completo, com pré-requisitos, custos e como desmontar tudo, está em [infra/README.md](infra/README.md).
@@ -236,7 +276,7 @@ Cada problema encontrado nos dados é registrado em [docs/data_quality_rules.md]
 
 ## Resultados medidos
 
-Primeira execução completa, sobre o mês de referência 2026-10 (arquivos `K3241.K03200Y*.D61010`, publicados pela Receita em outubro de 2026). Os números vêm dos manifestos `data/bronze/_manifest_2026-10.json` e `data/silver/_manifest_2026-10.json`.
+Primeira execução completa, sobre o mês de referência 2026-10 (arquivos `K3241.K03200Y*.D61010`, publicados pela Receita em outubro de 2026). Os números vêm dos manifestos `data/bronze/_manifest_2026-10.json`, `data/silver/_manifest_2026-10.json` e `data/gold/_manifest_2026-10.json`.
 
 | Métrica | Valor |
 | --- | --- |
@@ -263,6 +303,25 @@ Observações:
 - A parte 0 de cada tabela grande é bem maior que as demais (por exemplo, Estabelecimentos0 tem 6,9 GiB de CSV, e as outras nove partes têm cerca de 1 GiB cada). O particionamento do arquivo oficial não é uniforme.
 - Pico de memória e especificação da máquina não foram registrados nesta execução.
 
+### Camada gold
+
+Primeira execução da gold sobre o mesmo mês, depois da silver (relatório de contagens em [docs/gold/2026-10.md](docs/gold/2026-10.md)).
+
+| Modelo | Linhas | Parquet | Tempo |
+| --- | ---: | ---: | ---: |
+| `fato_estabelecimento` | 73.809.379 | 1,48 GiB | 1.308,5 s |
+| `mart_estabelecimentos_ativos` | 297.811 | 1,4 MiB | 6,6 s |
+| `mart_aberturas_mensal` | 322.173 | 1,2 MiB | 2,3 s |
+| `mart_perfil_porte_natureza` | 124 | menos de 1 MiB | 1,9 s |
+| `mart_simples_mei_uf` | 28 | menos de 1 MiB | 0,5 s |
+| `mart_socios_qualificacao` | 88 | menos de 1 MiB | 0,5 s |
+| 7 dimensões | de 4 a 5.572 | menos de 1 MiB cada | menos de 0,1 s cada |
+
+- As 15 verificações bloqueantes passaram: o fato tem as mesmas 73.809.379 linhas de Estabelecimentos na silver e nenhum CNPJ repetido, a soma de cada mart bate com o fato (28.380.653 estabelecimentos ativos; 27.049.049 empresas ativas, das quais 21.047.359 optantes pelo Simples; 28.495.961 sócios) e as dimensões não repetem código.
+- Nenhuma chave ficou sem correspondência: todo estabelecimento tem UF, data de início, empresa, CNAE na dimensão de CNAE e município na dimensão de municípios.
+- A gold inteira ocupa cerca de 1,5 GiB, quase tudo no fato. A construção do fato (junção com Empresas e Simples e gravação) responde por mais de 95% do tempo; os marts levam segundos porque leem o fato já em Parquet.
+- Foi a primeira execução. Pico de memória e especificação da máquina não foram registrados, e o limite de memória do DuckDB era o padrão de 4 GB, então a junção pode ter usado disco para transbordo.
+
 ## Roadmap
 
 - [x] Estrutura do repositório, CI, Docker
@@ -276,8 +335,9 @@ Observações:
 - [x] Camada silver (tipagem, limpeza, quarentena e deduplicação, testada com dados sintéticos)
 - [ ] Confirmar as demais regras da silver contra o profiling do mês real (parte já ajustada)
 - [x] Gerador de amostra sintética e demo ponta a ponta, testados no CI
-- [ ] Camada gold (tabelas analíticas a partir da silver)
-- [ ] Testes de qualidade de dados automatizados (unicidade de chaves, contagens entre camadas, formato do CNPJ)
+- [x] Camada gold (dimensões, fato e marts a partir da silver, com verificações; testada com dados sintéticos e executada no mês real)
+- [x] Rodar a gold no mês real e registrar contagens, tempo e tamanho
+- [ ] Testes de qualidade de dados automatizados (a gold já verifica unicidade de chaves e contagens entre camadas; falta cobrir formato do CNPJ, intervalos de datas e a silver)
 - [ ] Benchmarks documentados (amostra grande e mês real)
 - [x] AWS nível 1, código: Terraform, publicação no S3 e tabelas no Athena (testados com clientes simulados)
 - [ ] AWS nível 1, aplicar em conta real, publicar o mês real e registrar custo e tempo

@@ -1,7 +1,8 @@
 """Demonstracao ponta a ponta com dados sinteticos.
 
-Gera uma amostra sintetica, converte para Parquet na camada bronze, roda o profiling e
-constroi a camada silver (tipagem, limpeza e quarentena). Tudo acontece em uma pasta
+Gera uma amostra sintetica, converte para Parquet na camada bronze, roda o profiling,
+constroi a camada silver (tipagem, limpeza e quarentena) e a camada gold (dimensoes, fato e
+marts, com as verificacoes de qualidade). Tudo acontece em uma pasta
 separada (padrao: data/sample) e nao toca em data/raw nem em docs/.
 
 Exemplo:
@@ -16,7 +17,7 @@ import logging
 import sys
 from pathlib import Path
 
-from cnpj_pipeline import bronze, config, profiling, sample, silver
+from cnpj_pipeline import bronze, config, gold, profiling, sample, silver
 
 log = logging.getLogger("cnpj_pipeline.demo")
 
@@ -34,7 +35,7 @@ def run_demo(
     memory_limit: str = "1GB",
     threads: int | None = None,
 ) -> int:
-    """Executa amostra, bronze, profiling e silver dentro de base_dir. Retorna o codigo de saida."""
+    """Executa amostra, bronze, profiling, silver e gold dentro de base_dir. Retorna o codigo de saida."""
     if base_dir.resolve() in (config.DATA_DIR.resolve(), config.RAW_DIR.resolve()):
         log.error("Use uma pasta separada dos dados reais (por exemplo data/sample).")
         return 2
@@ -43,6 +44,7 @@ def run_demo(
     bronze_dir = base_dir / "bronze"
     report_dir = base_dir / "profiling"
     silver_dir = base_dir / "silver"
+    gold_dir = base_dir / "gold"
 
     created = sample.generate(month, raw_dir, rows=rows)
     log.info("Amostra: %d arquivo(s) em %s", sum(len(v) for v in created.values()), raw_dir / month)
@@ -86,15 +88,34 @@ def run_demo(
         max_quarantine_ratio=DEMO_MAX_QUARANTINE_RATIO,
         tmp_root=base_dir / "tmp",
     )
+    if code:
+        return code
+
+    code = gold.run(
+        month,
+        None,
+        silver_dir=silver_dir,
+        gold_dir=gold_dir,
+        report_dir=base_dir / "gold_report",
+        force=True,
+        memory_limit=memory_limit,
+        threads=threads,
+        tmp_root=base_dir / "tmp",
+    )
     if code == 0:
-        log.info("Demo concluida. Relatorios em %s e %s", report_dir / month, base_dir / "silver_report")
+        log.info(
+            "Demo concluida. Relatorios em %s, %s e %s",
+            report_dir / month,
+            base_dir / "silver_report",
+            base_dir / "gold_report",
+        )
     return code
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="python -m cnpj_pipeline.demo",
-        description="Roda amostra sintetica, bronze, profiling e silver em uma pasta separada.",
+        description="Roda amostra sintetica, bronze, profiling, silver e gold em uma pasta separada.",
     )
     parser.add_argument(
         "--dir", type=Path, default=config.DATA_DIR / "sample", help="Pasta da demo (padrao: data/sample)"

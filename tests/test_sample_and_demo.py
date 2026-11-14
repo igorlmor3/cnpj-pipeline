@@ -12,6 +12,7 @@ from cnpj_pipeline import config
 from cnpj_pipeline.bronze import check_layout
 from cnpj_pipeline.demo import main as demo_main
 from cnpj_pipeline.demo import run_demo
+from cnpj_pipeline.gold_models import MODEL_NAMES
 from cnpj_pipeline.sample import DEFAULT_MONTH, generate
 from cnpj_pipeline.sample import main as sample_main
 from cnpj_pipeline.schemas import columns_for
@@ -163,6 +164,17 @@ def test_demo_silver_types_and_quarantine(demo_dir):
     }
     assert reasons == {"invalid_key:cnpj_basico", "duplicate_key"}
     assert (demo_dir / "silver_report" / f"{DEFAULT_MONTH}.md").exists()
+
+
+def test_demo_gold_builds_every_model_and_passes_the_checks(demo_dir):
+    gold = demo_dir / "gold"
+    manifest = json.loads((gold / f"_manifest_{DEFAULT_MONTH}.json").read_text(encoding="utf-8"))
+
+    assert set(manifest["models"]) == set(MODEL_NAMES)
+    assert manifest["models"]["fato_estabelecimento"]["rows"] > 0
+    blocking = [c for c in manifest["checks"] if c["blocking"]]
+    assert blocking and all(c["ok"] for c in blocking)
+    assert (demo_dir / "gold_report" / f"{DEFAULT_MONTH}.md").exists()
 
 
 def test_demo_refuses_to_run_on_the_real_data_folder():
