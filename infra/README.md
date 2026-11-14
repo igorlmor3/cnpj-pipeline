@@ -75,7 +75,7 @@ python -m cnpj_pipeline.cloud.publish --month 2026-10 --layers gold
 
 # Crie as tabelas da gold no Athena (uma vez; as colunas vêm do manifesto local da gold) e consulte
 python -m cnpj_pipeline.cloud.athena create-tables --layer gold --month 2026-10
-python -m cnpj_pipeline.cloud.athena query "SELECT uf, empresas_ativas, pct_simples, pct_mei FROM gold_mart_simples_mei_uf WHERE reference_month = '2026-10' ORDER BY empresas_ativas DESC LIMIT 5"
+python -m cnpj_pipeline.cloud.athena query "SELECT uf, empresas_ativas, pct_simples, pct_mei FROM gold_mart_simples_mei_uf WHERE reference_month = '2026-10' AND NOT is_organizacao_politica ORDER BY empresas_ativas DESC LIMIT 5"
 ```
 
 Para a silver, use `--layers silver` (ou omita `--layers`) e `create-tables` sem `--layer`; as tabelas se chamam `silver_<tabela>`. As da gold se chamam `gold_<modelo>`.

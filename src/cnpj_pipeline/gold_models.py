@@ -79,6 +79,11 @@ TIPOS_SOCIO: tuple[tuple[str, str], ...] = (
 
 MATRIZ = "1"  # identificador_matriz_filial: 1 = matriz, 2 = filial
 
+# CNAE 9492800 (atividades de organizacoes politicas). Em anos de eleicao municipal concentra a
+# abertura de CNPJs de candidaturas (docs/analysis/2026-10.md), o que distorce as series de aberturas
+# e os percentuais de empresas ativas. Por isso a gold marca o CNAE principal e os marts separam o grupo.
+CNAE_ORG_POLITICA = "9492800"
+
 
 def _q(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
@@ -198,6 +203,7 @@ def fato_estabelecimento(month: str, ts: str) -> str:
             b.cnae_fiscal_principal AS cnae_principal,
             substr(b.cnae_fiscal_principal, 1, 2) AS cnae_divisao,
             {secao_case("b._div")} AS cnae_secao,
+            coalesce(b.cnae_fiscal_principal = {_q(CNAE_ORG_POLITICA)}, FALSE) AS is_organizacao_politica,
             b.uf,
             b.municipio,
             p.natureza_juridica,
@@ -227,14 +233,16 @@ def mart_aberturas_mensal(month: str, ts: str) -> str:
             f.ano_inicio_atividade AS ano,
             f.uf,
             f.cnae_secao,
+            f.is_organizacao_politica,
             count(*) AS estabelecimentos_abertos,
             count(*) FILTER (WHERE f.is_matriz) AS matrizes_abertas,
             count(*) FILTER (WHERE f.is_ativo) AS ainda_ativos,
             {meta_sql(month, ts)}
         FROM gold_fato_estabelecimento f
         WHERE f.data_inicio_atividade IS NOT NULL
-        GROUP BY f.ano_mes_inicio_atividade, f.ano_inicio_atividade, f.uf, f.cnae_secao
-        ORDER BY ano_mes, f.uf, f.cnae_secao
+        GROUP BY f.ano_mes_inicio_atividade, f.ano_inicio_atividade, f.uf, f.cnae_secao,
+            f.is_organizacao_politica
+        ORDER BY ano_mes, f.uf, f.cnae_secao, f.is_organizacao_politica
     """
 
 
@@ -247,6 +255,7 @@ def mart_estabelecimentos_ativos(month: str, ts: str) -> str:
             f.cnae_divisao,
             f.cnae_secao,
             s.descricao AS cnae_secao_descricao,
+            f.is_organizacao_politica,
             count(*) AS estabelecimentos_ativos,
             count(*) FILTER (WHERE f.is_matriz) AS matrizes_ativas,
             count(*) FILTER (WHERE f.is_optante_simples) AS optantes_simples,
@@ -256,8 +265,9 @@ def mart_estabelecimentos_ativos(month: str, ts: str) -> str:
         LEFT JOIN gold_dim_municipio m ON m.codigo = f.municipio
         LEFT JOIN gold_dim_cnae_secao s ON s.codigo = f.cnae_secao
         WHERE f.is_ativo
-        GROUP BY f.uf, f.municipio, m.descricao, f.cnae_divisao, f.cnae_secao, s.descricao
-        ORDER BY f.uf, f.municipio, f.cnae_divisao
+        GROUP BY f.uf, f.municipio, m.descricao, f.cnae_divisao, f.cnae_secao, s.descricao,
+            f.is_organizacao_politica
+        ORDER BY f.uf, f.municipio, f.cnae_divisao, f.is_organizacao_politica
     """
 
 
@@ -269,6 +279,7 @@ def mart_perfil_porte_natureza(month: str, ts: str) -> str:
             f.natureza_juridica,
             n.descricao AS natureza_descricao,
             n.grupo_descricao AS natureza_grupo,
+            f.is_organizacao_politica,
             count(*) AS empresas_ativas,
             sum(f.capital_social) AS capital_social_total,
             CAST(median(f.capital_social) AS DECIMAL(20,2)) AS capital_social_mediano,
@@ -277,8 +288,9 @@ def mart_perfil_porte_natureza(month: str, ts: str) -> str:
         LEFT JOIN gold_dim_porte p ON p.codigo = f.porte_empresa
         LEFT JOIN gold_dim_natureza_juridica n ON n.codigo = f.natureza_juridica
         WHERE f.is_matriz AND f.is_ativo
-        GROUP BY f.porte_empresa, p.descricao, f.natureza_juridica, n.descricao, n.grupo_descricao
-        ORDER BY f.porte_empresa, f.natureza_juridica
+        GROUP BY f.porte_empresa, p.descricao, f.natureza_juridica, n.descricao, n.grupo_descricao,
+            f.is_organizacao_politica
+        ORDER BY f.porte_empresa, f.natureza_juridica, f.is_organizacao_politica
     """
 
 
@@ -286,6 +298,7 @@ def mart_simples_mei_uf(month: str, ts: str) -> str:
     return f"""
         SELECT
             f.uf,
+            f.is_organizacao_politica,
             count(*) AS empresas_ativas,
             count(*) FILTER (WHERE f.is_optante_simples) AS optantes_simples,
             count(*) FILTER (WHERE f.is_mei) AS optantes_mei,
@@ -294,8 +307,8 @@ def mart_simples_mei_uf(month: str, ts: str) -> str:
             {meta_sql(month, ts)}
         FROM gold_fato_estabelecimento f
         WHERE f.is_matriz AND f.is_ativo
-        GROUP BY f.uf
-        ORDER BY f.uf
+        GROUP BY f.uf, f.is_organizacao_politica
+        ORDER BY f.uf, f.is_organizacao_politica
     """
 
 

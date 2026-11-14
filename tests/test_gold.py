@@ -12,6 +12,7 @@ from cnpj_pipeline import config
 from cnpj_pipeline.cloud.publish import collect_files
 from cnpj_pipeline.gold import gold_path, main, run
 from cnpj_pipeline.gold_models import (
+    CNAE_ORG_POLITICA,
     CNAE_SECOES,
     MODEL_NAMES,
     MODELS,
@@ -93,10 +94,40 @@ DOMAINS = {
 }  # fmt: skip
 
 
-def build_silver(tmp_path: Path) -> None:
+# Organizacoes politicas (CNAE 9492800) e uma associacao da mesma divisao 94 com outro CNAE.
+POLITICAS_ESTABELECIMENTOS = [
+    {"cnpj_basico": "00000005", "cnpj_ordem": "0001", "cnpj_dv": "11",
+     "identificador_matriz_filial": "1", "situacao_cadastral": "02",
+     "data_inicio_atividade": "20200915", "cnae_fiscal_principal": "9492800",
+     "uf": "SP", "municipio": "7107"},
+    {"cnpj_basico": "00000006", "cnpj_ordem": "0001", "cnpj_dv": "22",
+     "identificador_matriz_filial": "1", "situacao_cadastral": "08",
+     "data_inicio_atividade": "20200920", "cnae_fiscal_principal": "9492800",
+     "uf": "SP", "municipio": "7107"},
+    {"cnpj_basico": "00000007", "cnpj_ordem": "0001", "cnpj_dv": "33",
+     "identificador_matriz_filial": "1", "situacao_cadastral": "02",
+     "data_inicio_atividade": "20200920", "cnae_fiscal_principal": "9491000",
+     "uf": "SP", "municipio": "7107"},
+    # CNAE principal vazio na origem: o flag deve ser FALSE, nunca nulo
+    {"cnpj_basico": "00000008", "cnpj_ordem": "0001", "cnpj_dv": "44",
+     "identificador_matriz_filial": "1", "situacao_cadastral": "08",
+     "data_inicio_atividade": "20180510", "cnae_fiscal_principal": None,
+     "uf": "RJ", "municipio": "6001"},
+]  # fmt: skip
+POLITICAS_EMPRESAS = [
+    {"cnpj_basico": "00000005", "natureza_juridica": "4090", "porte_empresa": "05", "capital_social": "0,00"},
+    {"cnpj_basico": "00000006", "natureza_juridica": "4090", "porte_empresa": "05", "capital_social": "0,00"},
+    {"cnpj_basico": "00000007", "natureza_juridica": "3999", "porte_empresa": "03",
+     "capital_social": "10,00"},
+]  # fmt: skip
+
+
+def build_silver(tmp_path: Path, *, with_political: bool = False) -> None:
     bronze = tmp_path / "bronze"
-    write_bronze(bronze, "Estabelecimentos", ESTABELECIMENTOS)
-    write_bronze(bronze, "Empresas", EMPRESAS)
+    extra_estab = POLITICAS_ESTABELECIMENTOS if with_political else []
+    extra_emp = POLITICAS_EMPRESAS if with_political else []
+    write_bronze(bronze, "Estabelecimentos", ESTABELECIMENTOS + extra_estab)
+    write_bronze(bronze, "Empresas", EMPRESAS + extra_emp)
     write_bronze(bronze, "Simples", SIMPLES)
     write_bronze(bronze, "Socios", SOCIOS)
     for table, rows in DOMAINS.items():
@@ -218,6 +249,7 @@ def test_fato_has_one_row_per_cnpj_with_derived_columns(gold_dir):
     assert matriz["natureza_juridica"] == "2062" and matriz["porte_empresa"] == "05"
     assert matriz["capital_social"] == Decimal("1000.00")
     assert matriz["is_optante_simples"] is True and matriz["is_mei"] is False
+    assert matriz["is_organizacao_politica"] is False
     assert matriz["_reference_month"] == MONTH
 
     assert rows["00000001000272"]["is_matriz"] is False
@@ -345,6 +377,100 @@ def test_mart_socios_qualificacao(gold_dir):
 
 
 # --------------------------------------------------------------------------- #
+# Organizacoes politicas (CNAE 9492800)
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture
+def political_dir(tmp_path) -> Path:
+    build_silver(tmp_path, with_political=True)
+    assert run_gold(tmp_path) == 0
+    return tmp_path
+
+
+def test_cnae_org_politica_constant_is_the_political_organizations_code():
+    assert CNAE_ORG_POLITICA == "9492800"
+
+
+def test_fato_marks_only_the_political_cnae(political_dir):
+    rows = {r["cnpj"]: r for r in read(political_dir, "fato_estabelecimento", "cnpj")}
+
+    assert len(rows) == 9
+    flagged = {cnpj for cnpj, r in rows.items() if r["is_organizacao_politica"]}
+    assert flagged == {"00000005000111", "00000006000122"}
+    # mesma divisao 94, outro CNAE: nao e organizacao politica
+    assert rows["00000007000133"]["cnae_divisao"] == "94"
+    assert rows["00000007000133"]["is_organizacao_politica"] is False
+    # o flag nunca e nulo, nem quando o CNAE principal vem vazio
+    assert rows["00000008000144"]["cnae_principal"] is None
+    assert rows["00000008000144"]["is_organizacao_politica"] is False
+    assert all(r["is_organizacao_politica"] in (True, False) for r in rows.values())
+
+
+def test_aberturas_separates_the_political_group(political_dir):
+    rows = read(political_dir, "mart_aberturas_mensal", "ano_mes, uf, is_organizacao_politica")
+    got = {(r["ano_mes"], r["uf"], r["cnae_secao"], r["is_organizacao_politica"]): r for r in rows}
+
+    politica = got[("2020-09", "SP", "S", True)]
+    assert politica["estabelecimentos_abertos"] == 2
+    assert politica["matrizes_abertas"] == 2 and politica["ainda_ativos"] == 1
+    outras = got[("2020-09", "SP", "S", False)]
+    assert outras["estabelecimentos_abertos"] == 1  # a associacao de CNAE 9491000
+    # as demais linhas continuam sem a marcacao
+    assert all(not r["is_organizacao_politica"] for k, r in got.items() if k[:3] != ("2020-09", "SP", "S"))
+
+
+def test_other_marts_separate_the_political_group(political_dir):
+    ativos = {
+        (r["uf"], r["municipio"], r["cnae_divisao"], r["is_organizacao_politica"]): r
+        for r in read(political_dir, "mart_estabelecimentos_ativos", "uf NULLS LAST, municipio")
+    }
+    assert ativos[("SP", "7107", "94", True)]["estabelecimentos_ativos"] == 1  # a baixada fica de fora
+    assert ativos[("SP", "7107", "94", False)]["estabelecimentos_ativos"] == 1
+
+    perfil = {
+        (r["porte_empresa"], r["natureza_juridica"], r["is_organizacao_politica"]): r
+        for r in read(political_dir, "mart_perfil_porte_natureza", "porte_empresa NULLS LAST")
+    }
+    assert perfil[("05", "4090", True)]["empresas_ativas"] == 1
+    assert perfil[("03", "3999", False)]["empresas_ativas"] == 1
+    assert perfil[("05", "2062", False)]["empresas_ativas"] == 1  # as demais empresas nao mudam
+
+    simples = {
+        (r["uf"], r["is_organizacao_politica"]): r
+        for r in read(political_dir, "mart_simples_mei_uf", "uf NULLS LAST")
+    }
+    politica = simples[("SP", True)]
+    assert politica["empresas_ativas"] == 1 and politica["optantes_simples"] == 0
+    assert politica["pct_simples"] == 0.0
+    # sem a organizacao politica, o percentual e calculado so sobre as demais empresas de SP
+    outras = simples[("SP", False)]
+    assert outras["empresas_ativas"] == 2 and outras["optantes_simples"] == 1
+    assert outras["pct_simples"] == 50.0
+
+
+def test_political_checks_exist_and_pass(political_dir):
+    checks = {c["name"]: c for c in manifest(political_dir)["checks"]}
+
+    assert all(c["ok"] for c in checks.values() if c["blocking"])
+    for name in ("fato_org_politica_igual_silver", "mart_aberturas_org_politica_soma"):
+        assert checks[name]["blocking"] is True and checks[name]["ok"] is True, name
+        assert checks[name]["detail"] == {"esquerda": 2, "direita": 2}, name
+    # os totais gerais continuam fechando com o fato, agora somando os dois grupos
+    assert (
+        checks["mart_aberturas_soma"]["detail"]["esquerda"]
+        == checks["mart_aberturas_soma"]["detail"]["direita"]
+    )
+    assert checks["mart_ativos_soma"]["ok"] and checks["mart_simples_empresas_soma"]["ok"]
+
+
+def test_standard_data_has_no_political_rows(gold_dir):
+    checks = {c["name"]: c for c in manifest(gold_dir)["checks"]}
+    assert checks["fato_org_politica_igual_silver"]["detail"] == {"esquerda": 0, "direita": 0}
+    assert checks["mart_aberturas_org_politica_soma"]["detail"] == {"esquerda": 0, "direita": 0}
+
+
+# --------------------------------------------------------------------------- #
 # Verificacoes, manifesto e relatorio
 # --------------------------------------------------------------------------- #
 
@@ -439,6 +565,21 @@ def test_rebuilding_a_dependency_rebuilds_dependents(gold_dir):
     gold_path(gold_dir / "gold", "fato_estabelecimento", MONTH).unlink()
     assert run_gold(gold_dir, ["fato_estabelecimento", "mart_simples_mei_uf"]) == 0
     assert mart.stat().st_mtime_ns != before  # o fato foi refeito, entao o mart tambem
+
+
+def test_forcing_only_the_fato_also_rebuilds_the_marts(gold_dir):
+    root = gold_dir / "gold"
+    fato = gold_path(root, "fato_estabelecimento", MONTH)
+    marts = [gold_path(root, m, MONTH) for m in ("mart_aberturas_mensal", "mart_simples_mei_uf")]
+    dim = gold_path(root, "dim_cnae", MONTH)
+    before = {p: p.stat().st_mtime_ns for p in (fato, dim, *marts)}
+
+    assert run_gold(gold_dir, ["fato_estabelecimento"], force=True) == 0
+
+    assert fato.stat().st_mtime_ns != before[fato]
+    for mart in marts:
+        assert mart.stat().st_mtime_ns != before[mart]  # dependentes refeitos junto
+    assert dim.stat().st_mtime_ns == before[dim]  # quem o fato usa nao e refeito
 
 
 def test_models_without_inputs_are_skipped(tmp_path):

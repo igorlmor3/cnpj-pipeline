@@ -237,8 +237,8 @@ As regras estão em `silver_rules.py`. Parte delas já foi ajustada com o profil
 | `dim_natureza_juridica` | Natureza jurídica com o grupo (primeiro dígito do código) |
 | `dim_municipio`, `dim_qualificacao_socio` | Municípios e qualificações de sócio, vindos das tabelas de domínio |
 | `dim_situacao_cadastral`, `dim_porte` | Rótulos dos códigos documentados no layout da Receita |
-| `fato_estabelecimento` | Uma linha por CNPJ de 14 posições: situação, datas, CNAE principal e seção, UF, município, natureza, porte, capital social e indicadores de Simples e MEI |
-| `mart_aberturas_mensal` | Estabelecimentos abertos por mês, UF e seção da CNAE |
+| `fato_estabelecimento` | Uma linha por CNPJ de 14 posições: situação, datas, CNAE principal e seção, UF, município, natureza, porte, capital social e indicadores de Simples e MEI, mais a marcação `is_organizacao_politica` (CNAE 9492800) |
+| `mart_aberturas_mensal` | Estabelecimentos abertos por mês, UF e seção da CNAE, separados pela marcação de organização política |
 | `mart_estabelecimentos_ativos` | Estabelecimentos ativos por UF, município e divisão da CNAE |
 | `mart_perfil_porte_natureza` | Empresas ativas, capital social total e mediano por porte e natureza jurídica |
 | `mart_simples_mei_uf` | Empresas ativas e participação de Simples e MEI por UF |
@@ -251,12 +251,13 @@ Decisões de modelagem:
 - Empresa sem linha em Simples é tratada como não optante pelo Simples nem pelo MEI.
 - Os marts de aberturas mostram o que existe no cadastro do mês: estabelecimentos já removidos do cadastro não aparecem, então a série histórica pode subestimar aberturas antigas.
 - Os rótulos de códigos (situação, porte, tipo de sócio) e as seções da CNAE são tabelas fixas em `gold_models.py`, e não vêm dos arquivos da Receita.
+- O CNAE 9492800 (atividades de organizações políticas) cria picos nos anos de eleição municipal (a explicação provável são CNPJs de campanha, que o cadastro sozinho não demonstra) (ver [análise](docs/analysis/2026-10.md)). O fato traz a coluna `is_organizacao_politica`, e `mart_aberturas_mensal`, `mart_estabelecimentos_ativos`, `mart_perfil_porte_natureza` e `mart_simples_mei_uf` agrupam por ela, então cada consulta escolhe ler com ou sem esses registros. Somar sem filtrar continua dando o cadastro inteiro.
 
-Depois de construir, a gold roda verificações. As bloqueantes fazem o comando falhar (código de saída 1) e indicam que a gold não deve ser publicada: o CNPJ de 14 posições não se repete no fato, o fato tem as mesmas linhas que Estabelecimentos na silver, a soma de cada mart bate com a contagem correspondente no fato (e a de sócios, com a silver) e as dimensões não repetem código. A informativa registra, sem falhar, quantos estabelecimentos têm UF ou data de início nulas, natureza nula ou sem empresa correspondente e chaves sem correspondência nas dimensões de CNAE, município e natureza. O manifesto `data/gold/_manifest_<mês>.json` e o relatório `docs/gold/<mês>.md` trazem apenas contagens.
+Depois de construir, a gold roda verificações. As bloqueantes fazem o comando falhar (código de saída 1) e indicam que a gold não deve ser publicada: o CNPJ de 14 posições não se repete no fato, o fato tem as mesmas linhas que Estabelecimentos na silver, a soma de cada mart bate com a contagem correspondente no fato (e a de sócios, com a silver), a marcação de organização política no fato bate com a contagem do CNAE 9492800 na silver, a soma das aberturas marcadas bate com o fato e as dimensões não repetem código. A informativa registra, sem falhar, quantos estabelecimentos têm UF ou data de início nulas, natureza nula ou sem empresa correspondente e chaves sem correspondência nas dimensões de CNAE, município e natureza. O manifesto `data/gold/_manifest_<mês>.json` e o relatório `docs/gold/<mês>.md` trazem apenas contagens.
 
 | Opção | Descrição |
 | --- | --- |
-| `--models M [M ...]` | Subconjunto de modelos (padrão: todos) |
+| `--models M [M ...]` | Subconjunto de modelos (padrão: todos); os modelos que dependem deles entram junto, para não sobrar mart antigo ao lado de fato novo |
 | `--force` | Refaz modelos que já existem; modelos que dependem de um modelo refeito são refeitos junto |
 | `--memory-limit` | Limite de memória do DuckDB (padrão: 4GB) |
 | `--report-dir` | Pasta do relatório (padrão: `docs/gold`) |
@@ -321,22 +322,22 @@ Observações:
 
 ### Camada gold
 
-Primeira execução da gold sobre o mesmo mês, depois da silver (relatório de contagens em [docs/gold/2026-10.md](docs/gold/2026-10.md)).
+Gold do mesmo mês construída sobre a silver, na versão com a marcação de organização política (relatório de contagens em [docs/gold/2026-10.md](docs/gold/2026-10.md)). Os tempos são da reconstrução do fato e dos quatro marts que dependem dele; a primeira execução, sem a marcação, levou 1.308,5 s no fato.
 
 | Modelo | Linhas | Parquet | Tempo |
 | --- | ---: | ---: | ---: |
-| `fato_estabelecimento` | 73.809.379 | 1,48 GiB | 1.308,5 s |
-| `mart_estabelecimentos_ativos` | 297.811 | 1,4 MiB | 6,6 s |
-| `mart_aberturas_mensal` | 322.173 | 1,2 MiB | 2,3 s |
-| `mart_perfil_porte_natureza` | 124 | menos de 1 MiB | 1,9 s |
-| `mart_simples_mei_uf` | 28 | menos de 1 MiB | 0,5 s |
+| `fato_estabelecimento` | 73.809.379 | 1,48 GiB | 693,7 s |
+| `mart_estabelecimentos_ativos` | 303.382 | 1,4 MiB | 2,7 s |
+| `mart_aberturas_mensal` | 330.914 | 1,2 MiB | 2,1 s |
+| `mart_perfil_porte_natureza` | 148 | menos de 1 MiB | 1,7 s |
+| `mart_simples_mei_uf` | 56 | menos de 1 MiB | 0,6 s |
 | `mart_socios_qualificacao` | 88 | menos de 1 MiB | 0,5 s |
 | 7 dimensões | de 4 a 5.572 | menos de 1 MiB cada | menos de 0,1 s cada |
 
-- As 15 verificações bloqueantes passaram: o fato tem as mesmas 73.809.379 linhas de Estabelecimentos na silver e nenhum CNPJ repetido, a soma de cada mart bate com o fato (28.380.653 estabelecimentos ativos; 27.049.049 empresas ativas, das quais 21.047.359 optantes pelo Simples; 28.495.961 sócios) e as dimensões não repetem código.
+- As 17 verificações bloqueantes passaram: o fato tem as mesmas 73.809.379 linhas de Estabelecimentos na silver e nenhum CNPJ repetido, 3.326.186 estabelecimentos marcados como organização política (o mesmo número do CNAE 9492800 na silver, também conferido na soma das aberturas), a soma de cada mart bate com o fato (28.380.653 estabelecimentos ativos; 27.049.049 empresas ativas, das quais 21.047.359 optantes pelo Simples; 28.495.961 sócios) e as dimensões não repetem código.
 - Nenhuma chave ficou sem correspondência: todo estabelecimento tem UF, data de início, empresa, CNAE na dimensão de CNAE e município na dimensão de municípios.
 - A gold inteira ocupa cerca de 1,5 GiB, quase tudo no fato. A construção do fato (junção com Empresas e Simples e gravação) responde por mais de 95% do tempo; os marts levam segundos porque leem o fato já em Parquet.
-- Foi a primeira execução. A máquina está descrita em [Verificações de qualidade](#verificações-de-qualidade-e-máquina); o pico de memória desta execução não foi medido, e o limite de memória do DuckDB era o padrão de 4 GB, então a junção pode ter usado disco para transbordo.
+- A diferença de tempo do fato entre a primeira execução (1.308,5 s) e esta (693,7 s) não foi investigada; a carga do computador entre as duas não foi controlada. A máquina está descrita em [Verificações de qualidade](#verificações-de-qualidade-e-máquina); o pico de memória desta execução não foi medido, e o limite de memória do DuckDB era o padrão de 4 GB, então a junção pode ter usado disco para transbordo.
 
 ### Publicação da gold na AWS
 
@@ -392,7 +393,7 @@ Máquina onde o mês real foi processado e verificado: Windows 11, processador I
 - [ ] AWS nível 2: pipeline rodando em container no ECS Fargate com acesso por papel IAM
 - [ ] Orquestração do fluxo completo
 - [x] Primeira análise e principais insights sobre o cadastro de empresas (docs/analysis/2026-10.md)
-- [ ] Marcar o CNAE de organizações políticas na gold, para ler as aberturas com e sem ele
+- [x] Marcar o CNAE de organizações políticas na gold, para ler as aberturas com e sem ele
 - [ ] Agente de IA de texto para SQL com validação de consultas e limites de uso
 - [ ] Site em React com Tailwind publicando a análise e o agente
 

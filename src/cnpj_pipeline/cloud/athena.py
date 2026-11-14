@@ -105,6 +105,11 @@ def table_name(layer: str, table: str) -> str:
     return f"{layer}_{table.lower()}"
 
 
+def drop_table_ddl(table: str, *, database: str = common.DEFAULT_DATABASE, layer: str = "silver") -> str:
+    """Remove so a definicao da tabela no catalogo; os arquivos no S3 nao sao tocados."""
+    return f"DROP TABLE IF EXISTS `{database}`.`{table_name(layer, table)}`"
+
+
 def create_table_ddl(
     table: str,
     *,
@@ -185,9 +190,19 @@ def create_tables(
     start_month: str,
     layer: str = "silver",
     columns: dict[str, list[tuple[str, str]]] | None = None,
+    replace: bool = False,
     sleep: Callable[[float], None] = time.sleep,
 ) -> None:
+    """Cria as tabelas externas. Com `replace`, apaga a definicao antes (use quando as colunas mudarem)."""
     for table in tables:
+        if replace:
+            run_query(
+                client,
+                drop_table_ddl(table, database=database, layer=layer),
+                database=database,
+                workgroup=workgroup,
+                sleep=sleep,
+            )
         ddl = create_table_ddl(
             table,
             bucket=bucket,
@@ -197,7 +212,12 @@ def create_tables(
             columns=(columns or {}).get(table),
         )
         run_query(client, ddl, database=database, workgroup=workgroup, sleep=sleep)
-        log.info("tabela criada ou ja existente: %s.%s", database, table_name(layer, table))
+        log.info(
+            "tabela %s: %s.%s",
+            "recriada" if replace else "criada ou ja existente",
+            database,
+            table_name(layer, table),
+        )
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -230,6 +250,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     create.add_argument("--start-month", default=DEFAULT_START_MONTH, help="Primeiro mes da projecao")
     create.add_argument("--print-only", action="store_true", help="Imprime o DDL sem executar")
+    create.add_argument(
+        "--replace",
+        action="store_true",
+        help="Apaga a definicao de cada tabela antes de criar (necessario quando as colunas mudam; "
+        "os arquivos no S3 nao sao tocados)",
+    )
     query = sub.add_parser("query", parents=[common_args], help="Executa uma consulta e imprime o resultado")
     query.add_argument("sql")
     return parser.parse_args(argv)
@@ -270,6 +296,9 @@ def main(argv: list[str] | None = None, *, client: Any | None = None) -> int:
                 return 2
         if args.print_only:
             for table in tables:
+                if args.replace:
+                    print(drop_table_ddl(table, database=args.database, layer=args.layer))
+                    print(";\n")
                 print(
                     create_table_ddl(
                         table,
@@ -296,6 +325,7 @@ def main(argv: list[str] | None = None, *, client: Any | None = None) -> int:
                 start_month=args.start_month,
                 layer=args.layer,
                 columns=columns,
+                replace=args.replace,
             )
         else:
             execution = run_query(client, args.sql, database=args.database, workgroup=args.workgroup)

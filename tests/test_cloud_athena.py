@@ -248,6 +248,58 @@ def test_create_gold_tables_runs_one_ddl_per_model(built_gold):
     ]
 
 
+def test_replace_drops_each_table_before_creating_it(built_gold):
+    models = ["dim_porte", "mart_simples_mei_uf"]
+    client = FakeAthena(["SUCCEEDED"])
+    athena.create_tables(
+        client,
+        bucket="b",
+        database="cnpj",
+        workgroup="wg",
+        tables=models,
+        start_month="2023-01",
+        layer="gold",
+        columns=athena.gold_columns(built_gold / "gold", MONTH, models),
+        replace=True,
+        sleep=lambda _: None,
+    )
+    sent = [q["QueryString"] for q in client.started]
+    assert [q.split(" ")[0] for q in sent] == ["DROP", "CREATE", "DROP", "CREATE"]
+    assert sent[0] == "DROP TABLE IF EXISTS `cnpj`.`gold_dim_porte`"
+    assert "`gold_mart_simples_mei_uf`" in sent[3]
+
+
+def test_without_replace_never_drops(built_gold):
+    client = FakeAthena(["SUCCEEDED"])
+    athena.create_tables(
+        client,
+        bucket="b",
+        database="cnpj",
+        workgroup="wg",
+        tables=["dim_porte"],
+        start_month="2023-01",
+        layer="gold",
+        columns=athena.gold_columns(built_gold / "gold", MONTH, ["dim_porte"]),
+        sleep=lambda _: None,
+    )
+    assert not any("DROP" in q["QueryString"] for q in client.started)
+
+
+def test_cli_replace_is_passed_through_and_printed(built_gold, capsys):
+    base = ["create-tables", "--layer", "gold", "--bucket", "b", "--gold-dir", str(built_gold / "gold")]
+    base += ["--month", MONTH, "--tables", "dim_porte"]
+
+    assert athena.main([*base, "--print-only", "--replace"]) == 0
+    out = capsys.readouterr().out
+    assert out.index("DROP TABLE IF EXISTS `cnpj`.`gold_dim_porte`") < out.index("CREATE EXTERNAL TABLE")
+    assert athena.main([*base, "--print-only"]) == 0
+    assert "DROP" not in capsys.readouterr().out
+
+    client = FakeAthena(["SUCCEEDED"])
+    assert athena.main([*base, "--replace"], client=client) == 0
+    assert [q["QueryString"].split(" ")[0] for q in client.started] == ["DROP", "CREATE"]
+
+
 def test_cli_gold_print_only_and_validations(built_gold, capsys):
     base = ["create-tables", "--layer", "gold", "--bucket", "b", "--gold-dir", str(built_gold / "gold")]
 

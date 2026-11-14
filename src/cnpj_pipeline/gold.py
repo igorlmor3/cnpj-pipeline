@@ -35,7 +35,7 @@ import duckdb
 
 from cnpj_pipeline import config
 from cnpj_pipeline.download import MONTH_RE
-from cnpj_pipeline.gold_models import MODEL_NAMES, MODELS, MODELS_BY_NAME, Model
+from cnpj_pipeline.gold_models import CNAE_ORG_POLITICA, MODEL_NAMES, MODELS, MODELS_BY_NAME, Model
 from cnpj_pipeline.silver import silver_path
 
 log = logging.getLogger("cnpj_pipeline.gold")
@@ -185,6 +185,23 @@ RECONCILIATIONS: tuple[tuple[str, str, tuple[str, ...], tuple[str, ...], str, st
         (),
         "SELECT sum(estabelecimentos_abertos) FROM gold_mart_aberturas_mensal",
         f"SELECT count(*) FROM {FATO} WHERE data_inicio_atividade IS NOT NULL",
+    ),
+    (
+        "fato_org_politica_igual_silver",
+        "O fato marca como organizacao politica os mesmos estabelecimentos que a silver tem com esse CNAE",
+        ("fato_estabelecimento",),
+        ("Estabelecimentos",),
+        f"SELECT count(*) FROM {FATO} WHERE is_organizacao_politica",
+        f"SELECT count(*) FROM silver_estabelecimentos WHERE cnae_fiscal_principal = '{CNAE_ORG_POLITICA}'",
+    ),
+    (
+        "mart_aberturas_org_politica_soma",
+        "As aberturas marcadas como organizacao politica em mart_aberturas_mensal batem com o fato",
+        ("fato_estabelecimento", "mart_aberturas_mensal"),
+        (),
+        "SELECT coalesce(sum(estabelecimentos_abertos), 0) FROM gold_mart_aberturas_mensal "
+        "WHERE is_organizacao_politica",
+        f"SELECT count(*) FROM {FATO} WHERE is_organizacao_politica AND data_inicio_atividade IS NOT NULL",
     ),
     (
         "mart_ativos_soma",
@@ -371,6 +388,22 @@ def render_report(month: str, manifest: dict) -> str:
     return "\n".join(lines)
 
 
+def _with_dependents(names: list[str]) -> set[str]:
+    """Os modelos pedidos mais todos os que dependem deles, direta ou indiretamente.
+
+    Sem isso, refazer so o fato deixaria os marts antigos ao lado de um fato novo.
+    """
+    closed = set(names)
+    changed = True
+    while changed:
+        changed = False
+        for model in MODELS:
+            if model.name not in closed and any(dep in closed for dep in model.depends):
+                closed.add(model.name)
+                changed = True
+    return closed
+
+
 def run(
     month: str,
     models: list[str] | None,
@@ -387,7 +420,7 @@ def run(
         log.error("Nada para processar. Rode antes: python -m cnpj_pipeline.silver --month %s", month)
         return 1
 
-    selected = [m for m in MODELS if models is None or m.name in models]
+    selected = [m for m in MODELS if models is None or m.name in _with_dependents(models)]
     tmp_root.mkdir(parents=True, exist_ok=True)
     options: dict[str, str | int] = {
         "memory_limit": memory_limit,
