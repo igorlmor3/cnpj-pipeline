@@ -1,0 +1,227 @@
+{
+  "table": "Simples",
+  "reference_month": "2026-10",
+  "generated_at": "2026-11-14T15:43:04+00:00",
+  "files": 1,
+  "rows_profiled": 2540202,
+  "sample_percent": 5.0,
+  "columns": {
+    "cnpj_basico": {
+      "non_null": 2540202,
+      "nulls": 0,
+      "null_pct": 0.0,
+      "distinct_approx": 2603794,
+      "min_length": 8,
+      "max_length": 8,
+      "edge_whitespace": 0,
+      "blank": 0,
+      "control_chars": 0,
+      "replacement_chars": 0,
+      "sentinels": [],
+      "patterns": [
+        {
+          "pattern": "99999999",
+          "count": 2540202,
+          "pct": 100.0
+        }
+      ]
+    },
+    "opcao_pelo_simples": {
+      "non_null": 2540202,
+      "nulls": 0,
+      "null_pct": 0.0,
+      "distinct_approx": 2,
+      "min_length": 1,
+      "max_length": 1,
+      "edge_whitespace": 0,
+      "blank": 0,
+      "control_chars": 0,
+      "replacement_chars": 0,
+      "sentinels": [],
+      "patterns": [
+        {
+          "pattern": "A",
+          "count": 2540202,
+          "pct": 100.0
+        }
+      ],
+      "top_values": [
+        {
+          "value": "S",
+          "count": 1302415,
+          "pct": 51.2721
+        },
+        {
+          "value": "N",
+          "count": 1237787,
+          "pct": 48.7279
+        }
+      ]
+    },
+    "data_opcao_simples": {
+      "non_null": 2540202,
+      "nulls": 0,
+      "null_pct": 0.0,
+      "distinct_approx": 6786,
+      "min_length": 8,
+      "max_length": 8,
+      "edge_whitespace": 0,
+      "blank": 0,
+      "control_chars": 0,
+      "replacement_chars": 0,
+      "sentinels": [],
+      "patterns": [
+        {
+          "pattern": "99999999",
+          "count": 2540202,
+          "pct": 100.0
+        }
+      ],
+      "date": {
+        "valid": 2540202,
+        "sentinel_zero": 0,
+        "invalid": 0,
+        "min_valid": "2007-07-01",
+        "max_valid": "2026-10-11"
+      }
+    },
+    "data_exclusao_simples": {
+      "non_null": 2540202,
+      "nulls": 0,
+      "null_pct": 0.0,
+      "distinct_approx": 6607,
+      "min_length": 8,
+      "max_length": 8,
+      "edge_whitespace": 0,
+      "blank": 0,
+      "control_chars": 0,
+      "replacement_chars": 0,
+      "sentinels": [
+        {
+          "value": "00000000",
+          "count": 1260627,
+          "pct": 49.627
+        }
+      ],
+      "patterns": [
+        {
+          "pattern": "99999999",
+          "count": 2540202,
+          "pct": 100.0
+        }
+      ],
+      "date": {
+        "valid": 1279575,
+        "sentinel_zero": 1260627,
+        "invalid": 0,
+        "min_valid": "2007-07-01",
+        "max_valid": "2026-12-31"
+      }
+    },
+    "opcao_pelo_mei": {
+      "non_null": 2540202,
+      "nulls": 0,
+      "null_pct": 0.0,
+      "distinct_approx": 2,
+      "min_length": 1,
+      "max_length": 1,
+      "edge_whitespace": 0,
+      "blank": 0,
+      "control_chars": 0,
+      "replacement_chars": 0,
+      "sentinels": [],
+      "patterns": [
+        {
+          "pattern": "A",
+          "count": 2540202,
+          "pct": 100.0
+        }
+      ],
+      "top_values": [
+        {
+          "value": "N",
+          "count": 1657609,
+          "pct": 65.255
+        },
+        {
+          "value": "S",
+          "count": 882593,
+          "pct": 34.745
+        }
+      ]
+    },
+    "data_opcao_mei": {
+      "non_null": 2540202,
+      "nulls": 0,
+      "null_pct": 0.0,
+      "distinct_approx": 6212,
+      "min_length": 8,
+      "max_length": 8,
+      "edge_whitespace": 0,
+      "blank": 0,
+      "control_chars": 0,
+      "replacement_chars": 0,
+      "sentinels": [
+        {
+          "value": "00000000",
+          "count": 670067,
+          "pct": 26.3785
+        }
+      ],
+      "patterns": [
+        {
+          "pattern": "99999999",
+          "count": 2540202,
+          "pct": 100.0
+        }
+      ],
+      "date": {
+        "valid": 1870135,
+        "sentinel_zero": 670067,
+        "invalid": 0,
+        "min_valid": "2009-07-01",
+        "max_valid": "2026-10-11"
+      }
+    },
+    "data_exclusao_mei": {
+      "non_null": 2540202,
+      "nulls": 0,
+      "null_pct": 0.0,
+      "distinct_approx": 5833,
+      "min_length": 8,
+      "max_length": 8,
+      "edge_whitespace": 0,
+      "blank": 0,
+      "control_chars": 0,
+      "replacement_chars": 0,
+      "sentinels": [
+        {
+          "value": "00000000",
+          "count": 1535192,
+          "pct": 60.4358
+        }
+      ],
+      "patterns": [
+        {
+          "pattern": "99999999",
+          "count": 2540202,
+          "pct": 100.0
+        }
+      ],
+      "date": {
+        "valid": 1005010,
+        "sentinel_zero": 1535192,
+        "invalid": 0,
+        "min_valid": "2009-07-01",
+        "max_valid": "2026-12-31"
+      }
+    }
+  },
+  "key": {
+    "columns": [
+      "cnpj_basico"
+    ],
+    "duplicated_keys": 0,
+    "rows_in_duplicated_keys": 0
+  }
+}

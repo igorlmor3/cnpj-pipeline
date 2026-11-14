@@ -82,7 +82,7 @@ def test_find_zip_files_orders_numerically_and_ignores_other_tables(tmp_path):
 
 def test_check_layout_accepts_matching_and_rejects_different(tmp_path):
     csv_file = tmp_path / "a.csv"
-    csv_file.write_bytes(GOOD_ROWS[0].encode("latin-1") + b"\n")
+    csv_file.write_bytes(GOOD_ROWS[0].encode("utf-8") + b"\n")
 
     check_layout(csv_file, TABLE_COLUMNS["Empresas"])
     with pytest.raises(SchemaMismatchError, match="7 colunas|tem 7 colunas"):
@@ -90,8 +90,8 @@ def test_check_layout_accepts_matching_and_rejects_different(tmp_path):
 
 
 def test_check_layout_tolerates_a_few_broken_lines_but_not_a_layout_change(tmp_path):
-    good = GOOD_ROWS[0].encode("latin-1")
-    broken = BAD_ROWS[0].encode("latin-1")
+    good = GOOD_ROWS[0].encode("utf-8")
+    broken = BAD_ROWS[0].encode("utf-8")
 
     # Linha quebrada logo no inicio: a maioria das linhas bate com o esquema
     tolerant = tmp_path / "tolerant.csv"
@@ -108,6 +108,35 @@ def test_check_layout_tolerates_a_few_broken_lines_but_not_a_layout_change(tmp_p
 # --------------------------------------------------------------------------- #
 # Conversao
 # --------------------------------------------------------------------------- #
+
+
+def test_control_bytes_c1_do_not_break_conversion_and_are_counted(tmp_path):
+    # 0x8F e um controle C1: o decodificador latin-1 do DuckDB o recusa, a bronze deve aceitar.
+    # 0x1A (SUB) aparece em dados reais no lugar de letras acentuadas perdidas.
+    rows = [
+        '"98765432";"RAZAO COM \x8f\x8f CONTROLE";"2062";"49";"1,00";"01";""',
+        '"87654321";"ASUNCI\x1aN";"2062";"49";"1,00";"01";""',
+        GOOD_ROWS[0],
+    ]
+    zip_path = make_zip(tmp_path / "raw" / "Empresas0.zip", {"K3241.EMPRECSV": rows})
+    bronze = tmp_path / "bronze"
+
+    results = process_zip(zip_path, "Empresas", "2026-10", bronze, **kwargs(tmp_path))
+
+    assert results[0].status == STATUS_CONVERTED
+    assert results[0].rows == 3
+    assert results[0].rejected_lines == 0
+    assert results[0].control_chars == 2
+    assert results[0].csv_bytes == zip_path_member_size(zip_path)
+    out = bronze / "empresas" / "reference_month=2026-10" / "Empresas0.parquet"
+    values = {r[0]: r[1] for r in read_parquet(out).fetchall()}
+    assert values["98765432"] == "RAZAO COM \x8f\x8f CONTROLE"  # bronze preserva o dado de origem
+    assert values["87654321"] == "ASUNCI\x1aN"
+
+
+def zip_path_member_size(zip_path: Path) -> int:
+    with zipfile.ZipFile(zip_path) as zf:
+        return zf.infolist()[0].file_size
 
 
 def test_converts_latin1_csv_to_parquet(tmp_path):

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -12,6 +13,9 @@ class FakeServer:
     def __init__(self) -> None:
         self.files: dict[str, bytes] = {}
         self.fail_get: dict[str, int] = {}  # caminho -> quantas respostas 503 antes de servir
+        self.fail_status = 503  # status usado nas falhas de fail_get
+        self.empty_get: dict[str, int] = {}  # caminho -> quantas respostas 200 vazias antes de servir
+        self.require_auth: str | None = None  # "usuario:senha" exigido via HTTP basic
         self.honor_range = True
         self.range_requests: list[str] = []
         self.httpd: ThreadingHTTPServer | None = None
@@ -32,7 +36,19 @@ def server():
         def _body(self) -> bytes | None:
             return state.files.get(self.path.lstrip("/"))
 
+        def _authorized(self) -> bool:
+            if state.require_auth is None:
+                return True
+            expected = "Basic " + base64.b64encode(state.require_auth.encode()).decode()
+            if self.headers.get("Authorization") == expected:
+                return True
+            self.send_response(401)
+            self.end_headers()
+            return False
+
         def do_HEAD(self):
+            if not self._authorized():
+                return
             body = self._body()
             if body is None:
                 self.send_response(404)
@@ -43,6 +59,8 @@ def server():
             self.end_headers()
 
         def do_GET(self):
+            if not self._authorized():
+                return
             key = self.path.lstrip("/")
             body = self._body()
             if body is None:
@@ -52,7 +70,14 @@ def server():
 
             if state.fail_get.get(key, 0) > 0:
                 state.fail_get[key] -= 1
-                self.send_response(503)
+                self.send_response(state.fail_status)
+                self.end_headers()
+                return
+
+            if state.empty_get.get(key, 0) > 0:
+                state.empty_get[key] -= 1
+                self.send_response(200)
+                self.send_header("Content-Length", "0")
                 self.end_headers()
                 return
 

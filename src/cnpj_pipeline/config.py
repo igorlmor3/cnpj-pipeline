@@ -20,14 +20,19 @@ GOLD_DIR = DATA_DIR / "gold"
 
 # Template da URL de cada arquivo. Placeholders: {month} (AAAA-MM) e {filename}.
 #
-# ATENCAO: a Receita Federal alterou o layout da pagina e o caminho dos
-# arquivos no fim de janeiro de 2026. O valor padrao abaixo segue o padrao
-# historico do repositorio e PRECISA ser confirmado no site oficial antes do
-# primeiro uso. Se o caminho mudou, sobrescreva com CNPJ_URL_TEMPLATE no .env
-# ou com --url-template na linha de comando.
-DEFAULT_URL_TEMPLATE = (
-    "https://arquivos.receitafederal.gov.br/dados/cnpj/dados_abertos_cnpj/{month}/{filename}"
-)
+# A Receita Federal publica os arquivos em um compartilhamento publico Nextcloud, acessado por
+# WebDAV. O padrao abaixo (pasta Dados/Cadastros/CNPJ/<AAAA-MM>/<arquivo>.zip) e o descrito pela
+# documentacao do pacote comunitario rfbpy e NAO foi confirmado diretamente contra o servidor
+# por quem escreveu este projeto. Se falhar, confira no site oficial e sobrescreva com
+# CNPJ_URL_TEMPLATE no .env ou com --url-template na linha de comando.
+OFFICIAL_BASE_URL = "https://arquivos.receitafederal.gov.br/public.php/webdav/Dados/Cadastros/CNPJ"
+DEFAULT_URL_TEMPLATE = OFFICIAL_BASE_URL + "/{month}/{filename}"
+WEBDAV_MARKER = "/public.php/webdav/"
+
+# Token do compartilhamento publico (e o "usuario" do login WebDAV, com senha vazia). Nao e um
+# segredo: faz parte do link publico. Ele pode mudar; sobrescreva com CNPJ_SHARE_TOKEN.
+DEFAULT_SHARE_TOKEN = "gn672Ad4CF8N6TK"
+SHARE_TOKEN = os.getenv("CNPJ_SHARE_TOKEN", DEFAULT_SHARE_TOKEN)
 URL_TEMPLATE = os.getenv("CNPJ_URL_TEMPLATE", DEFAULT_URL_TEMPLATE)
 
 # Tabelas do conjunto de dados e como os arquivos sao nomeados.

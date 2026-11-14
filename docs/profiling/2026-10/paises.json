@@ -1,0 +1,164 @@
+{
+  "table": "Paises",
+  "reference_month": "2026-10",
+  "generated_at": "2026-11-14T15:42:50+00:00",
+  "files": 1,
+  "rows_profiled": 11,
+  "sample_percent": 5.0,
+  "columns": {
+    "codigo": {
+      "non_null": 11,
+      "nulls": 0,
+      "null_pct": 0.0,
+      "distinct_approx": 10,
+      "min_length": 3,
+      "max_length": 3,
+      "edge_whitespace": 0,
+      "blank": 0,
+      "control_chars": 0,
+      "replacement_chars": 0,
+      "sentinels": [],
+      "patterns": [
+        {
+          "pattern": "999",
+          "count": 11,
+          "pct": 100.0
+        }
+      ],
+      "top_values": [
+        {
+          "value": "831",
+          "count": 1,
+          "pct": 9.0909
+        },
+        {
+          "value": "345",
+          "count": 1,
+          "pct": 9.0909
+        },
+        {
+          "value": "073",
+          "count": 1,
+          "pct": 9.0909
+        },
+        {
+          "value": "031",
+          "count": 1,
+          "pct": 9.0909
+        },
+        {
+          "value": "081",
+          "count": 1,
+          "pct": 9.0909
+        },
+        {
+          "value": "271",
+          "count": 1,
+          "pct": 9.0909
+        },
+        {
+          "value": "827",
+          "count": 1,
+          "pct": 9.0909
+        },
+        {
+          "value": "331",
+          "count": 1,
+          "pct": 9.0909
+        },
+        {
+          "value": "198",
+          "count": 1,
+          "pct": 9.0909
+        },
+        {
+          "value": "670",
+          "count": 1,
+          "pct": 9.0909
+        },
+        {
+          "value": "399",
+          "count": 1,
+          "pct": 9.0909
+        }
+      ]
+    },
+    "descricao": {
+      "non_null": 11,
+      "nulls": 0,
+      "null_pct": 0.0,
+      "distinct_approx": 11,
+      "min_length": 5,
+      "max_length": 24,
+      "edge_whitespace": 0,
+      "blank": 0,
+      "control_chars": 0,
+      "replacement_chars": 0,
+      "sentinels": [],
+      "top_values": [
+        {
+          "value": "JAPAO",
+          "count": 1,
+          "pct": 9.0909
+        },
+        {
+          "value": "ROMENIA",
+          "count": 1,
+          "pct": 9.0909
+        },
+        {
+          "value": "BURKINA FASO",
+          "count": 1,
+          "pct": 9.0909
+        },
+        {
+          "value": "HONDURAS",
+          "count": 1,
+          "pct": 9.0909
+        },
+        {
+          "value": "FINLANDIA",
+          "count": 1,
+          "pct": 9.0909
+        },
+        {
+          "value": "TURQUIA",
+          "count": 1,
+          "pct": 9.0909
+        },
+        {
+          "value": "BANGLADESH",
+          "count": 1,
+          "pct": 9.0909
+        },
+        {
+          "value": "COVEITE",
+          "count": 1,
+          "pct": 9.0909
+        },
+        {
+          "value": "AZERBAIJAO, REPUBLICA DO",
+          "count": 1,
+          "pct": 9.0909
+        },
+        {
+          "value": "GUINE-EQUATORIAL",
+          "count": 1,
+          "pct": 9.0909
+        },
+        {
+          "value": "UCRANIA",
+          "count": 1,
+          "pct": 9.0909
+        }
+      ]
+    }
+  },
+  "key": {
+    "columns": [
+      "codigo"
+    ],
+    "duplicated_keys": 0,
+    "rows_in_duplicated_keys": 0
+  }
+}

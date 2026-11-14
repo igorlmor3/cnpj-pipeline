@@ -1,0 +1,94 @@
+{
+  "table": "Motivos",
+  "reference_month": "2026-10",
+  "generated_at": "2026-11-14T15:42:50+00:00",
+  "files": 1,
+  "rows_profiled": 4,
+  "sample_percent": 5.0,
+  "columns": {
+    "codigo": {
+      "non_null": 4,
+      "nulls": 0,
+      "null_pct": 0.0,
+      "distinct_approx": 4,
+      "min_length": 2,
+      "max_length": 2,
+      "edge_whitespace": 0,
+      "blank": 0,
+      "control_chars": 0,
+      "replacement_chars": 0,
+      "sentinels": [],
+      "patterns": [
+        {
+          "pattern": "99",
+          "count": 4,
+          "pct": 100.0
+        }
+      ],
+      "top_values": [
+        {
+          "value": "21",
+          "count": 1,
+          "pct": 25.0
+        },
+        {
+          "value": "06",
+          "count": 1,
+          "pct": 25.0
+        },
+        {
+          "value": "31",
+          "count": 1,
+          "pct": 25.0
+        },
+        {
+          "value": "93",
+          "count": 1,
+          "pct": 25.0
+        }
+      ]
+    },
+    "descricao": {
+      "non_null": 4,
+      "nulls": 0,
+      "null_pct": 0.0,
+      "distinct_approx": 4,
+      "min_length": 22,
+      "max_length": 29,
+      "edge_whitespace": 0,
+      "blank": 0,
+      "control_chars": 0,
+      "replacement_chars": 0,
+      "sentinels": [],
+      "top_values": [
+        {
+          "value": "CNPJ - TITULAR BAIXADO",
+          "count": 1,
+          "pct": 25.0
+        },
+        {
+          "value": "ENCERRAMENTO DA LIQUIDACAO",
+          "count": 1,
+          "pct": 25.0
+        },
+        {
+          "value": "EXTINCAO-UNIFICACAO DA FILIAL",
+          "count": 1,
+          "pct": 25.0
+        },
+        {
+          "value": "PEDIDO DE BAIXA INDEFERIDA",
+          "count": 1,
+          "pct": 25.0
+        }
+      ]
+    }
+  },
+  "key": {
+    "columns": [
+      "codigo"
+    ],
+    "duplicated_keys": 0,
+    "rows_in_duplicated_keys": 0
+  }
+}

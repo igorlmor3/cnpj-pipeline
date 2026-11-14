@@ -1,0 +1,204 @@
+{
+  "table": "Cnaes",
+  "reference_month": "2026-10",
+  "generated_at": "2026-11-14T15:42:50+00:00",
+  "files": 1,
+  "rows_profiled": 63,
+  "sample_percent": 5.0,
+  "columns": {
+    "codigo": {
+      "non_null": 63,
+      "nulls": 0,
+      "null_pct": 0.0,
+      "distinct_approx": 62,
+      "min_length": 7,
+      "max_length": 7,
+      "edge_whitespace": 0,
+      "blank": 0,
+      "control_chars": 0,
+      "replacement_chars": 0,
+      "sentinels": [],
+      "patterns": [
+        {
+          "pattern": "9999999",
+          "count": 63,
+          "pct": 100.0
+        }
+      ],
+      "top_values": [
+        {
+          "value": "0220905",
+          "count": 1,
+          "pct": 1.5873
+        },
+        {
+          "value": "0311601",
+          "count": 1,
+          "pct": 1.5873
+        },
+        {
+          "value": "8720499",
+          "count": 1,
+          "pct": 1.5873
+        },
+        {
+          "value": "1932200",
+          "count": 1,
+          "pct": 1.5873
+        },
+        {
+          "value": "4679604",
+          "count": 1,
+          "pct": 1.5873
+        },
+        {
+          "value": "9603305",
+          "count": 1,
+          "pct": 1.5873
+        },
+        {
+          "value": "2831300",
+          "count": 1,
+          "pct": 1.5873
+        },
+        {
+          "value": "4686902",
+          "count": 1,
+          "pct": 1.5873
+        },
+        {
+          "value": "5223100",
+          "count": 1,
+          "pct": 1.5873
+        },
+        {
+          "value": "6619303",
+          "count": 1,
+          "pct": 1.5873
+        },
+        {
+          "value": "2949299",
+          "count": 1,
+          "pct": 1.5873
+        },
+        {
+          "value": "8592901",
+          "count": 1,
+          "pct": 1.5873
+        },
+        {
+          "value": "9529101",
+          "count": 1,
+          "pct": 1.5873
+        },
+        {
+          "value": "0112199",
+          "count": 1,
+          "pct": 1.5873
+        },
+        {
+          "value": "3250709",
+          "count": 1,
+          "pct": 1.5873
+        }
+      ]
+    },
+    "descricao": {
+      "non_null": 63,
+      "nulls": 0,
+      "null_pct": 0.0,
+      "distinct_approx": 62,
+      "min_length": 7,
+      "max_length": 150,
+      "edge_whitespace": 0,
+      "blank": 0,
+      "control_chars": 0,
+      "replacement_chars": 0,
+      "sentinels": [],
+      "top_values": [
+        {
+          "value": "Ensino de dança",
+          "count": 1,
+          "pct": 1.5873
+        },
+        {
+          "value": "Atividade médica ambulatorial restrita a consultas",
+          "count": 1,
+          "pct": 1.5873
+        },
+        {
+          "value": "Serviços de diagnóstico por imagem sem uso de radiação ionizante, exceto ressonância magnética",
+          "count": 1,
+          "pct": 1.5873
+        },
+        {
+          "value": "Atividades de bibliotecas e arquivos",
+          "count": 1,
+          "pct": 1.5873
+        },
+        {
+          "value": "Serviços de sepultamento",
+          "count": 1,
+          "pct": 1.5873
+        },
+        {
+          "value": "Criação de ostras e mexilhões em água doce",
+          "count": 1,
+          "pct": 1.5873
+        },
+        {
+          "value": "Fabricação de biocombustíveis, exceto álcool",
+          "count": 1,
+          "pct": 1.5873
+        },
+        {
+          "value": "Fabricação de instrumentos musicais, peças e acessórios",
+          "count": 1,
+          "pct": 1.5873
+        },
+        {
+          "value": "Comércio atacadista de embalagens",
+          "count": 1,
+          "pct": 1.5873
+        },
+        {
+          "value": "Provedores de voz sobre protocolo internet - VOIP",
+          "count": 1,
+          "pct": 1.5873
+        },
+        {
+          "value": "Fabricação de outros produtos químicos não especificados anteriormente",
+          "count": 1,
+          "pct": 1.5873
+        },
+        {
+          "value": "Fabricação de produtos cerâmicos refratários",
+          "count": 1,
+          "pct": 1.5873
+        },
+        {
+          "value": "Comércio atacadista de frutas, verduras, raízes, tubérculos, hortaliças e legumes frescos",
+          "count": 1,
+          "pct": 1.5873
+        },
+        {
+          "value": "Serviços de somatoconservação",
+          "count": 1,
+          "pct": 1.5873
+        },
+        {
+          "value": "Fabricação de outras peças e acessórios para veículos automotores não especificadas anteriormente",
+          "count": 1,
+          "pct": 1.5873
+        }
+      ]
+    }
+  },
+  "key": {
+    "columns": [
+      "codigo"
+    ],
+    "duplicated_keys": 0,
+    "rows_in_duplicated_keys": 0
+  }
+}

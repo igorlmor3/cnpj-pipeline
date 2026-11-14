@@ -1,0 +1,435 @@
+{
+  "table": "Socios",
+  "reference_month": "2026-10",
+  "generated_at": "2026-11-14T15:42:50+00:00",
+  "files": 10,
+  "rows_profiled": 1425050,
+  "sample_percent": 5.0,
+  "columns": {
+    "cnpj_basico": {
+      "non_null": 1425050,
+      "nulls": 0,
+      "null_pct": 0.0,
+      "distinct_approx": 1363403,
+      "min_length": 8,
+      "max_length": 8,
+      "edge_whitespace": 0,
+      "blank": 0,
+      "control_chars": 0,
+      "replacement_chars": 0,
+      "sentinels": [
+        {
+          "value": "00000000",
+          "count": 1,
+          "pct": 0.0001
+        }
+      ],
+      "patterns": [
+        {
+          "pattern": "99999999",
+          "count": 1425050,
+          "pct": 100.0
+        }
+      ]
+    },
+    "identificador_socio": {
+      "non_null": 1425050,
+      "nulls": 0,
+      "null_pct": 0.0,
+      "distinct_approx": 3,
+      "min_length": 1,
+      "max_length": 1,
+      "edge_whitespace": 0,
+      "blank": 0,
+      "control_chars": 0,
+      "replacement_chars": 0,
+      "sentinels": [],
+      "patterns": [
+        {
+          "pattern": "9",
+          "count": 1425050,
+          "pct": 100.0
+        }
+      ],
+      "top_values": [
+        {
+          "value": "2",
+          "count": 1387481,
+          "pct": 97.3637
+        },
+        {
+          "value": "1",
+          "count": 36916,
+          "pct": 2.5905
+        },
+        {
+          "value": "3",
+          "count": 653,
+          "pct": 0.0458
+        }
+      ]
+    },
+    "nome_socio": {
+      "non_null": 1424962,
+      "nulls": 88,
+      "null_pct": 0.0062,
+      "distinct_approx": 1266124,
+      "min_length": 3,
+      "max_length": 142,
+      "edge_whitespace": 0,
+      "blank": 0,
+      "control_chars": 0,
+      "replacement_chars": 0,
+      "sentinels": []
+    },
+    "cnpj_cpf_socio": {
+      "non_null": 1424397,
+      "nulls": 653,
+      "null_pct": 0.0458,
+      "distinct_approx": 649534,
+      "min_length": 8,
+      "max_length": 11,
+      "edge_whitespace": 0,
+      "blank": 0,
+      "control_chars": 0,
+      "replacement_chars": 0,
+      "sentinels": [],
+      "patterns": [
+        {
+          "pattern": "***999999**",
+          "count": 1387481,
+          "pct": 97.4083
+        },
+        {
+          "pattern": "99999999",
+          "count": 36916,
+          "pct": 2.5917
+        }
+      ]
+    },
+    "qualificacao_socio": {
+      "non_null": 1425050,
+      "nulls": 0,
+      "null_pct": 0.0,
+      "distinct_approx": 39,
+      "min_length": 2,
+      "max_length": 2,
+      "edge_whitespace": 0,
+      "blank": 0,
+      "control_chars": 0,
+      "replacement_chars": 0,
+      "sentinels": [
+        {
+          "value": "00",
+          "count": 1,
+          "pct": 0.0001
+        }
+      ],
+      "patterns": [
+        {
+          "pattern": "99",
+          "count": 1425050,
+          "pct": 100.0
+        }
+      ],
+      "top_values": [
+        {
+          "value": "49",
+          "count": 908804,
+          "pct": 63.7735
+        },
+        {
+          "value": "22",
+          "count": 307651,
+          "pct": 21.5888
+        },
+        {
+          "value": "16",
+          "count": 75711,
+          "pct": 5.3129
+        },
+        {
+          "value": "05",
+          "count": 41239,
+          "pct": 2.8939
+        },
+        {
+          "value": "59",
+          "count": 21765,
+          "pct": 1.5273
+        },
+        {
+          "value": "65",
+          "count": 20668,
+          "pct": 1.4503
+        },
+        {
+          "value": "10",
+          "count": 19751,
+          "pct": 1.386
+        },
+        {
+          "value": "30",
+          "count": 7474,
+          "pct": 0.5245
+        },
+        {
+          "value": "52",
+          "count": 4309,
+          "pct": 0.3024
+        },
+        {
+          "value": "31",
+          "count": 3648,
+          "pct": 0.256
+        },
+        {
+          "value": "20",
+          "count": 3554,
+          "pct": 0.2494
+        },
+        {
+          "value": "28",
+          "count": 2598,
+          "pct": 0.1823
+        },
+        {
+          "value": "37",
+          "count": 2547,
+          "pct": 0.1787
+        },
+        {
+          "value": "38",
+          "count": 1665,
+          "pct": 0.1168
+        },
+        {
+          "value": "53",
+          "count": 1518,
+          "pct": 0.1065
+        }
+      ]
+    },
+    "data_entrada_sociedade": {
+      "non_null": 1425050,
+      "nulls": 0,
+      "null_pct": 0.0,
+      "distinct_approx": 16702,
+      "min_length": 8,
+      "max_length": 8,
+      "edge_whitespace": 0,
+      "blank": 0,
+      "control_chars": 0,
+      "replacement_chars": 0,
+      "sentinels": [],
+      "patterns": [
+        {
+          "pattern": "99999999",
+          "count": 1425050,
+          "pct": 100.0
+        }
+      ],
+      "date": {
+        "valid": 1425050,
+        "sentinel_zero": 0,
+        "invalid": 0,
+        "min_valid": "1900-01-01",
+        "max_valid": "2026-10-10"
+      }
+    },
+    "pais": {
+      "non_null": 4715,
+      "nulls": 1420335,
+      "null_pct": 99.6691,
+      "distinct_approx": 112,
+      "min_length": 3,
+      "max_length": 3,
+      "edge_whitespace": 0,
+      "blank": 0,
+      "control_chars": 0,
+      "replacement_chars": 0,
+      "sentinels": [],
+      "patterns": [
+        {
+          "pattern": "999",
+          "count": 4715,
+          "pct": 100.0
+        }
+      ]
+    },
+    "representante_legal": {
+      "non_null": 1425050,
+      "nulls": 0,
+      "null_pct": 0.0,
+      "distinct_approx": 31379,
+      "min_length": 11,
+      "max_length": 11,
+      "edge_whitespace": 0,
+      "blank": 0,
+      "control_chars": 0,
+      "replacement_chars": 0,
+      "sentinels": [],
+      "patterns": [
+        {
+          "pattern": "***999999**",
+          "count": 1425050,
+          "pct": 100.0
+        }
+      ]
+    },
+    "nome_representante": {
+      "non_null": 37758,
+      "nulls": 1387292,
+      "null_pct": 97.3504,
+      "distinct_approx": 32009,
+      "min_length": 5,
+      "max_length": 59,
+      "edge_whitespace": 0,
+      "blank": 0,
+      "control_chars": 0,
+      "replacement_chars": 0,
+      "sentinels": []
+    },
+    "qualificacao_representante_legal": {
+      "non_null": 1425050,
+      "nulls": 0,
+      "null_pct": 0.0,
+      "distinct_approx": 7,
+      "min_length": 2,
+      "max_length": 2,
+      "edge_whitespace": 0,
+      "blank": 0,
+      "control_chars": 0,
+      "replacement_chars": 0,
+      "sentinels": [
+        {
+          "value": "00",
+          "count": 1387262,
+          "pct": 97.3483
+        }
+      ],
+      "patterns": [
+        {
+          "pattern": "99",
+          "count": 1425050,
+          "pct": 100.0
+        }
+      ],
+      "top_values": [
+        {
+          "value": "00",
+          "count": 1387262,
+          "pct": 97.3483
+        },
+        {
+          "value": "05",
+          "count": 25314,
+          "pct": 1.7764
+        },
+        {
+          "value": "17",
+          "count": 4844,
+          "pct": 0.3399
+        },
+        {
+          "value": "15",
+          "count": 3900,
+          "pct": 0.2737
+        },
+        {
+          "value": "14",
+          "count": 3572,
+          "pct": 0.2507
+        },
+        {
+          "value": "09",
+          "count": 119,
+          "pct": 0.0084
+        },
+        {
+          "value": "35",
+          "count": 39,
+          "pct": 0.0027
+        }
+      ]
+    },
+    "faixa_etaria": {
+      "non_null": 1425050,
+      "nulls": 0,
+      "null_pct": 0.0,
+      "distinct_approx": 10,
+      "min_length": 1,
+      "max_length": 1,
+      "edge_whitespace": 0,
+      "blank": 0,
+      "control_chars": 0,
+      "replacement_chars": 0,
+      "sentinels": [
+        {
+          "value": "0",
+          "count": 37660,
+          "pct": 2.6427
+        }
+      ],
+      "patterns": [
+        {
+          "pattern": "9",
+          "count": 1425050,
+          "pct": 100.0
+        }
+      ],
+      "top_values": [
+        {
+          "value": "5",
+          "count": 347695,
+          "pct": 24.3988
+        },
+        {
+          "value": "6",
+          "count": 282176,
+          "pct": 19.8011
+        },
+        {
+          "value": "4",
+          "count": 253948,
+          "pct": 17.8203
+        },
+        {
+          "value": "7",
+          "count": 218359,
+          "pct": 15.3229
+        },
+        {
+          "value": "8",
+          "count": 115802,
+          "pct": 8.1262
+        },
+        {
+          "value": "3",
+          "count": 100029,
+          "pct": 7.0193
+        },
+        {
+          "value": "9",
+          "count": 60394,
+          "pct": 4.238
+        },
+        {
+          "value": "0",
+          "count": 37660,
+          "pct": 2.6427
+        },
+        {
+          "value": "2",
+          "count": 7580,
+          "pct": 0.5319
+        },
+        {
+          "value": "1",
+          "count": 1407,
+          "pct": 0.0987
+        }
+      ]
+    }
+  }
+}

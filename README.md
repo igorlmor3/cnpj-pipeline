@@ -11,7 +11,7 @@ Status: em desenvolvimento. As camadas raw, bronze e silver, o profiling e a dem
 
 Os arquivos são publicados mensalmente como `.zip` com CSVs. As tabelas são Empresas, Estabelecimentos e Sócios (divididas em várias partes) e as tabelas de domínio Cnaes, Motivos, Municípios, Naturezas, Países, Qualificações e Simples.
 
-A Receita alterou o layout da página e o caminho dos arquivos no início de 2026. O template de URL usado pelo script é configurável (`CNPJ_URL_TEMPLATE` ou `--url-template`) e deve ser confirmado no site oficial antes do primeiro download. O dicionário de layout publicado junto com os arquivos de cada mês é a referência para os esquemas das tabelas.
+A Receita alterou o layout da página e o caminho dos arquivos no início de 2026. Os arquivos ficam em um compartilhamento público Nextcloud acessado por WebDAV, e o template de URL padrão do script segue esse formato (documentado pelo pacote comunitário `rfbpy`). Esse padrão ainda não foi confirmado diretamente contra o servidor da Receita. O template é configurável (`CNPJ_URL_TEMPLATE` ou `--url-template`) e deve ser conferido no site oficial se o primeiro download falhar. O dicionário de layout publicado junto com os arquivos de cada mês é a referência para os esquemas das tabelas.
 
 ## Arquitetura planejada
 
@@ -132,14 +132,17 @@ python -m cnpj_pipeline.download --month 2026-11 --dry-run
 | `--tables T [T ...]` | Subconjunto de tabelas, sem diferenciar maiúsculas (padrão: todas) |
 | `--parts N` | Número de partes das tabelas divididas (padrão: 10) |
 | `--out-dir PASTA` | Pasta de destino (padrão: `data/raw`) |
-| `--url-template URL` | Template com `{month}` e `{filename}` |
-| `--workers N` | Downloads em paralelo (padrão: 2) |
-| `--retries N` | Tentativas por arquivo (padrão: 5) |
+| `--url-template URL` | Template com `{month}` e `{filename}` (padrão: compartilhamento WebDAV oficial) |
+| `--share-token TOKEN` | Token do compartilhamento WebDAV (padrão: `CNPJ_SHARE_TOKEN`; só é enviado ao servidor oficial) |
+| `--workers N` | Downloads em paralelo; o servidor oficial limita arquivos grandes (padrão: 2) |
+| `--retries N` | Tentativas por arquivo (padrão: 8) |
 | `--no-checksum` | Não calcula o SHA-256 |
 | `--dry-run` | Lista as URLs sem baixar |
 | `--manifest-only` | Não acessa a rede: gera o manifesto a partir dos arquivos já presentes na pasta do mês |
 
-O script retoma downloads interrompidos (arquivo `.part` e cabeçalho HTTP `Range`), repete tentativas com backoff exponencial, confere o tamanho final contra o `Content-Length` e grava `manifest.json` com tamanho e SHA-256 de cada arquivo. Partes que retornam 404 em tabelas divididas são ignoradas com aviso. Se nenhuma parte de uma tabela for obtida, o script termina com código de saída diferente de zero.
+O servidor oficial fica atrás de um balanceador que às vezes responde vazio ou derruba a conexão, e baixar pelo navegador costuma travar sem retomar. O script lida com isso: retoma downloads interrompidos (arquivo `.part` e cabeçalho HTTP `Range`), repete tentativas com backoff exponencial (inclusive para respostas vazias e limites de taxa 408/429), confere o tamanho final contra o `Content-Length` e grava `manifest.json` com tamanho e SHA-256 de cada arquivo. Partes que retornam 404 em tabelas divididas são ignoradas com aviso. Se nenhuma parte de uma tabela for obtida, o script termina com código de saída diferente de zero.
+
+Para testar a conexão antes do download grande, baixe só as tabelas pequenas: `python -m cnpj_pipeline.download --month 2026-10 --tables cnaes motivos`. Se o servidor oficial estiver indisponível, `--url-template` aceita um espelho de terceiros com os mesmos zips (por exemplo, o espelho da Casa dos Dados, `https://dados-abertos-rf-cnpj.casadosdados.com.br/arquivos/<data-da-pasta>/{filename}`). Nesse caso, confira os nomes dos arquivos na página do espelho e registre no README qual fonte foi usada, porque o manifesto guarda a URL e o SHA-256 de cada arquivo, mas não prova que o espelho é idêntico ao original.
 
 Se os arquivos já foram baixados manualmente, coloque-os em `data/raw/<AAAA-MM>/` e rode `python -m cnpj_pipeline.download --month AAAA-MM --manifest-only` para gerar o manifesto sem acessar a rede. Rodar o download normal com o mesmo mês também funciona: arquivos completos são reconhecidos, pulados e incluídos no manifesto.
 
@@ -159,7 +162,7 @@ Se os arquivos já foram baixados manualmente, coloque-os em `data/raw/<AAAA-MM>
 Comportamento:
 
 - Todas as colunas são gravadas como texto. Tipagem e regras de negócio ficam para a camada silver.
-- O encoding latin-1 é convertido para UTF-8, e campos vazios viram NULL.
+- O encoding latin-1 é convertido para UTF-8 na extração do zip, byte a byte e sem perder nenhum caractere, e campos vazios viram NULL. A conversão é feita no pipeline porque os dados reais de 2026-10 trazem bytes de controle C1 (`0x80` a `0x9F`) que o decodificador latin-1 do DuckDB recusa. Esses bytes são contados no log e no manifesto (`control_chars`), mantidos na bronze e removidos pela regra de texto da silver.
 - Cada CSV é extraído do zip em streaming para uma pasta temporária (`data/tmp`, apagada ao final), porque o DuckDB não lê CSV de dentro de zip.
 - Linhas com número de colunas errado ou aspas inválidas não são descartadas em silêncio: vão para `data/bronze/_rejects/` com o número da linha, o texto original e o motivo. Se a fração de rejeitadas passar do limite, o arquivo falha e o Parquet é removido.
 - Antes de converter, a quantidade de colunas mais frequente entre os primeiros 1000 registros é comparada com `schemas.py`. Algumas linhas quebradas no início não reprovam o arquivo, mas uma mudança real de layout para o processamento com uma mensagem clara.
@@ -199,6 +202,7 @@ O que a silver faz, tabela por tabela:
 - Decimais com vírgula viram `DECIMAL(20,2)`; valores inválidos viram NULL.
 - Indicadores `S`/`N` viram `BOOLEAN`; a lista de CNAEs secundários vira `VARCHAR[]`.
 - Textos são limpos (caracteres de controle, espaços repetidos e nas bordas); vazio vira NULL. Códigos mantêm os zeros à esquerda.
+- Valores que significam "não informado" viram NULL: nos campos de endereço e no nome fantasia, textos só de zeros, pontos ou hífens, `N/A`, `NULL`, `NAO INFORMADO` e `SEM INFORMACAO`; em telefone, DDD, fax e CEP, valores só de zeros. Essas regras vieram do profiling do mês real (2026-10). `S/N` no número é mantido, porque é o valor padrão de "sem número".
 - UF fora das 27 siglas (mais `EX`) vira NULL; e-mail vai para minúsculas.
 - Chaves obrigatórias inválidas (por exemplo `cnpj_basico` fora de 8 posições alfanuméricas) enviam a linha para `data/silver/_quarantine/` com o motivo em `_reject_reason`.
 - Chaves de negócio duplicadas mantêm uma linha, escolhida de forma determinística (hash do conteúdo, então a ordem de entrada não importa), e as demais vão para a quarentena como `duplicate_key`.
@@ -214,7 +218,7 @@ Se a fração de linhas em quarentena de uma tabela passar de `--max-quarantine-
 | `--memory-limit` | Limite de memória do DuckDB (padrão: 4GB) |
 | `--report-dir` | Pasta do relatório (padrão: `docs/silver`) |
 
-As regras estão em `silver_rules.py` e são provisórias: partem do layout histórico e de hipóteses, e só viram regras definitivas depois de confirmadas pelo profiling do mês real.
+As regras estão em `silver_rules.py`. Parte delas já foi ajustada com o profiling do mês real (2026-10), como o tratamento de bytes de controle e de valores de espaço reservado, mas o catálogo em [docs/data_quality_rules.md](docs/data_quality_rules.md) ainda precisa ser fechado regra a regra.
 
 ## Publicação na AWS (nível 1)
 
@@ -232,29 +236,45 @@ Cada problema encontrado nos dados é registrado em [docs/data_quality_rules.md]
 
 ## Resultados medidos
 
-A ser preenchido após a primeira execução completa, com números reais.
+Primeira execução completa, sobre o mês de referência 2026-10 (arquivos `K3241.K03200Y*.D61010`, publicados pela Receita em outubro de 2026). Os números vêm dos manifestos `data/bronze/_manifest_2026-10.json` e `data/silver/_manifest_2026-10.json`.
 
 | Métrica | Valor |
 | --- | --- |
-| Mês de referência processado | |
-| Tamanho dos zips (raw) | |
-| Tamanho descompactado | |
-| Linhas por tabela | |
-| Tempo por etapa | |
-| Pico de memória | |
-| Máquina usada | |
+| Zips (raw) | 37 arquivos, 7,3 GiB |
+| CSV descompactado | 26,9 GiB |
+| Parquet bronze | 5,2 GiB (cerca de 80% menor que o CSV) |
+| Parquet silver | 5,7 GiB |
+| Linhas, total | 223.636.289 |
+| Linhas rejeitadas na bronze | 0 |
+| Linhas em quarentena na silver | 1 (chave duplicada em Empresas) |
+
+| Tabela | Linhas | CSV | Bronze (conversão) | Silver |
+| --- | ---: | ---: | ---: | ---: |
+| Estabelecimentos | 73.809.379 | 16,05 GiB | 208 s | 1.129 s |
+| Empresas | 70.517.438 | 5,13 GiB | 40 s | 474 s |
+| Simples | 50.806.102 | 2,98 GiB | 30 s | 50 s |
+| Sócios | 28.495.961 | 2,72 GiB | 37 s | 89 s |
+| Tabelas de domínio (6) | 7.409 | menos de 1 MiB | menos de 1 s | menos de 1 s |
+
+Observações:
+
+- O tempo da bronze é só o da conversão no DuckDB. A extração do zip e a conversão de latin-1 para UTF-8, feitas em Python, somam um tempo a mais que não foi medido separadamente.
+- O tempo da silver de Estabelecimentos é o da segunda execução, já com as regras de valores de espaço reservado (1.129 s). A primeira execução, sem essas regras, levou 463 s. A diferença não vem só das regras: a repetição rodou com o computador em uso para outras coisas, e um teste sintético de 8 milhões de linhas mostrou cerca de 10% de custo adicional da regra. Convém medir de novo, com a máquina parada, antes de citar o tempo como referência.
+- A parte 0 de cada tabela grande é bem maior que as demais (por exemplo, Estabelecimentos0 tem 6,9 GiB de CSV, e as outras nove partes têm cerca de 1 GiB cada). O particionamento do arquivo oficial não é uniforme.
+- Pico de memória e especificação da máquina não foram registrados nesta execução.
 
 ## Roadmap
 
 - [x] Estrutura do repositório, CI, Docker
 - [x] Download parametrizado com retomada e manifesto
 - [x] Módulo de profiling (testado com dados sintéticos)
-- [ ] Rodar o profiling no mês real e preencher o catálogo de qualidade de dados
-- [ ] Esquemas das tabelas a partir do dicionário de layout do mês processado
+- [x] Rodar o profiling no mês real (amostra de 5%)
+- [ ] Preencher o catálogo de qualidade de dados com as regras confirmadas
+- [x] Esquemas das tabelas validados contra os dados reais de 2026-10 (10 tabelas, sem linhas rejeitadas)
 - [x] Camada bronze (CSV para Parquet em streaming, testada com dados sintéticos)
-- [ ] Validar a bronze com o mês real e registrar as métricas
+- [x] Validar a bronze com o mês real e registrar as métricas
 - [x] Camada silver (tipagem, limpeza, quarentena e deduplicação, testada com dados sintéticos)
-- [ ] Confirmar as regras da silver contra o profiling do mês real
+- [ ] Confirmar as demais regras da silver contra o profiling do mês real (parte já ajustada)
 - [x] Gerador de amostra sintética e demo ponta a ponta, testados no CI
 - [ ] Camada gold (tabelas analíticas a partir da silver)
 - [ ] Testes de qualidade de dados automatizados (unicidade de chaves, contagens entre camadas, formato do CNPJ)

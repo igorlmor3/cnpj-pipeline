@@ -3,7 +3,9 @@
 Caracteristicas:
 - parametrizado por mes de referencia, tabelas e numero de partes;
 - retomada de downloads interrompidos (HTTP Range + arquivo .part);
-- retry com backoff exponencial para erros de rede e respostas 5xx;
+- retry com backoff exponencial para erros de rede, respostas 5xx, 408/429 e respostas vazias
+  (o servidor oficial fica atras de um balanceador que as vezes responde vazio);
+- autenticacao basica para o compartilhamento WebDAV oficial (token publico, senha vazia);
 - verificacao de tamanho contra o Content-Length;
 - manifesto JSON por mes com tamanho, SHA-256 e URL de cada arquivo.
 
@@ -11,6 +13,7 @@ Exemplos:
     python -m cnpj_pipeline.download --month 2026-11 --dry-run
     python -m cnpj_pipeline.download --month 2026-11 --tables empresas cnaes
     python -m cnpj_pipeline.download --month 2026-11 --url-template "https://host/{month}/{filename}"
+    python -m cnpj_pipeline.download --month 2026-10 --workers 1 --retries 10
 """
 
 from __future__ import annotations
@@ -36,6 +39,8 @@ log = logging.getLogger("cnpj_pipeline.download")
 CHUNK_SIZE = 1024 * 1024  # 1 MiB
 USER_AGENT = "cnpj-pipeline/0.1 (projeto de portfolio; engenharia de dados)"
 MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
+
+RETRYABLE_CLIENT_ERRORS = (408, 429)
 
 STATUS_DOWNLOADED = "downloaded"
 STATUS_SKIPPED = "skipped"
@@ -97,6 +102,18 @@ def build_url(template: str, month: str, filename: str) -> str:
     return template.format(month=month, filename=filename)
 
 
+def resolve_auth(url_template: str, share_token: str | None) -> tuple[str, str] | None:
+    """Credenciais HTTP basic. Um token explicito vale sempre; sem ele, so o WebDAV oficial usa o padrao.
+
+    Em um template de outro servidor (por exemplo um espelho), nenhuma credencial e enviada.
+    """
+    if share_token:
+        return (share_token, "")
+    if config.WEBDAV_MARKER in url_template and config.SHARE_TOKEN:
+        return (config.SHARE_TOKEN, "")
+    return None
+
+
 # --------------------------------------------------------------------------- #
 # Download de um arquivo
 # --------------------------------------------------------------------------- #
@@ -121,7 +138,8 @@ def _remote_size(session: requests.Session, url: str, timeout: float) -> int | N
     if resp.status_code >= 400:
         return None
     length = resp.headers.get("Content-Length")
-    return int(length) if length and length.isdigit() else None
+    size = int(length) if length and length.isdigit() else None
+    return size or None  # 0 e a resposta vazia do balanceador, nao o tamanho real
 
 
 def _fetch_once(
@@ -168,6 +186,8 @@ def _fetch_once(
                     log.info("%s: %d%% (%.1f MiB)", part.stem, int(written / total * 100), written / 2**20)
                     next_log += 0.1
 
+    if written == 0:
+        raise requests.RequestException("Resposta vazia do servidor")
     if total is not None and written != total:
         raise requests.RequestException(f"Download incompleto: {written} de {total} bytes")
     return written
@@ -181,6 +201,7 @@ def download_file(
     backoff: float = 2.0,
     timeout: float = 60.0,
     checksum: bool = True,
+    auth: tuple[str, str] | None = None,
 ) -> DownloadResult:
     """Baixa `url` para `dest` com retomada, retry e verificacao de tamanho."""
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -189,6 +210,8 @@ def download_file(
 
     with requests.Session() as session:
         session.headers["User-Agent"] = USER_AGENT
+        if auth:
+            session.auth = auth
 
         try:
             expected = _remote_size(session, url, timeout)
@@ -219,8 +242,8 @@ def download_file(
             except requests.HTTPError as exc:
                 status = exc.response.status_code if exc.response is not None else 0
                 last_error = f"HTTP {status}"
-                if 400 <= status < 500:  # erro do cliente: nao adianta repetir
-                    break
+                if 400 <= status < 500 and status not in RETRYABLE_CLIENT_ERRORS:
+                    break  # erro do cliente (401, 403...): repetir nao adianta
             except requests.RequestException as exc:
                 last_error = str(exc)
 
@@ -307,6 +330,7 @@ def run(
     checksum: bool,
     dry_run: bool,
     manifest_only: bool = False,
+    auth: tuple[str, str] | None = None,
 ) -> int:
     """Executa o download. Retorna o codigo de saida (0 = sucesso)."""
     plan = build_filenames(tables, parts)
@@ -337,7 +361,7 @@ def run(
     def work(job: tuple[str, str, str]) -> tuple[str, DownloadResult]:
         table, name, url = job
         return table, download_file(
-            url, month_dir / name, retries=retries, timeout=timeout, checksum=checksum
+            url, month_dir / name, retries=retries, timeout=timeout, checksum=checksum, auth=auth
         )
 
     with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
@@ -390,8 +414,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=config.URL_TEMPLATE,
         help="Template da URL com {month} e {filename} (padrao: CNPJ_URL_TEMPLATE ou o valor de config.py)",
     )
-    parser.add_argument("--workers", type=int, default=2, help="Downloads em paralelo (padrao: %(default)s)")
-    parser.add_argument("--retries", type=int, default=5, help="Tentativas por arquivo (padrao: %(default)s)")
+    parser.add_argument(
+        "--share-token",
+        default=None,
+        help="Token do compartilhamento WebDAV (padrao: CNPJ_SHARE_TOKEN, usado so no servidor oficial)",
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=2,
+        help="Downloads em paralelo; o servidor oficial limita arquivos grandes (padrao: %(default)s)",
+    )
+    parser.add_argument("--retries", type=int, default=8, help="Tentativas por arquivo (padrao: %(default)s)")
     parser.add_argument(
         "--timeout", type=float, default=60.0, help="Timeout em segundos (padrao: %(default)s)"
     )
@@ -437,6 +471,7 @@ def main(argv: list[str] | None = None) -> int:
         checksum=not args.no_checksum,
         dry_run=args.dry_run,
         manifest_only=args.manifest_only,
+        auth=resolve_auth(args.url_template, args.share_token),
     )
 
 

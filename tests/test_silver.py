@@ -123,6 +123,25 @@ def test_text_cleaning_and_decimal_and_types(tmp_path):
     assert {"_source_file", "_reference_month", "_ingested_at"} <= set(types)
 
 
+def test_text_cleaning_removes_c1_control_characters(tmp_path):
+    write_bronze(
+        tmp_path / "bronze",
+        "Empresas",
+        [
+            {"cnpj_basico": "00000001", "razao_social": "ALFA\x8f\x8fBETA"},
+            {"cnpj_basico": "00000002", "razao_social": "\x8f"},
+            {"cnpj_basico": "00000003", "razao_social": "ASUNCI\x1aN"},
+        ],
+    )
+
+    assert run_silver(tmp_path, ["Empresas"]) == 0
+    rows = {r["cnpj_basico"]: r for r in silver_rows(tmp_path, "Empresas")}
+
+    assert rows["00000001"]["razao_social"] == "ALFA BETA"
+    assert rows["00000002"]["razao_social"] is None  # so controle: vira vazio e depois NULL
+    assert rows["00000003"]["razao_social"] == "ASUNCI N"
+
+
 def test_codes_keep_leading_zeros(tmp_path):
     write_bronze(
         tmp_path / "bronze",
@@ -189,6 +208,69 @@ def test_estabelecimentos_cnpj_uf_email_and_list(tmp_path):
     assert rows["00000001"]["cnae_fiscal_secundaria"] == ["1111111", "2222222", "3333333"]
     assert rows["00000002"]["uf"] is None  # UF inexistente
     assert rows["00000003"]["cnae_fiscal_secundaria"] is None  # so separadores
+
+
+def test_placeholders_and_zero_only_values_become_null(tmp_path):
+    def row(key: str, **cols):
+        return {"cnpj_basico": key, "cnpj_ordem": "0001", "cnpj_dv": "91", **cols}
+
+    write_bronze(
+        tmp_path / "bronze",
+        "Estabelecimentos",
+        [
+            row(
+                "00000001",
+                nome_fantasia="NAO INFORMADO",
+                logradouro=" . ",
+                numero="000000",
+                complemento="N/A",
+                bairro="---",
+                ddd_1="0000",
+                telefone_1="00000000",
+                cep="00000000",
+                correio_eletronico="NULL",
+            ),
+            row(
+                "00000002",
+                nome_fantasia="N\u00c3O INFORMADO",
+                logradouro="RUA 0 NORTE",
+                numero="S/N",
+                complemento="SALA 00",
+                bairro="CENTRO",
+                ddd_1="11",
+                telefone_1="  99999999 ",
+                cep="01001000",
+                correio_eletronico=" Contato@Exemplo.TEST ",
+            ),
+            row("00000003", numero="0", complemento="KM 0", ddd_2="0", fax="0"),
+        ],
+    )
+
+    assert run_silver(tmp_path, ["Estabelecimentos"], ratio=1.0) == 0
+    rows = {r["cnpj_basico"]: r for r in silver_rows(tmp_path, "Estabelecimentos")}
+
+    placeholders = rows["00000001"]
+    for column in (
+        "nome_fantasia", "logradouro", "numero", "complemento", "bairro",
+        "ddd_1", "telefone_1", "cep", "correio_eletronico",
+    ):  # fmt: skip
+        assert placeholders[column] is None, column
+
+    real = rows["00000002"]
+    assert real["nome_fantasia"] is None  # com acento tambem
+    assert real["logradouro"] == "RUA 0 NORTE"  # zero dentro de texto real e preservado
+    assert real["numero"] == "S/N"  # S/N e o valor padrao de "sem numero" e nao e anulado
+    assert real["complemento"] == "SALA 00"
+    assert real["ddd_1"] == "11"
+    assert real["telefone_1"] == "99999999"  # sequencia de noves nao e tratada como zero
+    assert real["cep"] == "01001000"  # zero a esquerda preservado
+    assert real["correio_eletronico"] == "contato@exemplo.test"
+
+    other = rows["00000003"]
+    assert other["numero"] is None
+    assert other["complemento"] == "KM 0"
+    assert other["ddd_2"] is None
+    assert other["fax"] is None
 
 
 def test_simples_flags(tmp_path):

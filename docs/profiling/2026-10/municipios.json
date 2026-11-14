@@ -1,0 +1,50 @@
+{
+  "table": "Municipios",
+  "reference_month": "2026-10",
+  "generated_at": "2026-11-14T15:42:50+00:00",
+  "files": 1,
+  "rows_profiled": 297,
+  "sample_percent": 5.0,
+  "columns": {
+    "codigo": {
+      "non_null": 297,
+      "nulls": 0,
+      "null_pct": 0.0,
+      "distinct_approx": 302,
+      "min_length": 4,
+      "max_length": 4,
+      "edge_whitespace": 0,
+      "blank": 0,
+      "control_chars": 0,
+      "replacement_chars": 0,
+      "sentinels": [],
+      "patterns": [
+        {
+          "pattern": "9999",
+          "count": 297,
+          "pct": 100.0
+        }
+      ]
+    },
+    "descricao": {
+      "non_null": 297,
+      "nulls": 0,
+      "null_pct": 0.0,
+      "distinct_approx": 293,
+      "min_length": 4,
+      "max_length": 26,
+      "edge_whitespace": 0,
+      "blank": 0,
+      "control_chars": 0,
+      "replacement_chars": 0,
+      "sentinels": []
+    }
+  },
+  "key": {
+    "columns": [
+      "codigo"
+    ],
+    "duplicated_keys": 0,
+    "rows_in_duplicated_keys": 0
+  }
+}

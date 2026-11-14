@@ -3,7 +3,9 @@
 Regras desta camada:
 - nenhuma regra de negocio: todas as colunas sao texto, sem conversao de tipos;
 - campos vazios viram NULL (o CSV nao distingue vazio de ausente);
-- o encoding ISO-8859-1 (latin-1) e convertido para UTF-8;
+- o encoding ISO-8859-1 (latin-1) e convertido para UTF-8 na extracao do zip, byte a byte,
+  sem perder nenhum caractere (bytes de controle C1 do arquivo viram o ponto de codigo
+  equivalente; a limpeza deles e da silver);
 - linhas com quantidade de colunas errada ou aspas invalidas nao sao perdidas em
   silencio: vao para data/bronze/_rejects/ com o numero da linha e o motivo;
 - colunas de metadados sao adicionadas: _source_file, _reference_month, _ingested_at;
@@ -23,7 +25,6 @@ import csv
 import json
 import logging
 import re
-import shutil
 import sys
 import tempfile
 import time
@@ -42,7 +43,12 @@ from cnpj_pipeline.schemas import columns_for
 
 log = logging.getLogger("cnpj_pipeline.bronze")
 
-CSV_ENCODING = "latin-1"
+SOURCE_ENCODING = "latin-1"  # encoding dos CSVs dentro do zip da Receita
+CSV_ENCODING = "utf-8"  # encoding do CSV extraido (convertido na extracao)
+# Bytes 0x80-0x9F (controles C1) existem em alguns arquivos reais e o decodificador latin-1
+# do DuckDB os recusa ("File is not latin-1 encoded"); por isso a conversao e feita aqui.
+C1_CONTROL_BYTES = bytes(range(0x80, 0xA0))
+EXTRACT_CHUNK_BYTES = 8 * 1024 * 1024
 CSV_DELIMITER = ";"
 CSV_QUOTE = '"'
 
@@ -65,6 +71,7 @@ class FileResult:
     rows: int = 0
     rejected_lines: int = 0
     csv_bytes: int = 0
+    control_chars: int = 0
     parquet_bytes: int = 0
     seconds: float = 0.0
     error: str | None = None
@@ -184,16 +191,39 @@ def convert_csv(
     return rows, rejected
 
 
-def _extract_members(zip_path: Path, tmp_dir: Path) -> list[tuple[str, Path]]:
-    """Extrai os arquivos do zip em streaming (o DuckDB nao le CSV dentro de zip)."""
+@dataclass
+class ExtractedMember:
+    name: str
+    path: Path
+    source_bytes: int  # tamanho do CSV original (latin-1), antes da conversao
+    control_chars: int  # bytes de controle C1 encontrados (preservados como U+0080..U+009F)
+
+
+def _transcode_latin1_to_utf8(src, dst) -> tuple[int, int]:
+    """Copia `src` para `dst` convertendo latin-1 para UTF-8. Retorna (bytes lidos, bytes C1)."""
+    total = 0
+    control = 0
+    while chunk := src.read(EXTRACT_CHUNK_BYTES):
+        total += len(chunk)
+        control += len(chunk) - len(chunk.translate(None, C1_CONTROL_BYTES))
+        dst.write(chunk.decode(SOURCE_ENCODING).encode("utf-8"))
+    return total, control
+
+
+def _extract_members(zip_path: Path, tmp_dir: Path) -> list[ExtractedMember]:
+    """Extrai os arquivos do zip em streaming, ja convertidos para UTF-8.
+
+    O DuckDB nao le CSV dentro de zip. A conversao de encoding e feita aqui (latin-1 tem um
+    byte por caractere, entao nao ha risco nas bordas dos blocos) e nao descarta nenhum byte.
+    """
     extracted = []
     with zipfile.ZipFile(zip_path) as zf:
         members = [m for m in zf.infolist() if not m.is_dir()]
         for index, member in enumerate(members):
             target = tmp_dir / f"{zip_path.stem}_{index}.csv"
             with zf.open(member) as src, target.open("wb") as dst:
-                shutil.copyfileobj(src, dst, length=1024 * 1024)
-            extracted.append((member.filename, target))
+                source_bytes, control = _transcode_latin1_to_utf8(src, dst)
+            extracted.append(ExtractedMember(member.filename, target, source_bytes, control))
     return extracted
 
 
@@ -221,7 +251,8 @@ def process_zip(
         except (zipfile.BadZipFile, OSError) as exc:
             return [FileResult(table, zip_path.name, "", "", STATUS_FAILED, error=f"zip invalido: {exc}")]
 
-        for index, (member_name, csv_path) in enumerate(members):
+        for index, extracted in enumerate(members):
+            member_name, csv_path = extracted.name, extracted.path
             stem = zip_path.stem if len(members) == 1 else f"{zip_path.stem}_{index}"
             out_path = parquet_path(bronze_dir, table, month, stem)
             rejects_path = (
@@ -233,7 +264,8 @@ def process_zip(
                 member=member_name,
                 parquet=out_path.relative_to(bronze_dir).as_posix(),
                 status=STATUS_FAILED,
-                csv_bytes=csv_path.stat().st_size,
+                csv_bytes=extracted.source_bytes,
+                control_chars=extracted.control_chars,
             )
 
             if out_path.exists() and not force:
@@ -298,6 +330,13 @@ def process_zip(
                 log.error("%s: %s", stem, result.error)
             else:
                 result.status = STATUS_CONVERTED
+                if result.control_chars:
+                    log.warning(
+                        "%s: %d byte(s) de controle C1 (0x80-0x9F) no CSV de origem; "
+                        "mantidos na bronze, a silver os remove",
+                        stem,
+                        result.control_chars,
+                    )
                 if rejected:
                     log.warning("%s: %d linha(s) rejeitada(s), ver %s", stem, rejected, rejects_path)
                 log.info(
@@ -341,6 +380,7 @@ def write_manifest(bronze_dir: Path, month: str, results: list[FileResult]) -> P
         "total_rows": sum(e["rows"] for e in files),
         "total_rejected_lines": sum(e["rejected_lines"] for e in files),
         "total_csv_bytes": sum(e["csv_bytes"] for e in files),
+        "total_control_chars": sum(e.get("control_chars", 0) for e in files),
         "total_parquet_bytes": sum(e["parquet_bytes"] for e in files),
         "files": files,
     }

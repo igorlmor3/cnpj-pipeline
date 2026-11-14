@@ -16,6 +16,7 @@ from cnpj_pipeline.download import (
     download_file,
     main,
     normalize_tables,
+    resolve_auth,
     run,
 )
 
@@ -220,3 +221,91 @@ def test_manifest_only_uses_local_files(tmp_path, server):
 
 def test_manifest_only_fails_when_folder_is_empty(tmp_path, server):
     assert run("2026-11", ["Cnaes"], **_run_kwargs(tmp_path, server, manifest_only=True)) == 1
+
+
+# --------------------------------------------------------------------------- #
+# Servidor oficial: autenticacao WebDAV, respostas vazias e limites de taxa
+# --------------------------------------------------------------------------- #
+
+
+def test_resolve_auth_rules(monkeypatch):
+    official = config.DEFAULT_URL_TEMPLATE
+    monkeypatch.setattr(config, "SHARE_TOKEN", "tok123")
+
+    assert resolve_auth(official, None) == ("tok123", "")
+    assert resolve_auth(official, "outro") == ("outro", "")  # token explicito vence
+    assert resolve_auth("https://espelho.exemplo/{month}/{filename}", None) is None
+    assert resolve_auth("https://espelho.exemplo/{month}/{filename}", "x") == ("x", "")
+
+
+def test_default_template_points_to_the_official_webdav_share():
+    assert config.DEFAULT_URL_TEMPLATE.endswith("/Dados/Cadastros/CNPJ/{month}/{filename}")
+    url = build_url(config.DEFAULT_URL_TEMPLATE, "2026-10", "Empresas0.zip")
+    assert url.endswith("/CNPJ/2026-10/Empresas0.zip")
+
+
+def test_download_with_basic_auth(tmp_path, server):
+    server.files["a.zip"] = PAYLOAD
+    server.require_auth = "meutoken:"
+
+    result = download_file(server.url("a.zip"), tmp_path / "a.zip", retries=1, auth=("meutoken", ""))
+
+    assert result.status == STATUS_DOWNLOADED
+    assert (tmp_path / "a.zip").read_bytes() == PAYLOAD
+
+
+def test_missing_credentials_fail_without_retrying(tmp_path, server):
+    server.files["a.zip"] = PAYLOAD
+    server.require_auth = "meutoken:"
+
+    result = download_file(server.url("a.zip"), tmp_path / "a.zip", retries=5, backoff=0)
+
+    assert result.status == STATUS_FAILED
+    assert not (tmp_path / "a.zip").exists()
+
+
+def test_empty_responses_are_retried(tmp_path, server):
+    server.files["a.zip"] = PAYLOAD
+    server.empty_get["a.zip"] = 2
+
+    result = download_file(server.url("a.zip"), tmp_path / "a.zip", retries=4, backoff=0)
+
+    assert result.status == STATUS_DOWNLOADED
+    assert (tmp_path / "a.zip").read_bytes() == PAYLOAD
+
+
+def test_only_empty_responses_fail_after_retries(tmp_path, server):
+    server.files["a.zip"] = PAYLOAD
+    server.empty_get["a.zip"] = 99
+
+    result = download_file(server.url("a.zip"), tmp_path / "a.zip", retries=2, backoff=0)
+
+    assert result.status == STATUS_FAILED
+    assert "vazia" in (result.error or "")
+
+
+def test_rate_limit_429_is_retried(tmp_path, server):
+    server.files["a.zip"] = PAYLOAD
+    server.fail_get["a.zip"] = 2
+    server.fail_status = 429
+
+    result = download_file(server.url("a.zip"), tmp_path / "a.zip", retries=4, backoff=0)
+
+    assert result.status == STATUS_DOWNLOADED
+
+
+def test_run_passes_credentials_to_every_file(tmp_path, server):
+    server.require_auth = "tok:"
+    for name in ("Cnaes.zip", "Motivos.zip"):
+        server.files[f"2026-10/{name}"] = PAYLOAD
+
+    code = run("2026-10", ["Cnaes", "Motivos"], **_run_kwargs(tmp_path, server, auth=("tok", "")))
+
+    assert code == 0
+    assert (tmp_path / "2026-10" / "Cnaes.zip").exists()
+
+
+def test_cli_dry_run_uses_official_template_by_default(capsys):
+    assert main(["--month", "2026-10", "--tables", "cnaes", "--dry-run"]) == 0
+    out = capsys.readouterr().out
+    assert "arquivos.receitafederal.gov.br/public.php/webdav/Dados/Cadastros/CNPJ/2026-10/Cnaes.zip" in out

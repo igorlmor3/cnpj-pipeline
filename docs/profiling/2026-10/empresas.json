@@ -1,0 +1,361 @@
+{
+  "table": "Empresas",
+  "reference_month": "2026-10",
+  "generated_at": "2026-11-14T15:41:42+00:00",
+  "files": 10,
+  "rows_profiled": 3524181,
+  "sample_percent": 5.0,
+  "columns": {
+    "cnpj_basico": {
+      "non_null": 3524181,
+      "nulls": 0,
+      "null_pct": 0.0,
+      "distinct_approx": 3568353,
+      "min_length": 8,
+      "max_length": 8,
+      "edge_whitespace": 0,
+      "blank": 0,
+      "control_chars": 0,
+      "replacement_chars": 0,
+      "sentinels": [],
+      "patterns": [
+        {
+          "pattern": "99999999",
+          "count": 3524181,
+          "pct": 100.0
+        }
+      ]
+    },
+    "razao_social": {
+      "non_null": 3524181,
+      "nulls": 0,
+      "null_pct": 0.0,
+      "distinct_approx": 3474861,
+      "min_length": 3,
+      "max_length": 150,
+      "edge_whitespace": 89,
+      "blank": 0,
+      "control_chars": 0,
+      "replacement_chars": 0,
+      "sentinels": []
+    },
+    "natureza_juridica": {
+      "non_null": 3524181,
+      "nulls": 0,
+      "null_pct": 0.0,
+      "distinct_approx": 80,
+      "min_length": 4,
+      "max_length": 4,
+      "edge_whitespace": 0,
+      "blank": 0,
+      "control_chars": 0,
+      "replacement_chars": 0,
+      "sentinels": [],
+      "patterns": [
+        {
+          "pattern": "9999",
+          "count": 3524181,
+          "pct": 100.0
+        }
+      ],
+      "top_values": [
+        {
+          "value": "2135",
+          "count": 2284477,
+          "pct": 64.8229
+        },
+        {
+          "value": "2062",
+          "count": 843930,
+          "pct": 23.9468
+        },
+        {
+          "value": "4090",
+          "count": 148102,
+          "pct": 4.2025
+        },
+        {
+          "value": "3999",
+          "count": 71903,
+          "pct": 2.0403
+        },
+        {
+          "value": "2240",
+          "count": 40395,
+          "pct": 1.1462
+        },
+        {
+          "value": "4120",
+          "count": 31648,
+          "pct": 0.898
+        },
+        {
+          "value": "3085",
+          "count": 16871,
+          "pct": 0.4787
+        },
+        {
+          "value": "4014",
+          "count": 10719,
+          "pct": 0.3042
+        },
+        {
+          "value": "2305",
+          "count": 10598,
+          "pct": 0.3007
+        },
+        {
+          "value": "2321",
+          "count": 8662,
+          "pct": 0.2458
+        },
+        {
+          "value": "3271",
+          "count": 7153,
+          "pct": 0.203
+        },
+        {
+          "value": "3220",
+          "count": 6904,
+          "pct": 0.1959
+        },
+        {
+          "value": "2216",
+          "count": 5871,
+          "pct": 0.1666
+        },
+        {
+          "value": "2054",
+          "count": 5206,
+          "pct": 0.1477
+        },
+        {
+          "value": "2232",
+          "count": 5071,
+          "pct": 0.1439
+        }
+      ]
+    },
+    "qualificacao_responsavel": {
+      "non_null": 3524181,
+      "nulls": 0,
+      "null_pct": 0.0,
+      "distinct_approx": 31,
+      "min_length": 2,
+      "max_length": 2,
+      "edge_whitespace": 0,
+      "blank": 0,
+      "control_chars": 0,
+      "replacement_chars": 0,
+      "sentinels": [
+        {
+          "value": "00",
+          "count": 124,
+          "pct": 0.0035
+        }
+      ],
+      "patterns": [
+        {
+          "pattern": "99",
+          "count": 3524181,
+          "pct": 100.0
+        }
+      ],
+      "top_values": [
+        {
+          "value": "50",
+          "count": 2283568,
+          "pct": 64.7971
+        },
+        {
+          "value": "49",
+          "count": 857951,
+          "pct": 24.3447
+        },
+        {
+          "value": "51",
+          "count": 148102,
+          "pct": 4.2025
+        },
+        {
+          "value": "16",
+          "count": 93253,
+          "pct": 2.6461
+        },
+        {
+          "value": "59",
+          "count": 31648,
+          "pct": 0.898
+        },
+        {
+          "value": "05",
+          "count": 30146,
+          "pct": 0.8554
+        },
+        {
+          "value": "65",
+          "count": 20673,
+          "pct": 0.5866
+        },
+        {
+          "value": "19",
+          "count": 15442,
+          "pct": 0.4382
+        },
+        {
+          "value": "28",
+          "count": 11589,
+          "pct": 0.3288
+        },
+        {
+          "value": "34",
+          "count": 10703,
+          "pct": 0.3037
+        },
+        {
+          "value": "17",
+          "count": 6826,
+          "pct": 0.1937
+        },
+        {
+          "value": "43",
+          "count": 6599,
+          "pct": 0.1872
+        },
+        {
+          "value": "10",
+          "count": 4008,
+          "pct": 0.1137
+        },
+        {
+          "value": "64",
+          "count": 1131,
+          "pct": 0.0321
+        },
+        {
+          "value": "12",
+          "count": 863,
+          "pct": 0.0245
+        }
+      ]
+    },
+    "capital_social": {
+      "non_null": 3524181,
+      "nulls": 0,
+      "null_pct": 0.0,
+      "distinct_approx": 27692,
+      "min_length": 4,
+      "max_length": 15,
+      "edge_whitespace": 0,
+      "blank": 0,
+      "control_chars": 0,
+      "replacement_chars": 0,
+      "sentinels": [],
+      "patterns": [
+        {
+          "pattern": "9999,99",
+          "count": 1235762,
+          "pct": 35.0652
+        },
+        {
+          "pattern": "9,99",
+          "count": 1089900,
+          "pct": 30.9263
+        },
+        {
+          "pattern": "99999,99",
+          "count": 807003,
+          "pct": 22.899
+        },
+        {
+          "pattern": "999,99",
+          "count": 171158,
+          "pct": 4.8567
+        },
+        {
+          "pattern": "999999,99",
+          "count": 170702,
+          "pct": 4.8437
+        },
+        {
+          "pattern": "99,99",
+          "count": 23738,
+          "pct": 0.6736
+        },
+        {
+          "pattern": "9999999,99",
+          "count": 20635,
+          "pct": 0.5855
+        },
+        {
+          "pattern": "99999999,99",
+          "count": 4005,
+          "pct": 0.1136
+        }
+      ],
+      "decimal_comma": {
+        "matching": 3524181,
+        "not_matching": 0,
+        "with_dot": 0,
+        "max_value": 999999999999.0
+      }
+    },
+    "porte_empresa": {
+      "non_null": 3523974,
+      "nulls": 207,
+      "null_pct": 0.0059,
+      "distinct_approx": 3,
+      "min_length": 2,
+      "max_length": 2,
+      "edge_whitespace": 0,
+      "blank": 0,
+      "control_chars": 0,
+      "replacement_chars": 0,
+      "sentinels": [],
+      "patterns": [
+        {
+          "pattern": "99",
+          "count": 3523974,
+          "pct": 100.0
+        }
+      ],
+      "top_values": [
+        {
+          "value": "01",
+          "count": 2668510,
+          "pct": 75.7245
+        },
+        {
+          "value": "05",
+          "count": 747081,
+          "pct": 21.2
+        },
+        {
+          "value": "03",
+          "count": 108383,
+          "pct": 3.0756
+        }
+      ]
+    },
+    "ente_federativo_responsavel": {
+      "non_null": 3761,
+      "nulls": 3520420,
+      "null_pct": 99.8933,
+      "distinct_approx": 2441,
+      "min_length": 4,
+      "max_length": 37,
+      "edge_whitespace": 0,
+      "blank": 0,
+      "control_chars": 0,
+      "replacement_chars": 0,
+      "sentinels": []
+    }
+  },
+  "key": {
+    "columns": [
+      "cnpj_basico"
+    ],
+    "duplicated_keys": 0,
+    "rows_in_duplicated_keys": 0
+  }
+}

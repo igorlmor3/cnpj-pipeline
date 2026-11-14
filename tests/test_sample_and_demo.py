@@ -49,7 +49,7 @@ def test_generated_csv_matches_schema_and_is_latin1(tmp_path, tmp_path_factory):
         raw = read_member(paths[-1])
         text = raw.decode("latin-1")  # nao pode falhar
         csv_file = work / f"{table}.csv"
-        csv_file.write_bytes(raw)
+        csv_file.write_bytes(text.encode("utf-8"))  # como a bronze extrai
         check_layout(csv_file, columns_for(table))
         assert text.endswith("\n")
 

@@ -7,9 +7,13 @@ docs/data_quality_rules.md.
 
 Cada coluna recebe um "tipo de regra" (kind):
 
-  text    texto: troca caracteres de controle por espaco, junta espacos repetidos, apara as
-          bordas e transforma vazio em NULL
+  text    texto: troca caracteres de controle (inclusive os C1, U+0080 a U+009F) por espaco,
+          junta espacos repetidos, apara as bordas e transforma vazio em NULL
+  text_ph como text, mas valores-espaco-reservado (somente zeros, somente pontos ou hifens, N/A,
+          NULL, NAO INFORMADO, SEM INFORMACAO) viram NULL
   code    codigo textual (zeros a esquerda importam): apenas apara as bordas, vazio vira NULL
+  zero_null como code, mas valor composto somente por zeros (telefone, DDD, fax, CEP) vira NULL
+  email   como lower, mas valores-espaco-reservado viram NULL
   upper   como code, mas em maiusculas
   lower   como code, mas em minusculas (e-mail)
   uf      sigla de UF valida (27 UFs e EX), em maiusculas; qualquer outro valor vira NULL
@@ -33,15 +37,37 @@ UFS = (
 
 _UF_LIST = ", ".join(f"'{uf}'" for uf in UFS)
 
+# Limpeza base de texto: controles ASCII e C1 (U+0080..U+009F) viram espaco, espacos repetidos
+# sao juntados, bordas aparadas e vazio vira NULL.
+_TEXT_CLEAN = (
+    "NULLIF(trim(regexp_replace(regexp_replace({c}, '[[:cntrl:]\\x{80}-\\x{9f}]', ' ', 'g'), "
+    "' {2,}', ' ', 'g')), '')"
+)
+
+# Valores que significam "nao informado" mesmo sem serem NULL. Medidos no profiling de 2026-10
+# (docs/profiling/2026-10/estabelecimentos.md): somente zeros, somente pontos ou hifens e rotulos.
+_PLACEHOLDER_WORDS = (
+    "'N/A', 'NULL', 'NAO INFORMADO', 'N\u00c3O INFORMADO', 'SEM INFORMACAO', 'SEM INFORMA\u00c7\u00c3O'"
+)
+
+
+def _null_if_placeholder(value_sql: str) -> str:
+    test = f"upper({value_sql}) IN ({_PLACEHOLDER_WORDS}) OR regexp_matches({value_sql}, '^(0+|[.-]+)$')"
+    return f"CASE WHEN {test} THEN NULL ELSE {value_sql} END"
+
+
 # kind -> (tipo DuckDB, expressao SQL com o marcador {c} para a coluna de origem)
 KINDS: dict[str, tuple[str, str]] = {
-    "text": (
-        "VARCHAR",
-        "NULLIF(trim(regexp_replace(regexp_replace({c}, '[[:cntrl:]]', ' ', 'g'), ' {2,}', ' ', 'g')), '')",
-    ),
+    "text": ("VARCHAR", _TEXT_CLEAN),
+    "text_ph": ("VARCHAR", _null_if_placeholder(_TEXT_CLEAN)),
     "code": ("VARCHAR", "NULLIF(trim({c}), '')"),
     "upper": ("VARCHAR", "NULLIF(upper(trim({c})), '')"),
     "lower": ("VARCHAR", "NULLIF(lower(trim({c})), '')"),
+    "email": ("VARCHAR", _null_if_placeholder("NULLIF(lower(trim({c})), '')")),
+    "zero_null": (
+        "VARCHAR",
+        "CASE WHEN regexp_matches(trim({c}), '^0+$') THEN NULL ELSE NULLIF(trim({c}), '') END",
+    ),
     "uf": ("VARCHAR", f"CASE WHEN upper(trim({{c}})) IN ({_UF_LIST}) THEN upper(trim({{c}})) END"),
     "date": (
         "DATE",
@@ -73,7 +99,9 @@ KINDS: dict[str, tuple[str, str]] = {
 }
 
 # Tipos em que "valor alterado" faz sentido como metrica (a saida continua sendo texto).
-TEXT_LIKE = frozenset({"text", "code", "upper", "lower", "uf", "key8", "key4", "dv2"})
+TEXT_LIKE = frozenset(
+    {"text", "text_ph", "code", "zero_null", "upper", "lower", "email", "uf", "key8", "key4", "dv2"}
+)
 
 _DOMAIN_RULES = {"codigo": "code", "descricao": "text"}
 
@@ -92,7 +120,7 @@ RULES: dict[str, dict[str, str]] = {
         "cnpj_ordem": "key4",
         "cnpj_dv": "dv2",
         "identificador_matriz_filial": "code",
-        "nome_fantasia": "text",
+        "nome_fantasia": "text_ph",
         "situacao_cadastral": "code",
         "data_situacao_cadastral": "date",
         "motivo_situacao_cadastral": "code",
@@ -102,20 +130,20 @@ RULES: dict[str, dict[str, str]] = {
         "cnae_fiscal_principal": "code",
         "cnae_fiscal_secundaria": "list",
         "tipo_logradouro": "text",
-        "logradouro": "text",
-        "numero": "text",
-        "complemento": "text",
-        "bairro": "text",
-        "cep": "code",
+        "logradouro": "text_ph",
+        "numero": "text_ph",
+        "complemento": "text_ph",
+        "bairro": "text_ph",
+        "cep": "zero_null",
         "uf": "uf",
         "municipio": "code",
-        "ddd_1": "code",
-        "telefone_1": "code",
-        "ddd_2": "code",
-        "telefone_2": "code",
-        "ddd_fax": "code",
-        "fax": "code",
-        "correio_eletronico": "lower",
+        "ddd_1": "zero_null",
+        "telefone_1": "zero_null",
+        "ddd_2": "zero_null",
+        "telefone_2": "zero_null",
+        "ddd_fax": "zero_null",
+        "fax": "zero_null",
+        "correio_eletronico": "email",
         "situacao_especial": "text",
         "data_situacao_especial": "date",
     },
