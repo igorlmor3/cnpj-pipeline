@@ -101,6 +101,10 @@ resource "aws_athena_workgroup" "cnpj" {
 
 resource "aws_iam_user" "publisher" {
   name = "cnpj-pipeline-publisher"
+
+  # As chaves de acesso sao criadas no console, fora do Terraform. Sem force_destroy, o
+  # `terraform destroy` falharia ao apagar um usuario que ainda tem chave.
+  force_destroy = true
 }
 
 data "aws_iam_policy_document" "publisher" {
@@ -156,6 +160,7 @@ data "aws_iam_policy_document" "publisher" {
       "glue:DeleteTable",
       "glue:GetPartition",
       "glue:GetPartitions",
+      "glue:BatchGetPartition",
     ]
     resources = [
       "arn:aws:glue:${var.region}:${data.aws_caller_identity.current.account_id}:catalog",

@@ -31,7 +31,7 @@ Cada decisão é registrada aqui com as alternativas consideradas e o motivo.
 
 ## Decisões de plataforma e de produto
 
-Estas decisões foram tomadas no planejamento. O nível 1 da AWS (Terraform, publicação no S3 e tabelas no Athena) já tem código e testes com clientes simulados, mas ainda não foi aplicado em uma conta real; o nível 2, o agente, a análise e o site ainda não foram iniciados. Cada decisão registra o motivo, para ser revisada quando houver dado medido.
+Estas decisões foram tomadas no planejamento. O nível 1 da AWS (Terraform, publicação no S3 e tabelas no Athena) tem código com testes de clientes simulados e já foi aplicado em uma conta real, com a gold do mês 2026-10 publicada e consultada no Athena; a primeira análise está feita, e o nível 2, o agente e o site ainda não foram iniciados. Cada decisão registra o motivo, para ser revisada quando houver dado medido.
 
 | Tema | Alternativas | Decisão e motivo |
 | --- | --- | --- |

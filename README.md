@@ -2,7 +2,7 @@
 
 Pipeline ETL em lote sobre os dados abertos do CNPJ da Receita Federal do Brasil. O objetivo do projeto é tratar um dataset público grande (alvo de 5 a 10 GB de dado bruto) com problemas reais de qualidade: arquivos sem cabeçalho, separador `;`, encoding `ISO-8859-1`, vírgula decimal, datas em texto e valores sentinela.
 
-Status: em desenvolvimento. As camadas raw, bronze e silver, o profiling e a demonstração com dados sintéticos foram validados com o mês real 2026-10. A camada gold também foi executada sobre o mês real, com todas as verificações de qualidade passando. A publicação na AWS, a análise, o agente de IA e o site são as próximas etapas e estão descritas em [Visão geral do projeto](#visão-geral-do-projeto). A seção [Roadmap](#roadmap) mostra o que já existe e o que falta.
+Status: em desenvolvimento. As camadas raw, bronze e silver, o profiling e a demonstração com dados sintéticos foram validados com o mês real 2026-10. A camada gold também foi executada sobre o mês real, com todas as verificações de qualidade passando. A gold do mês real também foi publicada na AWS (S3, Glue e Athena) e consultada com SQL. O agente de IA, o site e a automação do fluxo são as próximas etapas e estão descritas em [Visão geral do projeto](#visão-geral-do-projeto). A seção [Roadmap](#roadmap) mostra o que já existe e o que falta.
 
 ## Fonte dos dados
 
@@ -40,8 +40,8 @@ O motor de transformação é o DuckDB. As decisões tomadas e as ainda em abert
 O projeto está planejado em cinco frentes. A primeira está implementada; as demais são planejadas e ainda não existem no repositório.
 
 1. **Pipeline de dados (implementado até a gold).** Download com retomada, bronze, profiling, silver e gold, todos testados com dados sintéticos e executados no CI. O fluxo completo já rodou sobre o mês real 2026-10.
-2. **Publicação na AWS (nível 1 escrito, ainda não aplicado; nível 2 planejado).** Será feita em dois níveis, nesta ordem:
-   - Nível 1: o pipeline continua rodando localmente e publica o Parquet (bronze, silver e gold) em um bucket S3, com o mesmo particionamento por `reference_month`. Um catálogo no AWS Glue e consultas no Athena permitem rodar SQL sobre os dados na nuvem. A infraestrutura é descrita em Terraform (`infra/`), com um usuário IAM restrito ao bucket e alerta de orçamento. O código e os testes com clientes simulados já existem, mas o ambiente ainda não foi aplicado em uma conta real. Veja [Publicação na AWS (nível 1)](#publicação-na-aws-nível-1).
+2. **Publicação na AWS (nível 1 aplicado e validado com a gold do mês real; nível 2 planejado).** Será feita em dois níveis, nesta ordem:
+   - Nível 1: o pipeline continua rodando localmente e publica o Parquet (bronze, silver e gold) em um bucket S3, com o mesmo particionamento por `reference_month`. Um catálogo no AWS Glue e consultas no Athena permitem rodar SQL sobre os dados na nuvem. A infraestrutura é descrita em Terraform (`infra/`), com um usuário IAM restrito ao bucket e alerta de orçamento. O código tem testes com clientes simulados e o ambiente já foi aplicado em uma conta real, com a gold do mês 2026-10 publicada e consultada no Athena. Veja [Publicação na AWS (nível 1)](#publicação-na-aws-nível-1).
    - Nível 2: o pipeline passa a rodar na nuvem, em um container no ECS Fargate (a imagem Docker já existe), lendo e gravando `s3://` diretamente. O acesso passa a ser feito por papel IAM da tarefa, sem chaves.
 3. **Análise e insights (primeira versão pronta).** Um relatório com os principais achados sobre o cadastro de empresas, gerado a partir da camada gold, em [docs/analysis/2026-10.md](docs/analysis/2026-10.md): perfil por porte e natureza jurídica, Simples e MEI por UF, crescimento de aberturas por setor e a distorção que as eleições municipais causam na série de aberturas. Um site público com gráficos continua planejado.
 4. **Agente de IA para perguntas sobre os dados (planejado).** Um agente de texto para SQL: o modelo recebe o esquema da gold, escreve uma consulta, ela roda em modo somente leitura e o resultado é explicado em linguagem natural. Embeddings ficam restritos a partes pequenas, como busca por descrição de CNAE ou natureza jurídica. O agente só enxerga tabelas permitidas e toda consulta passa por validação antes de executar.
@@ -323,6 +323,20 @@ Primeira execução da gold sobre o mesmo mês, depois da silver (relatório de 
 - A gold inteira ocupa cerca de 1,5 GiB, quase tudo no fato. A construção do fato (junção com Empresas e Simples e gravação) responde por mais de 95% do tempo; os marts levam segundos porque leem o fato já em Parquet.
 - Foi a primeira execução. Pico de memória e especificação da máquina não foram registrados, e o limite de memória do DuckDB era o padrão de 4 GB, então a junção pode ter usado disco para transbordo.
 
+### Publicação da gold na AWS
+
+Nível 1 aplicado em uma conta real (região us-east-1) com o Terraform de `infra/`: 9 recursos criados (bucket, bloqueio de acesso público, criptografia, ciclo de vida, banco no Glue, workgroup do Athena, usuário IAM, política e alerta de orçamento).
+
+| Etapa | Resultado |
+| --- | --- |
+| Publicação da gold (`cloud.publish --layers gold`) | 14 arquivos (13 modelos e o manifesto), 1.593,4 MB, cerca de 2 min 40 s |
+| Criação das tabelas (`cloud.athena create-tables --layer gold`) | 13 tabelas `gold_<modelo>` em cerca de 21 s |
+| Consulta de teste em `gold_mart_simples_mei_uf` | respondeu com as 5 UFs de mais empresas ativas; SP à frente, com 8.373.339 |
+
+- O tempo do envio é dominado pelo `fato_estabelecimento` (cerca de 2 min 30 s); as dimensões e os marts levam segundos. O tempo depende da conexão de upload da máquina local, que não foi registrada.
+- A consulta de teste foi feita sem medir o tempo nem o volume lido, e o custo real ainda não foi conferido no painel de cobrança. Os números de custo ficam pendentes no roadmap.
+- O usuário que publica tem política de menor privilégio (somente o bucket e o Athena); o usuário que aplica o Terraform é separado, e as chaves de acesso são criadas no console, fora do código.
+
 ## Roadmap
 
 - [x] Estrutura do repositório, CI, Docker
@@ -341,7 +355,8 @@ Primeira execução da gold sobre o mesmo mês, depois da silver (relatório de 
 - [ ] Testes de qualidade de dados automatizados (a gold já verifica unicidade de chaves e contagens entre camadas; falta cobrir formato do CNPJ, intervalos de datas e a silver)
 - [ ] Benchmarks documentados (amostra grande e mês real)
 - [x] AWS nível 1, código: Terraform, publicação no S3 e tabelas no Athena (testados com clientes simulados)
-- [ ] AWS nível 1, aplicar em conta real, publicar o mês real e registrar custo e tempo
+- [x] AWS nível 1, aplicado em conta real, gold do mês real publicada e consultada no Athena (tempo registrado)
+- [ ] AWS nível 1, registrar o custo real e o volume lido por consulta no Athena
 - [ ] AWS nível 2: pipeline rodando em container no ECS Fargate com acesso por papel IAM
 - [ ] Orquestração do fluxo completo
 - [x] Primeira análise e principais insights sobre o cadastro de empresas (docs/analysis/2026-10.md)

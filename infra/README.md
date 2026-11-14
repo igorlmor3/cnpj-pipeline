@@ -2,7 +2,7 @@
 
 Este diretório descreve, em Terraform, o ambiente de nuvem do projeto. No nível 1 o pipeline continua rodando na máquina local e publica o Parquet no S3; o Athena consulta esses dados na nuvem.
 
-Estado: o código foi escrito e a parte em Python tem testes automatizados com clientes simulados. O Terraform ainda não foi aplicado em uma conta real e a sintaxe dos arquivos foi apenas verificada por um parser HCL. Ao rodar `terraform plan` pela primeira vez, leia o plano antes de aplicar.
+Estado: o código foi escrito e a parte em Python tem testes automatizados com clientes simulados. O Terraform já foi aplicado em uma conta real (9 recursos) e a gold do mês 2026-10 foi publicada e consultada no Athena. Para o usuário que aplica o Terraform, anexe uma política com permissão sobre S3, Glue, Athena, IAM e Budgets; sem ela, o `apply` falha com `AccessDenied`, e uma permissão recém-anexada pode levar alguns instantes para valer em todos os serviços. Leia sempre o plano antes de aplicar.
 
 ## O que é criado
 
