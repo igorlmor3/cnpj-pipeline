@@ -177,6 +177,21 @@ def test_demo_gold_builds_every_model_and_passes_the_checks(demo_dir):
     assert (demo_dir / "gold_report" / f"{DEFAULT_MONTH}.md").exists()
 
 
+def test_demo_quality_checks_pass_across_all_layers(demo_dir):
+    manifest = json.loads(
+        (demo_dir / "quality" / f"_manifest_{DEFAULT_MONTH}.json").read_text(encoding="utf-8")
+    )
+    checks = {c["name"]: c for c in manifest["checks"]}
+
+    assert not [c["name"] for c in checks.values() if c["status"] == "falhou"]
+    # Com os manifestos das tres camadas, as contagens entre camadas sao realmente conferidas.
+    for name in ("estabelecimentos_bronze_x_silver", "estabelecimentos_silver_conserva_linhas",
+                 "empresas_quarentena_x_manifesto", "gold_verificacoes_bloqueantes"):  # fmt: skip
+        assert checks[name]["status"] == "ok", name
+    assert set(manifest["benchmarks"]) == {"bronze", "silver", "gold"}
+    assert (demo_dir / "quality_report" / f"{DEFAULT_MONTH}.md").exists()
+
+
 def test_demo_refuses_to_run_on_the_real_data_folder():
     assert run_demo(config.DATA_DIR) == 2
     assert run_demo(config.RAW_DIR) == 2

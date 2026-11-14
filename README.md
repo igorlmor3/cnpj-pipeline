@@ -70,6 +70,7 @@ As escolhas feitas para cada decisão, com as alternativas consideradas, estão 
 │   ├── profiling/         relatórios gerados pelo profiling (apenas agregados)
 │   ├── silver/            relatório das regras aplicadas na silver (apenas contagens)
 │   ├── gold/              relatório dos modelos e das verificações da gold (apenas contagens)
+│   ├── quality/           relatório de qualidade entre camadas e tempos medidos (apenas contagens)
 │   └── analysis/          análise do cadastro a partir da gold (apenas agregados)
 ├── src/cnpj_pipeline/
 │   ├── config.py          caminhos e configuração
@@ -81,6 +82,7 @@ As escolhas feitas para cada decisão, com as alternativas consideradas, estão 
 │   ├── silver.py          bronze para silver: tipos, limpeza, quarentena e deduplicação
 │   ├── gold_models.py    modelos da gold em SQL: dimensões, fato e marts
 │   ├── gold.py            silver para gold: construção, verificações de qualidade e manifesto
+│   ├── quality.py         verificações de qualidade sobre a silver e entre camadas, e tempos medidos
 │   ├── cloud/             publicação no S3 (publish.py) e tabelas/consultas no Athena (athena.py)
 │   ├── sample.py          gerador de zips sintéticos com defeitos plantados
 │   └── demo.py            amostra, bronze, profiling, silver e gold de ponta a ponta
@@ -275,6 +277,19 @@ O suporte à AWS é opcional: `python -m pip install -e ".[aws]"`. Os testes usa
 
 Cada problema encontrado nos dados é registrado em [docs/data_quality_rules.md](docs/data_quality_rules.md) com a decisão tomada (corrigir, anular ou rejeitar), a camada em que a regra é aplicada e o teste que a cobre. O catálogo é preenchido durante o profiling e não parte de suposições.
 
+Além das regras aplicadas em cada camada, o módulo `quality.py` confere o resultado depois que as camadas estão prontas:
+
+```
+python -m cnpj_pipeline.quality --month 2026-10            # completa
+python -m cnpj_pipeline.quality --month 2026-10 --quick    # pula as verificações pesadas
+```
+
+- Por linha: formato do CNPJ (12 posições de base e ordem, que aceitam letras do CNPJ alfanumérico, mais 2 dígitos), dígitos verificadores pelo módulo 11 (também para o formato alfanumérico), domínios de códigos (matriz/filial, situação cadastral, porte, tipo de sócio), datas futuras, anteriores a 1900 ou incoerentes entre si, e capital social negativo.
+- Sobre o conjunto: unicidade de chaves, empresas sem estabelecimento matriz e sócios sem empresa.
+- Entre camadas: linhas da bronze iguais às de entrada da silver; saída mais quarentena iguais à entrada; Parquet e quarentena iguais ao que o manifesto registra; e as verificações bloqueantes da gold.
+
+Cada verificação é bloqueante (o comando termina com código 1) ou informativa (só registra a contagem e a proporção). O relatório `docs/quality/<mês>.md` traz apenas contagens, os tempos de cada camada lidos dos manifestos e a especificação da máquina. `--quick` pula as verificações que exigem agrupar ou juntar as tabelas grandes inteiras. Os testes usam dados sintéticos e provocam cada erro de propósito para conferir que a regra o detecta.
+
 ## Resultados medidos
 
 Primeira execução completa, sobre o mês de referência 2026-10 (arquivos `K3241.K03200Y*.D61010`, publicados pela Receita em outubro de 2026). Os números vêm dos manifestos `data/bronze/_manifest_2026-10.json`, `data/silver/_manifest_2026-10.json` e `data/gold/_manifest_2026-10.json`.
@@ -302,7 +317,7 @@ Observações:
 - O tempo da bronze é só o da conversão no DuckDB. A extração do zip e a conversão de latin-1 para UTF-8, feitas em Python, somam um tempo a mais que não foi medido separadamente.
 - O tempo da silver de Estabelecimentos é o da segunda execução, já com as regras de valores de espaço reservado (1.129 s). A primeira execução, sem essas regras, levou 463 s. A diferença não vem só das regras: a repetição rodou com o computador em uso para outras coisas, e um teste sintético de 8 milhões de linhas mostrou cerca de 10% de custo adicional da regra. Convém medir de novo, com a máquina parada, antes de citar o tempo como referência.
 - A parte 0 de cada tabela grande é bem maior que as demais (por exemplo, Estabelecimentos0 tem 6,9 GiB de CSV, e as outras nove partes têm cerca de 1 GiB cada). O particionamento do arquivo oficial não é uniforme.
-- Pico de memória e especificação da máquina não foram registrados nesta execução.
+- A máquina está descrita em [Verificações de qualidade](#verificações-de-qualidade-e-máquina). O pico de memória desta execução não foi medido.
 
 ### Camada gold
 
@@ -321,7 +336,7 @@ Primeira execução da gold sobre o mesmo mês, depois da silver (relatório de 
 - As 15 verificações bloqueantes passaram: o fato tem as mesmas 73.809.379 linhas de Estabelecimentos na silver e nenhum CNPJ repetido, a soma de cada mart bate com o fato (28.380.653 estabelecimentos ativos; 27.049.049 empresas ativas, das quais 21.047.359 optantes pelo Simples; 28.495.961 sócios) e as dimensões não repetem código.
 - Nenhuma chave ficou sem correspondência: todo estabelecimento tem UF, data de início, empresa, CNAE na dimensão de CNAE e município na dimensão de municípios.
 - A gold inteira ocupa cerca de 1,5 GiB, quase tudo no fato. A construção do fato (junção com Empresas e Simples e gravação) responde por mais de 95% do tempo; os marts levam segundos porque leem o fato já em Parquet.
-- Foi a primeira execução. Pico de memória e especificação da máquina não foram registrados, e o limite de memória do DuckDB era o padrão de 4 GB, então a junção pode ter usado disco para transbordo.
+- Foi a primeira execução. A máquina está descrita em [Verificações de qualidade](#verificações-de-qualidade-e-máquina); o pico de memória desta execução não foi medido, e o limite de memória do DuckDB era o padrão de 4 GB, então a junção pode ter usado disco para transbordo.
 
 ### Publicação da gold na AWS
 
@@ -336,6 +351,22 @@ Nível 1 aplicado em uma conta real (região us-east-1) com o Terraform de `infr
 - O tempo do envio é dominado pelo `fato_estabelecimento` (cerca de 2 min 30 s); as dimensões e os marts levam segundos. O tempo depende da conexão de upload da máquina local, que não foi registrada.
 - A consulta de teste foi feita sem medir o tempo nem o volume lido, e o custo real ainda não foi conferido no painel de cobrança. Os números de custo ficam pendentes no roadmap.
 - O usuário que publica tem política de menor privilégio (somente o bucket e o Athena); o usuário que aplica o Terraform é separado, e as chaves de acesso são criadas no console, fora do código.
+
+### Verificações de qualidade e máquina
+
+Verificação completa (`python -m cnpj_pipeline.quality --month 2026-10`) sobre a silver, a gold e os manifestos das três camadas. Relatório em [docs/quality/2026-10.md](docs/quality/2026-10.md).
+
+| Medida | Resultado |
+| --- | --- |
+| Verificações | 73: 66 ok, 7 com aviso, 0 falhas, 0 puladas |
+| Tempo total | 86,9 s (regras por linha em Estabelecimentos: 50,7 s; chave única de Estabelecimentos: 17,3 s) |
+| Contagens entre camadas | 42 verificações, todas ok: bronze, silver, quarentena e gold batem entre si |
+| Dígito verificador do CNPJ | 0 inválidos em 73.809.379 estabelecimentos |
+| Chaves únicas, empresa sem matriz, sócio sem empresa | 0 violações |
+
+Os 7 avisos são informativos e não bloqueiam: 11.574 matrizes com ordem diferente de 0001; 1.065 situações cadastrais anteriores ao início da atividade; 4 inícios de atividade anteriores a 1900; 4.113 empresas sem porte; 3 exclusões do Simples e 3 do MEI anteriores à opção; 11 opções do Simples com data 2027-01-01 (agendadas). Detalhes e leitura de cada um em [docs/data_quality_rules.md](docs/data_quality_rules.md).
+
+Máquina onde o mês real foi processado e verificado: Windows 11, processador Intel de 12 CPUs lógicas, 16 GiB de memória, Python 3.13.2 e DuckDB 2.0.0. Nesta verificação, o limite de memória do DuckDB era 4 GB e o pico do processo foi 4.050 MiB. Os tempos das camadas vêm dos manifestos de cada execução e estão no mesmo relatório: bronze 316 s, silver 1.742 s e gold 1.320 s, somando os itens de cada camada.
 
 ## Roadmap
 
@@ -352,8 +383,9 @@ Nível 1 aplicado em uma conta real (região us-east-1) com o Terraform de `infr
 - [x] Gerador de amostra sintética e demo ponta a ponta, testados no CI
 - [x] Camada gold (dimensões, fato e marts a partir da silver, com verificações; testada com dados sintéticos e executada no mês real)
 - [x] Rodar a gold no mês real e registrar contagens, tempo e tamanho
-- [ ] Testes de qualidade de dados automatizados (a gold já verifica unicidade de chaves e contagens entre camadas; falta cobrir formato do CNPJ, intervalos de datas e a silver)
-- [ ] Benchmarks documentados (amostra grande e mês real)
+- [x] Verificações de qualidade automatizadas (`quality.py`: formato e dígitos do CNPJ, datas, domínios, unicidade e contagens entre camadas; testadas com dados sintéticos)
+- [x] Verificações de qualidade completas rodadas no mês real, com relatório e tempos registrados (docs/quality/2026-10.md)
+- [ ] Benchmarks documentados (o relatório de qualidade já traz os tempos do mês real; falta a amostra grande)
 - [x] AWS nível 1, código: Terraform, publicação no S3 e tabelas no Athena (testados com clientes simulados)
 - [x] AWS nível 1, aplicado em conta real, gold do mês real publicada e consultada no Athena (tempo registrado)
 - [ ] AWS nível 1, registrar o custo real e o volume lido por consulta no Athena

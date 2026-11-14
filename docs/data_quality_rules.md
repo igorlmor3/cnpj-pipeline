@@ -50,6 +50,22 @@ Implementadas em `src/cnpj_pipeline/silver_rules.py` e cobertas por `tests/test_
 - Simples: 49,6% das datas de exclusão do Simples e 60% das de exclusão do MEI vêm zeradas (`00000000`), o que significa que a empresa não foi excluída. Há datas de exclusão futuras (até 2026-12-31).
 - Os CSVs trazem bytes de controle C1 (cinco em 223 milhões de linhas) e `0x1A` no lugar de letras acentuadas perdidas na origem.
 
+## Verificações automatizadas (`quality.py`)
+
+As verificações do módulo `quality.py` rodam depois das camadas e registram o resultado em `docs/quality/<mês>.md`. Primeiros achados no mês real (2026-10), todos informativos, sem ação na silver até haver decisão:
+
+| Verificação | Linhas afetadas | Leitura |
+| --- | ---: | --- |
+| Dígito verificador do CNPJ | 0 de 73.809.379 | todos os CNPJs conferem pelo módulo 11 |
+| Matriz com ordem diferente de 0001 | 11.574 | a hipótese de que matriz é sempre a ordem 0001 não vale para todos |
+| Situação cadastral anterior ao início da atividade | 1.065 | datas incoerentes na origem |
+| Início de atividade anterior a 1900 | 4 | datas improváveis na origem |
+| Empresas sem porte | 4.113 | o porte vem vazio; os demais valores são só 01, 03 e 05 |
+| Exclusão do Simples ou do MEI anterior à opção | 3 | diferença de um dia |
+| Opção do Simples posterior ao fim do mês | 11 | todas com data 2027-01-01: opções agendadas, não erro |
+
+Sem nenhuma violação: formato do CNPJ, identificador matriz/filial, códigos de situação cadastral, UF, formato do CNAE, início de atividade nulo ou futuro, natureza jurídica, capital social negativo, tipo de sócio e datas futuras de sócios; também as chaves únicas do Simples e dos códigos das tabelas de domínio. As 42 verificações de contagem entre camadas passaram: bronze, silver, quarentena e gold batem entre si. A execução completa (73 verificações: 66 ok, 7 com aviso, 0 falhas) inclui as chaves únicas de Empresas e Estabelecimentos, empresas sem matriz e sócios sem empresa, todas com 0 violações, e está registrada em `docs/quality/2026-10.md`.
+
 ## Hipóteses a verificar
 
 Itens a confirmar contra o dicionário de layout do mês processado e contra os dados.

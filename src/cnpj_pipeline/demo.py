@@ -1,8 +1,8 @@
 """Demonstracao ponta a ponta com dados sinteticos.
 
 Gera uma amostra sintetica, converte para Parquet na camada bronze, roda o profiling,
-constroi a camada silver (tipagem, limpeza e quarentena) e a camada gold (dimensoes, fato e
-marts, com as verificacoes de qualidade). Tudo acontece em uma pasta
+constroi a camada silver (tipagem, limpeza e quarentena), a camada gold (dimensoes, fato e
+marts, com verificacoes) e roda as verificacoes de qualidade entre camadas. Tudo acontece em uma pasta
 separada (padrao: data/sample) e nao toca em data/raw nem em docs/.
 
 Exemplo:
@@ -17,7 +17,7 @@ import logging
 import sys
 from pathlib import Path
 
-from cnpj_pipeline import bronze, config, gold, profiling, sample, silver
+from cnpj_pipeline import bronze, config, gold, profiling, quality, sample, silver
 
 log = logging.getLogger("cnpj_pipeline.demo")
 
@@ -102,12 +102,28 @@ def run_demo(
         threads=threads,
         tmp_root=base_dir / "tmp",
     )
+    if code:
+        return code
+
+    code = quality.run(
+        month,
+        bronze_dir=bronze_dir,
+        silver_dir=silver_dir,
+        gold_dir=gold_dir,
+        quality_dir=base_dir / "quality",
+        report_dir=base_dir / "quality_report",
+        quick=False,
+        memory_limit=memory_limit,
+        threads=threads,
+        tmp_root=base_dir / "tmp",
+    )
     if code == 0:
         log.info(
-            "Demo concluida. Relatorios em %s, %s e %s",
+            "Demo concluida. Relatorios em %s, %s, %s e %s",
             report_dir / month,
             base_dir / "silver_report",
             base_dir / "gold_report",
+            base_dir / "quality_report",
         )
     return code
 
