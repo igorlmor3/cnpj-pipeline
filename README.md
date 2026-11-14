@@ -43,7 +43,7 @@ O projeto está planejado em cinco frentes. A primeira está implementada; as de
 2. **Publicação na AWS (nível 1 escrito, ainda não aplicado; nível 2 planejado).** Será feita em dois níveis, nesta ordem:
    - Nível 1: o pipeline continua rodando localmente e publica o Parquet (bronze, silver e gold) em um bucket S3, com o mesmo particionamento por `reference_month`. Um catálogo no AWS Glue e consultas no Athena permitem rodar SQL sobre os dados na nuvem. A infraestrutura é descrita em Terraform (`infra/`), com um usuário IAM restrito ao bucket e alerta de orçamento. O código e os testes com clientes simulados já existem, mas o ambiente ainda não foi aplicado em uma conta real. Veja [Publicação na AWS (nível 1)](#publicação-na-aws-nível-1).
    - Nível 2: o pipeline passa a rodar na nuvem, em um container no ECS Fargate (a imagem Docker já existe), lendo e gravando `s3://` diretamente. O acesso passa a ser feito por papel IAM da tarefa, sem chaves.
-3. **Análise e insights (planejada).** Um relatório com os principais achados sobre o cadastro de empresas (por exemplo, abertura de empresas por ano e UF, situação cadastral por atividade econômica, distribuição de porte e capital social), gerado a partir da camada gold.
+3. **Análise e insights (primeira versão pronta).** Um relatório com os principais achados sobre o cadastro de empresas, gerado a partir da camada gold, em [docs/analysis/2026-10.md](docs/analysis/2026-10.md): perfil por porte e natureza jurídica, Simples e MEI por UF, crescimento de aberturas por setor e a distorção que as eleições municipais causam na série de aberturas. Um site público com gráficos continua planejado.
 4. **Agente de IA para perguntas sobre os dados (planejado).** Um agente de texto para SQL: o modelo recebe o esquema da gold, escreve uma consulta, ela roda em modo somente leitura e o resultado é explicado em linguagem natural. Embeddings ficam restritos a partes pequenas, como busca por descrição de CNAE ou natureza jurídica. O agente só enxerga tabelas permitidas e toda consulta passa por validação antes de executar.
 5. **Site em React com Tailwind (planejado).** Uma página pública com a análise, gráficos a partir de agregados pré-calculados e o agente de perguntas. Hospedagem estática, fora da AWS, para não depender do prazo do plano gratuito.
 
@@ -69,7 +69,8 @@ As escolhas feitas para cada decisão, com as alternativas consideradas, estão 
 │   ├── data_quality_rules.md   catálogo de problemas de qualidade e decisões
 │   ├── profiling/         relatórios gerados pelo profiling (apenas agregados)
 │   ├── silver/            relatório das regras aplicadas na silver (apenas contagens)
-│   └── gold/              relatório dos modelos e das verificações da gold (apenas contagens)
+│   ├── gold/              relatório dos modelos e das verificações da gold (apenas contagens)
+│   └── analysis/          análise do cadastro a partir da gold (apenas agregados)
 ├── src/cnpj_pipeline/
 │   ├── config.py          caminhos e configuração
 │   ├── download.py        download parametrizado com retomada e manifesto
@@ -343,7 +344,8 @@ Primeira execução da gold sobre o mesmo mês, depois da silver (relatório de 
 - [ ] AWS nível 1, aplicar em conta real, publicar o mês real e registrar custo e tempo
 - [ ] AWS nível 2: pipeline rodando em container no ECS Fargate com acesso por papel IAM
 - [ ] Orquestração do fluxo completo
-- [ ] Análise e principais insights sobre o cadastro de empresas
+- [x] Primeira análise e principais insights sobre o cadastro de empresas (docs/analysis/2026-10.md)
+- [ ] Marcar o CNAE de organizações políticas na gold, para ler as aberturas com e sem ele
 - [ ] Agente de IA de texto para SQL com validação de consultas e limites de uso
 - [ ] Site em React com Tailwind publicando a análise e o agente
 
