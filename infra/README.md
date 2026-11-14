@@ -67,16 +67,18 @@ As chaves de acesso do usuário `cnpj-pipeline-publisher` não são criadas pelo
 ## Publicar e consultar
 
 ```powershell
-# Veja o que seria enviado, sem enviar nada
-python -m cnpj_pipeline.cloud.publish --month 2026-10 --dry-run
+# Veja o que seria enviado, sem enviar nada (a gold tem cerca de 1,5 GiB e nenhum nome de pessoa)
+python -m cnpj_pipeline.cloud.publish --month 2026-10 --layers gold --dry-run
 
-# Envie a silver (padrão). Use --layers silver gold para incluir a gold (python -m cnpj_pipeline.gold --month AAAA-MM)
-python -m cnpj_pipeline.cloud.publish --month 2026-10
+# Envie a gold. A silver (padrão do comando) tem nomes de sócios; envie-a só se precisar dela na nuvem
+python -m cnpj_pipeline.cloud.publish --month 2026-10 --layers gold
 
-# Crie as tabelas no Athena (uma vez) e consulte
-python -m cnpj_pipeline.cloud.athena create-tables
-python -m cnpj_pipeline.cloud.athena query "SELECT count(*) FROM silver_empresas WHERE reference_month = '2026-10'"
+# Crie as tabelas da gold no Athena (uma vez; as colunas vêm do manifesto local da gold) e consulte
+python -m cnpj_pipeline.cloud.athena create-tables --layer gold --month 2026-10
+python -m cnpj_pipeline.cloud.athena query "SELECT uf, empresas_ativas, pct_simples, pct_mei FROM gold_mart_simples_mei_uf WHERE reference_month = '2026-10' ORDER BY empresas_ativas DESC LIMIT 5"
 ```
+
+Para a silver, use `--layers silver` (ou omita `--layers`) e `create-tables` sem `--layer`; as tabelas se chamam `silver_<tabela>`. As da gold se chamam `gold_<modelo>`.
 
 A publicação é idempotente: um arquivo já enviado, com o mesmo tamanho e o mesmo SHA-256, é pulado, e cada envio é conferido por tamanho depois de concluído. Quarentena e rejeitados contêm linhas originais, possivelmente com dados pessoais, e só sobem com `--include-quarantine`.
 

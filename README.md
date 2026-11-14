@@ -266,8 +266,8 @@ Um modelo cuja silver ou cujo modelo de origem não existe é pulado com aviso. 
 O nível 1 mantém o processamento local e leva o resultado para a nuvem. O passo a passo completo, com pré-requisitos, custos e como desmontar tudo, está em [infra/README.md](infra/README.md).
 
 - `infra/` (Terraform): bucket S3 privado e criptografado, banco no Glue, workgroup do Athena com limite de dados lidos por consulta, usuário IAM de menor privilégio e alerta de orçamento. As chaves de acesso não passam pelo Terraform.
-- `python -m cnpj_pipeline.cloud.publish --month AAAA-MM`: envia o Parquet ao S3 de forma idempotente (pula arquivos idênticos por tamanho e SHA-256) e confere o tamanho de cada envio. Por padrão envia só a silver; quarentena e rejeitados, que contêm linhas originais, só com `--include-quarantine`. Aceita `--dry-run`.
-- `python -m cnpj_pipeline.cloud.athena create-tables`: cria as tabelas externas da silver com partition projection em `reference_month` (sem crawler e sem `MSCK REPAIR`). Um teste confere que as colunas do DDL batem com o Parquet que a silver realmente grava. O subcomando `query` executa consultas.
+- `python -m cnpj_pipeline.cloud.publish --month AAAA-MM`: envia o Parquet ao S3 de forma idempotente (pula arquivos idênticos por tamanho e SHA-256) e confere o tamanho de cada envio. Por padrão envia só a silver (com `--layers gold` envia a gold, que não tem nomes de pessoas); quarentena e rejeitados, que contêm linhas originais, só com `--include-quarantine`. Aceita `--dry-run`.
+- `python -m cnpj_pipeline.cloud.athena create-tables`: cria as tabelas externas da silver (`silver_<tabela>`) ou, com `--layer gold --month AAAA-MM`, da gold (`gold_<modelo>`, com as colunas lidas do manifesto da gold), com partition projection em `reference_month` (sem crawler e sem `MSCK REPAIR`). Testes conferem que as colunas do DDL batem com o Parquet que cada camada realmente grava. O subcomando `query` executa consultas.
 
 O suporte à AWS é opcional: `python -m pip install -e ".[aws]"`. Os testes usam clientes simulados e não exigem conta nem rede.
 

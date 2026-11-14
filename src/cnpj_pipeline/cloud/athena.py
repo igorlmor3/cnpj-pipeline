@@ -1,29 +1,36 @@
-"""Tabelas e consultas no Athena sobre a silver publicada no S3.
+"""Tabelas e consultas no Athena sobre a silver e a gold publicadas no S3.
 
-As tabelas sao externas, apontam para s3://<bucket>/silver/<tabela>/ e usam partition
+As tabelas sao externas, apontam para s3://<bucket>/<camada>/<tabela>/ e usam partition
 projection em `reference_month`, entao nao precisam de crawler nem de MSCK REPAIR: um novo mes
-publicado ja aparece nas consultas.
+publicado ja aparece nas consultas. As tabelas se chamam silver_<tabela> e gold_<modelo>.
 
-As colunas das tabelas saem das mesmas regras da silver (silver_rules.py), e um teste confere
-que o DDL bate com o Parquet que a silver realmente grava.
+As colunas da silver saem das mesmas regras da silver (silver_rules.py). As da gold saem do
+manifesto local da gold (data/gold/_manifest_<mes>.json), que registra o tipo de cada coluna do
+Parquet gravado. Testes conferem que o DDL bate com o Parquet que cada camada realmente grava.
 
 Exemplos:
     python -m cnpj_pipeline.cloud.athena create-tables --print-only
     python -m cnpj_pipeline.cloud.athena create-tables
+    python -m cnpj_pipeline.cloud.athena create-tables --layer gold --month 2026-10
     python -m cnpj_pipeline.cloud.athena query "SELECT count(*) FROM silver_empresas"
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import logging
+import re
 import sys
 import time
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
+from cnpj_pipeline import config
 from cnpj_pipeline.cloud import common
-from cnpj_pipeline.download import normalize_tables
+from cnpj_pipeline.download import MONTH_RE, normalize_tables
+from cnpj_pipeline.gold_models import MODEL_NAMES
 from cnpj_pipeline.schemas import columns_for
 from cnpj_pipeline.silver_rules import RULES, output_type
 
@@ -36,6 +43,17 @@ ATHENA_TYPES = {
     "BOOLEAN": "boolean",
     "VARCHAR[]": "array<string>",
 }
+SIMPLE_ATHENA_TYPES = {
+    "VARCHAR": "string",
+    "DATE": "date",
+    "BOOLEAN": "boolean",
+    "INTEGER": "int",
+    "BIGINT": "bigint",
+    "DOUBLE": "double",
+    "TIMESTAMP": "timestamp",
+    "VARCHAR[]": "array<string>",
+}
+DECIMAL_RE = re.compile(r"^DECIMAL\((\d+),\s*(\d+)\)$")
 DEFAULT_START_MONTH = "2023-01"
 POLL_SECONDS = 1.0
 MAX_POLLS = 600
@@ -43,6 +61,30 @@ MAX_POLLS = 600
 
 class AthenaError(RuntimeError):
     """Consulta falhou ou foi cancelada."""
+
+
+def athena_type(duckdb_type: str) -> str:
+    """Tipo do Athena para um tipo do DuckDB, como o DESCRIBE o informa."""
+    if duckdb_type in SIMPLE_ATHENA_TYPES:
+        return SIMPLE_ATHENA_TYPES[duckdb_type]
+    match = DECIMAL_RE.match(duckdb_type)
+    if match:
+        return f"decimal({match.group(1)},{match.group(2)})"
+    raise AthenaError(f"tipo sem equivalente no Athena: {duckdb_type}")
+
+
+def gold_columns(gold_dir: Path, month: str, models: list[str]) -> dict[str, list[tuple[str, str]]]:
+    """Colunas (nome, tipo Athena) de cada modelo da gold, lidas do manifesto do mes."""
+    path = gold_dir / f"_manifest_{month}.json"
+    if not path.exists():
+        raise AthenaError(
+            f"manifesto da gold nao encontrado: {path}. Rode: python -m cnpj_pipeline.gold --month {month}"
+        )
+    built = json.loads(path.read_text(encoding="utf-8")).get("models", {})
+    missing = [m for m in models if m not in built]
+    if missing:
+        raise AthenaError(f"modelos ausentes no manifesto da gold de {month}: {', '.join(missing)}")
+    return {m: [(c, athena_type(t)) for c, t in built[m]["columns"].items()] for m in models}
 
 
 def silver_columns(table: str) -> list[tuple[str, str]]:
@@ -70,8 +112,10 @@ def create_table_ddl(
     database: str = common.DEFAULT_DATABASE,
     layer: str = "silver",
     start_month: str = DEFAULT_START_MONTH,
+    columns: list[tuple[str, str]] | None = None,
 ) -> str:
-    cols = ",\n  ".join(f"`{name}` {kind}" for name, kind in silver_columns(table))
+    """DDL da tabela externa. Sem `columns`, usa as colunas da silver."""
+    cols = ",\n  ".join(f"`{name}` {kind}" for name, kind in (columns or silver_columns(table)))
     location = f"s3://{bucket}/{layer}/{table.lower()}/"
     template = f"{location}reference_month=${{reference_month}}/"
     return f"""CREATE EXTERNAL TABLE IF NOT EXISTS `{database}`.`{table_name(layer, table)}` (
@@ -139,18 +183,27 @@ def create_tables(
     workgroup: str,
     tables: list[str],
     start_month: str,
+    layer: str = "silver",
+    columns: dict[str, list[tuple[str, str]]] | None = None,
     sleep: Callable[[float], None] = time.sleep,
 ) -> None:
     for table in tables:
-        ddl = create_table_ddl(table, bucket=bucket, database=database, start_month=start_month)
+        ddl = create_table_ddl(
+            table,
+            bucket=bucket,
+            database=database,
+            layer=layer,
+            start_month=start_month,
+            columns=(columns or {}).get(table),
+        )
         run_query(client, ddl, database=database, workgroup=workgroup, sleep=sleep)
-        log.info("tabela criada ou ja existente: %s.%s", database, table_name("silver", table))
+        log.info("tabela criada ou ja existente: %s.%s", database, table_name(layer, table))
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="python -m cnpj_pipeline.cloud.athena",
-        description="Cria as tabelas da silver no Athena e executa consultas.",
+        description="Cria as tabelas da silver e da gold no Athena e executa consultas.",
     )
     common_args = argparse.ArgumentParser(add_help=False)
     common_args.add_argument(
@@ -164,7 +217,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
     sub = parser.add_subparsers(dest="command", required=True)
     create = sub.add_parser("create-tables", parents=[common_args], help="Cria as tabelas externas")
-    create.add_argument("--tables", nargs="+", metavar="TABELA", help="Subconjunto de tabelas")
+    create.add_argument(
+        "--layer", choices=("silver", "gold"), default="silver", help="Camada (padrao: %(default)s)"
+    )
+    create.add_argument("--month", help="Mes AAAA-MM do manifesto da gold (obrigatorio com --layer gold)")
+    create.add_argument("--gold-dir", type=Path, default=config.GOLD_DIR)
+    create.add_argument(
+        "--tables",
+        nargs="+",
+        metavar="TABELA",
+        help="Subconjunto de tabelas da silver ou de modelos da gold",
+    )
     create.add_argument("--start-month", default=DEFAULT_START_MONTH, help="Primeiro mes da projecao")
     create.add_argument("--print-only", action="store_true", help="Imprime o DDL sem executar")
     query = sub.add_parser("query", parents=[common_args], help="Executa uma consulta e imprime o resultado")
@@ -179,20 +242,42 @@ def main(argv: list[str] | None = None, *, client: Any | None = None) -> int:
         format="%(asctime)s %(levelname)s %(message)s",
     )
 
+    columns: dict[str, list[tuple[str, str]]] | None = None
     if args.command == "create-tables":
         try:
-            tables = normalize_tables(args.tables)
+            if args.layer == "gold":
+                tables = args.tables or list(MODEL_NAMES)
+                unknown = [t for t in tables if t not in MODEL_NAMES]
+                if unknown:
+                    raise ValueError(
+                        f"Modelo(s) desconhecido(s): {', '.join(unknown)}. Validos: {', '.join(MODEL_NAMES)}"
+                    )
+                if not args.month or not MONTH_RE.match(args.month):
+                    raise ValueError("--layer gold exige --month AAAA-MM (mes do manifesto da gold)")
+            else:
+                tables = normalize_tables(args.tables)
         except ValueError as exc:
             print(exc, file=sys.stderr)
             return 2
         if not args.bucket:
             print(f"Informe --bucket ou defina {common.BUCKET_ENV}.", file=sys.stderr)
             return 2
+        if args.layer == "gold":
+            try:
+                columns = gold_columns(args.gold_dir, args.month, tables)
+            except AthenaError as exc:
+                print(exc, file=sys.stderr)
+                return 2
         if args.print_only:
             for table in tables:
                 print(
                     create_table_ddl(
-                        table, bucket=args.bucket, database=args.database, start_month=args.start_month
+                        table,
+                        bucket=args.bucket,
+                        database=args.database,
+                        layer=args.layer,
+                        start_month=args.start_month,
+                        columns=(columns or {}).get(table),
                     )
                 )
                 print(";\n")
@@ -209,6 +294,8 @@ def main(argv: list[str] | None = None, *, client: Any | None = None) -> int:
                 workgroup=args.workgroup,
                 tables=tables,
                 start_month=args.start_month,
+                layer=args.layer,
+                columns=columns,
             )
         else:
             execution = run_query(client, args.sql, database=args.database, workgroup=args.workgroup)
