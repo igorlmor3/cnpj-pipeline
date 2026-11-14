@@ -3,6 +3,7 @@ data/raw/*
 data/bronze/*
 data/silver/*
 data/gold/*
+data/quality/*
 data/tmp/
 data/sample/
 !data/**/.gitkeep
