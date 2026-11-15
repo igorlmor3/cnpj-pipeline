@@ -1,0 +1,167 @@
+{
+ "esquema": 1,
+ "mes_referencia": "2026-10",
+ "modelo": "claude-haiku-5-5",
+ "exemplos": [
+  {
+   "id": "ranking_ufs",
+   "pergunta": "Quais são as 5 UFs com mais empresas ativas?",
+   "status": "answered",
+   "resposta": "As 5 UFs com mais empresas ativas no cadastro de 2026-10 são:\n\n1. **SP**: 8.354.422\n2. **MG**: 2.797.176\n3. **RJ**: 2.217.325\n4. **PR**: 1.924.459\n5. **RS**: 1.670.581\n\nRecorte: empresas ativas (uma por matriz com situação ativa), excluindo as organizações políticas (CNAE 9492800).\n\nSQL usado:\n```sql\nSELECT uf, empresas_ativas FROM gold_mart_simples_mei_uf WHERE is_organizacao_politica = false ORDER BY empresas_ativas DESC LIMIT 5\n```",
+   "sql": "SELECT uf, empresas_ativas FROM (SELECT * FROM gold_mart_simples_mei_uf WHERE reference_month = '2026-10') AS gold_mart_simples_mei_uf WHERE is_organizacao_politica = FALSE ORDER BY empresas_ativas DESC LIMIT 5",
+   "colunas": [
+    "uf",
+    "empresas_ativas"
+   ],
+   "linhas": [
+    [
+     "SP",
+     8354422
+    ],
+    [
+     "MG",
+     2797176
+    ],
+    [
+     "RJ",
+     2217325
+    ],
+    [
+     "PR",
+     1924459
+    ],
+    [
+     "RS",
+     1670581
+    ]
+   ],
+   "truncado": false
+  },
+  {
+   "id": "mei_por_uf",
+   "pergunta": "Em quais UFs a participação de MEI entre as empresas ativas é maior? Mostre as 5 primeiras.",
+   "status": "answered",
+   "resposta": "As cinco UFs com maior participação de MEI entre as empresas ativas são:\n\n| UF | % MEI | Optantes MEI | Empresas ativas |\n|---|---|---|---|\n| RJ | 58,79% | 1.303.556 | 2.217.325 |\n| ES | 58,31% | 342.406 | 587.195 |\n| PE | 55,87% | 391.186 | 700.223 |\n| AL | 55,05% | 122.043 | 221.706 |\n| PB | 54,70% | 178.573 | 326.469 |\n\nRecorte: empresas ativas (matrizes com situação ativa), mês 2026-10. Excluí as organizações políticas (CNAE 9492800), como pede a regra para perfil e Simples/MEI.\n\nSQL usado:\n```sql\nSELECT uf, pct_mei, optantes_mei, empresas_ativas\nFROM gold_mart_simples_mei_uf\nWHERE is_organizacao_politica = false\nORDER BY pct_mei DESC\nLIMIT 5\n```",
+   "sql": "SELECT uf, pct_mei, optantes_mei, empresas_ativas FROM (SELECT * FROM gold_mart_simples_mei_uf WHERE reference_month = '2026-10') AS gold_mart_simples_mei_uf WHERE is_organizacao_politica = FALSE ORDER BY pct_mei DESC LIMIT 5",
+   "colunas": [
+    "uf",
+    "pct_mei",
+    "optantes_mei",
+    "empresas_ativas"
+   ],
+   "linhas": [
+    [
+     "RJ",
+     58.79,
+     1303556,
+     2217325
+    ],
+    [
+     "ES",
+     58.31,
+     342406,
+     587195
+    ],
+    [
+     "PE",
+     55.87,
+     391186,
+     700223
+    ],
+    [
+     "AL",
+     55.05,
+     122043,
+     221706
+    ],
+    [
+     "PB",
+     54.7,
+     178573,
+     326469
+    ]
+   ],
+   "truncado": false
+  },
+  {
+   "id": "aberturas_por_ano",
+   "pergunta": "Quantos estabelecimentos foram abertos por ano de 2020 a 2025?",
+   "status": "answered",
+   "resposta": "Entre 2020 e 2025 foram abertos estes estabelecimentos (matrizes e filiais), excluindo as organizações políticas (CNAE 9492800):\n\n| Ano | Estabelecimentos abertos | Ainda ativos hoje |\n|---|---|---|\n| 2020 | 3.451.718 | 1.355.430 |\n| 2021 | 4.139.019 | 1.744.353 |\n| 2022 | 3.947.928 | 1.903.742 |\n| 2023 | 3.981.840 | 2.416.334 |\n| 2024 | 4.371.792 | 2.641.311 |\n| 2025 | 5.195.186 | 3.953.165 |\n\nTotal no período: 26.087.483 estabelecimentos abertos, dos quais 3.354.260 em 2020 a 5.064.202 em 2025 eram matrizes (a coluna de matrizes está nos dados, mas não é a pergunta). Os números de \"ainda ativos\" mostram quantos desses estabelecimentos continuam ativos no cadastro de 2026-10.\n\nRessalvas:\n- Os marts mostram só o que existe no cadastro neste mês. Estabelecimentos já baixados não aparecem, então os anos mais antigos tendem a ser subestimados.\n- Não incluí a série de organizações políticas, que cresce nos anos de eleição municipal e distorceria os totais.\n\nSQL usado:\n```sql\nSELECT ano, SUM(estabelecimentos_abertos) AS estabelecimentos_abertos, SUM(matrizes_abertas) AS matrizes_abertas, SUM(ainda_ativos) AS ainda_ativos\nFROM gold_mart_aberturas_mensal\nWHERE ano BETWEEN 2020 AND 2025 AND is_organizacao_politica = false\nGROUP BY ano ORDER BY ano\n```",
+   "sql": "SELECT ano, SUM(estabelecimentos_abertos) AS estabelecimentos_abertos, SUM(matrizes_abertas) AS matrizes_abertas, SUM(ainda_ativos) AS ainda_ativos FROM (SELECT * FROM gold_mart_aberturas_mensal WHERE reference_month = '2026-10') AS gold_mart_aberturas_mensal WHERE ano BETWEEN 2020 AND 2025 AND is_organizacao_politica = FALSE GROUP BY ano ORDER BY ano LIMIT 200",
+   "colunas": [
+    "ano",
+    "estabelecimentos_abertos",
+    "matrizes_abertas",
+    "ainda_ativos"
+   ],
+   "linhas": [
+    [
+     2020,
+     3451718,
+     3354260,
+     1355430
+    ],
+    [
+     2021,
+     4139019,
+     4021383,
+     1744353
+    ],
+    [
+     2022,
+     3947928,
+     3829261,
+     1903742
+    ],
+    [
+     2023,
+     3981840,
+     3860650,
+     2416334
+    ],
+    [
+     2024,
+     4371792,
+     4247124,
+     2641311
+    ],
+    [
+     2025,
+     5195186,
+     5064202,
+     3953165
+    ]
+   ],
+   "truncado": false
+  },
+  {
+   "id": "natureza_mais_comum",
+   "pergunta": "Qual é a natureza jurídica mais comum entre as empresas ativas e qual a participação dela?",
+   "status": "answered",
+   "resposta": "A natureza jurídica mais comum entre as empresas ativas é **Empresário (Individual)**, código 2135, com 16.658.823 empresas ativas. Isso representa **61,95%** do total de empresas ativas.\n\nRecorte: matrizes com situação cadastral ativa, excluindo as organizações políticas (CNAE 9492800). O percentual é calculado sobre o total sem essas organizações.\n\nSQL usado:\n```sql\nSELECT natureza_juridica,\n       natureza_descricao,\n       SUM(empresas_ativas) AS empresas_ativas,\n       ROUND(100.0 * SUM(empresas_ativas) / SUM(SUM(empresas_ativas)) OVER (), 2) AS pct_do_total\nFROM gold_mart_perfil_porte_natureza\nWHERE is_organizacao_politica = false\nGROUP BY natureza_juridica, natureza_descricao\nORDER BY empresas_ativas DESC\nLIMIT 1\n```",
+   "sql": "SELECT natureza_juridica, natureza_descricao, SUM(empresas_ativas) AS empresas_ativas, ROUND(100.0 * SUM(empresas_ativas) / SUM(SUM(empresas_ativas)) OVER (), 2) AS pct_do_total FROM (SELECT * FROM gold_mart_perfil_porte_natureza WHERE reference_month = '2026-10') AS gold_mart_perfil_porte_natureza WHERE is_organizacao_politica = FALSE GROUP BY natureza_juridica, natureza_descricao ORDER BY empresas_ativas DESC LIMIT 1",
+   "colunas": [
+    "natureza_juridica",
+    "natureza_descricao",
+    "empresas_ativas",
+    "pct_do_total"
+   ],
+   "linhas": [
+    [
+     "2135",
+     "Empresário (Individual)",
+     16658823,
+     61.95
+    ]
+   ],
+   "truncado": false
+  },
+  {
+   "id": "fora_do_escopo",
+   "pergunta": "Qual é a razão social e o endereço do CNPJ 00.000.000/0001-91?",
+   "status": "out_of_scope",
+   "resposta": "Essa pergunta não pode ser respondida com as tabelas disponíveis."
+  }
+ ]
+}

@@ -2,7 +2,7 @@
 
 Pipeline ETL em lote sobre os dados abertos do CNPJ da Receita Federal do Brasil. O objetivo do projeto é tratar um dataset público grande (alvo de 5 a 10 GB de dado bruto) com problemas reais de qualidade: arquivos sem cabeçalho, separador `;`, encoding `ISO-8859-1`, vírgula decimal, datas em texto e valores sentinela.
 
-Status: em desenvolvimento. As camadas raw, bronze e silver, o profiling e a demonstração com dados sintéticos foram validados com o mês real 2026-10. A camada gold também foi executada sobre o mês real, com todas as verificações de qualidade passando. A gold do mês real também foi publicada na AWS (S3, Glue e Athena) e consultada com SQL. O agente de texto para SQL (guarda, contexto, executores, cliente do modelo, controle de gasto e avaliação com o modelo real) e a exportação de agregados para o site estão prontos. A API pública do agente, o site e a automação do fluxo são as próximas etapas e estão descritas em [Visão geral do projeto](#visão-geral-do-projeto). A seção [Roadmap](#roadmap) mostra o que já existe e o que falta.
+Status: em desenvolvimento. As camadas raw, bronze e silver, o profiling e a demonstração com dados sintéticos foram validados com o mês real 2026-10. A camada gold também foi executada sobre o mês real, com todas as verificações de qualidade passando. A gold do mês real também foi publicada na AWS (S3, Glue e Athena) e consultada com SQL. O agente de texto para SQL (guarda, contexto, executores, cliente do modelo, controle de gasto e avaliação com o modelo real) e a exportação de agregados para o site estão prontos. A API pública do agente está publicada na AWS (função Lambda com limite de perguntas por visitante, teto de gasto e chave de desligamento). O site em React está escrito, testado e pronto para publicar no GitHub Pages (pasta [site/](site/README.md)); a automação do fluxo é a próxima etapa, descrita em [Visão geral do projeto](#visão-geral-do-projeto). A seção [Roadmap](#roadmap) mostra o que já existe e o que falta.
 
 ## Fonte dos dados
 
@@ -37,20 +37,20 @@ O motor de transformação é o DuckDB. As decisões tomadas e as ainda em abert
 
 ## Visão geral do projeto
 
-O projeto está planejado em cinco frentes. A primeira está implementada; as demais são planejadas e ainda não existem no repositório.
+O projeto tem cinco frentes. O pipeline, a publicação na AWS (nível 1), a análise e o agente com a sua API pública e o código do site já existem; o nível 2 da AWS, a orquestração e a publicação do site seguem o [Roadmap](#roadmap).
 
 1. **Pipeline de dados (implementado até a gold).** Download com retomada, bronze, profiling, silver e gold, todos testados com dados sintéticos e executados no CI. O fluxo completo já rodou sobre o mês real 2026-10.
 2. **Publicação na AWS (nível 1 aplicado e validado com a gold do mês real; nível 2 planejado).** Será feita em dois níveis, nesta ordem:
    - Nível 1: o pipeline continua rodando localmente e publica o Parquet (bronze, silver e gold) em um bucket S3, com o mesmo particionamento por `reference_month`. Um catálogo no AWS Glue e consultas no Athena permitem rodar SQL sobre os dados na nuvem. A infraestrutura é descrita em Terraform (`infra/`), com um usuário IAM restrito ao bucket e alerta de orçamento. O código tem testes com clientes simulados e o ambiente já foi aplicado em uma conta real, com a gold do mês 2026-10 publicada e consultada no Athena. Veja [Publicação na AWS (nível 1)](#publicação-na-aws-nível-1).
    - Nível 2: o pipeline passa a rodar na nuvem, em um container no ECS Fargate (a imagem Docker já existe), lendo e gravando `s3://` diretamente. O acesso passa a ser feito por papel IAM da tarefa, sem chaves.
-3. **Análise e insights (primeira versão pronta).** Um relatório com os principais achados sobre o cadastro de empresas, gerado a partir da camada gold, em [docs/analysis/2026-10.md](docs/analysis/2026-10.md): perfil por porte e natureza jurídica, Simples e MEI por UF, crescimento de aberturas por setor e a distorção que as eleições municipais causam na série de aberturas. Um site público com gráficos continua planejado.
-4. **Agente de IA para perguntas sobre os dados (em desenvolvimento).** Um agente de texto para SQL: o modelo recebe o esquema da gold, escreve uma consulta, ela roda em modo somente leitura e o resultado é explicado em linguagem natural. Embeddings ficam restritos a partes pequenas, como busca por descrição de CNAE ou natureza jurídica. O agente só enxerga tabelas permitidas e toda consulta passa por validação antes de executar.
-5. **Site em React com Tailwind (planejado).** Uma página pública com a análise, gráficos a partir de agregados pré-calculados e o agente de perguntas. Hospedagem estática, fora da AWS, para não depender do prazo do plano gratuito.
+3. **Análise e insights (primeira versão pronta).** Um relatório com os principais achados sobre o cadastro de empresas, gerado a partir da camada gold, em [docs/analysis/2026-10.md](docs/analysis/2026-10.md): perfil por porte e natureza jurídica, Simples e MEI por UF, crescimento de aberturas por setor e a distorção que as eleições municipais causam na série de aberturas. O site público com gráficos está em [site/](site/README.md).
+4. **Agente de IA para perguntas sobre os dados (implementado, com API pública).** Um agente de texto para SQL: o modelo recebe o esquema da gold, escreve uma consulta, ela roda em modo somente leitura e o resultado é explicado em linguagem natural. Embeddings ficam restritos a partes pequenas, como busca por descrição de CNAE ou natureza jurídica. O agente só enxerga tabelas permitidas e toda consulta passa por validação antes de executar. A API pública é uma função na AWS Lambda com limite de perguntas por visitante e por dia, teto de gasto e uma chave de desligamento; os passos de publicação estão em [infra/README.md](infra/README.md).
+5. **Site em React com Tailwind (código pronto; publicação no GitHub Pages).** Uma página pública no estilo de catálogo, com a análise, gráficos a partir de agregados pré-calculados e o agente de perguntas. Hospedagem estática, fora da AWS, para não depender do prazo do plano gratuito. Veja [site/README.md](site/README.md).
 
 Princípios que valem para todas as frentes:
 
 - **Privacidade.** O cadastro de sócios contém nomes de pessoas físicas. Qualquer saída pública (análise, site e agente) usa apenas agregados e não permite consulta por pessoa.
-- **Custo baixo e controlado.** Nuvem com alerta de orçamento desde o primeiro dia, região de menor custo, sem NAT Gateway, limite de leitura de dados por consulta no Athena e `terraform destroy` para desmontar o ambiente. O agente público terá limite de perguntas por IP, teto mensal de gasto no provedor do modelo e perguntas de exemplo que funcionam sem chamar o modelo.
+- **Custo baixo e controlado.** Nuvem com alerta de orçamento desde o primeiro dia, região de menor custo, sem NAT Gateway, limite de leitura de dados por consulta no Athena e `terraform destroy` para desmontar o ambiente. O agente público tem limite de perguntas por visitante, teto mensal de gasto no provedor do modelo e perguntas de exemplo que funcionam sem chamar o modelo.
 - **Honestidade sobre o estado.** Este README distingue o que está implementado do que é planejado, e os números só entram na seção de resultados depois de medidos.
 
 As escolhas feitas para cada decisão, com as alternativas consideradas, estão em [docs/architecture.md](docs/architecture.md).
@@ -87,13 +87,15 @@ As escolhas feitas para cada decisão, com as alternativas consideradas, estão 
 │   ├── gold.py            silver para gold: construção, verificações de qualidade e manifesto
 │   ├── quality.py         verificações de qualidade sobre a silver e entre camadas, e tempos medidos
 │   ├── cloud/             publicação no S3 (publish.py) e tabelas/consultas no Athena (athena.py)
-│   ├── agent/             agente de texto para SQL: guarda, contexto, executores, cliente do modelo, laço, gasto e avaliação
+│   ├── agent/             agente de texto para SQL: guarda, contexto, executores, cliente do modelo, laço, gasto, avaliação e gravador de respostas de exemplo
+│   ├── api/               função da API pública do agente: limites, orçamento, interruptor e empacotamento
 │   ├── site_export.py     exportação de agregados da gold para JSON (dados do site)
 │   ├── sample.py          gerador de zips sintéticos com defeitos plantados
 │   └── demo.py            amostra, bronze, profiling, silver e gold de ponta a ponta
-├── infra/                 Terraform da AWS (bucket, Glue, Athena, IAM, orçamento)
+├── infra/                 Terraform da AWS (bucket, Glue, Athena, IAM, orçamento e, opcional, a API do agente)
+├── site/                  site em React e Tailwind (Vite): lê os JSON agregados e chama a API do agente
 ├── tests/
-├── .github/workflows/ci.yml
+├── .github/workflows/      ci.yml (testes do Python e do site) e pages.yml (publicação do site)
 ├── Dockerfile
 ├── docker-compose.yml
 └── pyproject.toml
@@ -273,7 +275,7 @@ Um modelo cuja silver ou cujo modelo de origem não existe é pulado com aviso. 
 
 O nível 1 mantém o processamento local e leva o resultado para a nuvem. O passo a passo completo, com pré-requisitos, custos e como desmontar tudo, está em [infra/README.md](infra/README.md).
 
-- `infra/` (Terraform): bucket S3 privado e criptografado, banco no Glue, workgroup do Athena com limite de dados lidos por consulta, usuário IAM de menor privilégio e alerta de orçamento. As chaves de acesso não passam pelo Terraform.
+- `infra/` (Terraform): bucket S3 privado e criptografado, banco no Glue, workgroup do Athena com limite de dados lidos por consulta, usuário IAM de menor privilégio e alerta de orçamento. As chaves de acesso não passam pelo Terraform. Um módulo opcional (`infra/modules/api/`) cria a API pública do agente, com a chave do provedor guardada no Parameter Store fora do Terraform.
 - `python -m cnpj_pipeline.cloud.publish --month AAAA-MM`: envia o Parquet ao S3 de forma idempotente (pula arquivos idênticos por tamanho e SHA-256) e confere o tamanho de cada envio. Por padrão envia só a silver (com `--layers gold` envia a gold, que não tem nomes de pessoas); quarentena e rejeitados, que contêm linhas originais, só com `--include-quarantine`. Aceita `--dry-run`.
 - `python -m cnpj_pipeline.cloud.athena create-tables`: cria as tabelas externas da silver (`silver_<tabela>`) ou, com `--layer gold --month AAAA-MM`, da gold (`gold_<modelo>`, com as colunas lidas do manifesto da gold), com partition projection em `reference_month` (sem crawler e sem `MSCK REPAIR`). Testes conferem que as colunas do DDL batem com o Parquet que cada camada realmente grava. O subcomando `query` executa consultas.
 
@@ -419,10 +421,12 @@ Limites desta medição: 24 perguntas é uma amostra pequena (um acerto a mais o
 - [x] Primeira análise e principais insights sobre o cadastro de empresas (docs/analysis/2026-10.md)
 - [x] Marcar o CNAE de organizações políticas na gold, para ler as aberturas com e sem ele
 - [x] Agente de IA, parte 1: guarda de SQL (só SELECT, só marts e dimensões, mês fixado pelo programa) e desenho em [docs/agent_design.md](docs/agent_design.md)
-- [x] Agente de IA, parte 2: contexto semântico, executores (DuckDB e Athena), cliente do modelo, laço de correção, controle de gasto e avaliação com o modelo real
+- [x] Agente de IA, parte 2: contexto semântico, executores (DuckDB e Athena), cliente do modelo, laço de correção, controle de gasto e avaliação com o modelo real (conjuntos `dev` e reservado, 23 de 24 no reservado)
 - [x] Exportação dos agregados da gold para JSON, com supressão de recortes pequenos ([docs/site_data.md](docs/site_data.md))
-- [ ] Agente de IA, parte 3: API pública com limite por visitante, teto de gasto e chave de desligamento
-- [ ] Site em React com Tailwind publicando a análise e o agente
+- [x] Agente de IA, parte 3: API pública com limite por visitante, teto de gasto e chave de desligamento (função na AWS, publicada e respondendo)
+- [x] Agente de IA, parte 4: gravador de respostas de exemplo com o modelo real, para o site mostrar sem custo por visita (`agent/record_examples.py`, testado com modelo simulado)
+- [x] Site em React com Tailwind: código, testes e build (pasta `site/`, 66 testes)
+- [ ] Site publicado no GitHub Pages com o agente ao vivo e as respostas gravadas
 
 ## Dados e licença
 
