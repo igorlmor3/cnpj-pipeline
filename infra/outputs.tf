@@ -15,3 +15,13 @@ output "publisher_user" {
   description = "Usuario IAM do pipeline. Crie a chave de acesso dele no console."
   value       = aws_iam_user.publisher.name
 }
+
+output "api_url" {
+  description = "Endereco publico da API do agente (nulo se api_enabled for false)."
+  value       = one(module.api[*].function_url)
+}
+
+output "api_param_prefix" {
+  description = "Prefixo dos parametros da API no Parameter Store."
+  value       = one(module.api[*].param_prefix)
+}

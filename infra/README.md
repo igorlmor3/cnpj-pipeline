@@ -84,6 +84,75 @@ A publicação é idempotente: um arquivo já enviado, com o mesmo tamanho e o m
 
 As tabelas usam partition projection em `reference_month`, então um novo mês publicado aparece nas consultas sem crawler e sem `MSCK REPAIR`. Sempre filtre por `reference_month` nas consultas para ler menos dados e gastar menos.
 
+## API pública do agente
+
+A API deixa o site fazer perguntas livres ao agente de texto para SQL sem expor a chave do provedor. Ela é opcional (`api_enabled`, desligado por padrão) e fica em `modules/api/`. O desenho do agente e das camadas de defesa está em [../docs/agent_design.md](../docs/agent_design.md).
+
+| Recurso | Para quê |
+| --- | --- |
+| Função Lambda `cnpj-pipeline-api` (Python 3.12) com endereço público (Function URL) | Recebe `POST /ask` com `{"question": "..."}` e responde com a resposta em texto e o resultado da última consulta. `GET /health` mostra se o interruptor está ligado. |
+| Tabela DynamoDB `cnpj-pipeline-api-state` | Contadores de limite por visitante (por minuto e por dia), contador global do dia e gasto do mês. Os contadores expiram sozinhos (TTL). |
+| Parâmetro `/cnpj-pipeline/api/enabled` | Interruptor. Nasce desligado, e só o valor `true` liga. Se o parâmetro não puder ser lido, a API fica desligada. |
+| Parâmetro `/cnpj-pipeline/api/salt` (SecureString) | Sal do identificador anônimo do visitante: o IP nunca é gravado, só um HMAC dele. |
+| Parâmetro `/cnpj-pipeline/api/anthropic-api-key` (SecureString) | Chave do provedor. É gravada pela CLI, fora do Terraform, para nunca entrar no arquivo de estado. |
+| Papel IAM da função | Menor privilégio: lê só a gold (a silver, que tem nomes de sócios, fica fora), grava só os resultados do Athena, usa só esta tabela e só estes parâmetros. |
+| Grupo de logs (14 dias) | Registros em JSON sem pergunta, SQL, chave nem IP. |
+
+Limites padrão: 3 perguntas por minuto e 15 por dia por visitante, 150 por dia no total e US$ 4 por mês de gasto com o modelo (o limite do workspace no provedor, US$ 5, é a barreira final). O prazo de uma pergunta é de 40 segundos, e a função tem 90 segundos de tempo máximo.
+
+### Publicar
+
+1. Gere o pacote (o código, as dependências para Linux e o arquivo de colunas da gold do mês; o arquivo só tem nomes e tipos de coluna, nenhum dado):
+
+   ```powershell
+   python -m cnpj_pipeline.api.package --month 2026-10
+   ```
+
+2. Em `infra/terraform.tfvars`, ligue a API e informe o endereço do site (origem `https`, sem barra no final):
+
+   ```
+   api_enabled         = true
+   api_month           = "2026-10"
+   api_allowed_origins = ["https://seu-usuario.github.io"]
+   ```
+
+3. Aplique (o `init -upgrade` atualiza o provedor da AWS para a série 6, necessária para liberar a chamada pública da função, e baixa o provedor `random`, usado para gerar o sal):
+
+   ```powershell
+   cd infra
+   terraform init -upgrade
+   terraform plan
+   terraform apply
+   ```
+
+4. Grave a chave do provedor no Parameter Store, sem ela aparecer na tela:
+
+   ```powershell
+   $k = Read-Host "Cole a chave aqui"
+   aws ssm put-parameter --profile cnpj-admin --name "/cnpj-pipeline/api/anthropic-api-key" --type SecureString --value $k
+   Remove-Variable k
+   ```
+
+5. Ligue o interruptor e teste:
+
+   ```powershell
+   aws ssm put-parameter --profile cnpj-admin --name "/cnpj-pipeline/api/enabled" --type String --value true --overwrite
+   $url = terraform output -raw api_url
+   Invoke-RestMethod "${url}health"
+   $r = Invoke-RestMethod -Method Post -Uri "${url}ask" -ContentType "application/json" -Body '{"question": "Quais são as 5 UFs com mais empresas ativas?"}'
+   $r.status
+   $r.message
+   $r.rows | ConvertTo-Json -Compress
+   ```
+
+Para desligar a API na hora, mude o mesmo parâmetro para `false` (o valor é relido em até 30 segundos). O Terraform não volta o valor do interruptor. Depois de atualizar o código, gere o pacote de novo e rode `terraform apply`: a função só é atualizada se o conteúdo mudou, porque o zip é determinístico.
+
+### Limites conhecidos
+
+- O endereço da função é público, sem WAF. Pedidos feitos fora de um navegador não carregam o cabeçalho de origem, então o que os limita são os contadores. Cada pedido barrado custa uma escrita no DynamoDB, e o gasto com o modelo só acontece depois de passar por todos os limites.
+- `api_reserved_concurrency` limita as execuções simultâneas, mas é opcional: contas novas têm um limite total baixo de execuções, e a AWS exige que 10 fiquem sem reserva.
+- A API responde só sobre o mês indicado em `api_month`, e só a partir de agregados (a gold).
+
 ## Custos e cuidados
 
 - Armazenamento e consultas custam centavos neste volume: nas medições do mês real, uma consulta sobre o fato inteiro (73,81 milhões de linhas) leu 39,52 MB, e uma sobre um mart leu menos de 1 KB. O Athena cobra por dado lido; o limite por consulta do workgroup e o filtro por `reference_month` evitam surpresas.

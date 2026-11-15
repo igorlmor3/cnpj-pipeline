@@ -37,3 +37,39 @@ variable "athena_results_retention_days" {
   type        = number
   default     = 7
 }
+
+variable "api_enabled" {
+  description = "Cria a API publica do agente (funcao, endereco, tabela de estado e parametros)."
+  type        = bool
+  default     = false
+}
+
+variable "api_month" {
+  description = "Mes de referencia (AAAA-MM) consultado pelo agente. Deve ser o mesmo usado ao gerar o pacote."
+  type        = string
+  default     = "2026-10"
+}
+
+variable "api_package" {
+  description = "Caminho do zip da funcao, relativo a este diretorio."
+  type        = string
+  default     = "build/api.zip"
+}
+
+variable "api_allowed_origins" {
+  description = "Origens https do site que podem chamar a API pelo navegador (sem barra final). Vazio bloqueia todas."
+  type        = list(string)
+  default     = []
+}
+
+variable "api_reserved_concurrency" {
+  description = "Execucoes simultaneas reservadas para a funcao. Nulo nao reserva. Contas novas tem limite total baixo, e a AWS exige que 10 fiquem sem reserva."
+  type        = number
+  default     = null
+}
+
+variable "api_monthly_budget_usd" {
+  description = "Teto de gasto do agente por mes, aplicado pela propria funcao. O limite do workspace no provedor continua sendo a barreira final."
+  type        = number
+  default     = 4
+}

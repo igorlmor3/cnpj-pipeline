@@ -8,3 +8,9 @@ alert_email = "seu-email@exemplo.com"
 # monthly_budget_usd            = 5
 # athena_scan_limit_gb          = 5
 # athena_results_retention_days = 7
+
+# API publica do agente (veja infra/README.md). Gere antes o pacote:
+#   python -m cnpj_pipeline.api.package --month 2026-10
+# api_enabled         = true
+# api_month           = "2026-10"
+# api_allowed_origins = ["https://seu-usuario.github.io"]
