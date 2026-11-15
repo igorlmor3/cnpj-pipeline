@@ -5,12 +5,12 @@
   "generated_on": "2026-11-15",
   "summary": {
     "cases": 26,
-    "passed": 21,
-    "accuracy": 0.8076923076923077,
+    "passed": 26,
+    "accuracy": 1.0,
     "by_category": {
       "agregacao": {
         "cases": 6,
-        "passed": 4
+        "passed": 6
       },
       "agrupamento": {
         "cases": 5,
@@ -18,11 +18,11 @@
       },
       "ranking": {
         "cases": 4,
-        "passed": 2
+        "passed": 4
       },
       "juncao": {
         "cases": 3,
-        "passed": 2
+        "passed": 3
       },
       "ressalva": {
         "cases": 2,
@@ -35,10 +35,10 @@
     },
     "first_query_ok_rate": 1.0,
     "mean_llm_calls": 1.8076923076923077,
-    "mean_cost_usd": 0.0012002846153846155,
-    "total_cost_usd": 0.031207400000000003,
-    "latency_median_s": 4.059325050009647,
-    "latency_p95_s": 5.8330554000567645,
+    "mean_cost_usd": 0.001213076923076923,
+    "total_cost_usd": 0.03154,
+    "latency_median_s": 3.5057666999928188,
+    "latency_p95_s": 6.593285300012212,
     "failed_queries": 0,
     "extra": {}
   },
@@ -55,11 +55,11 @@
       "queries": 1,
       "failed_queries": 0,
       "first_query_ok": true,
-      "input_tokens": 9233,
-      "output_tokens": 423,
-      "cost_usd": 0.0011348,
-      "elapsed_s": 3.070148299972061,
-      "final_sql": "SELECT uf, is_organizacao_politica, empresas_ativas FROM (SELECT * FROM gold_mart_simples_mei_uf WHERE reference_month = '2026-10') AS gold_mart_simples_mei_uf WHERE uf = 'SP' AND is_organizacao_politica = FALSE LIMIT 200"
+      "input_tokens": 9591,
+      "output_tokens": 347,
+      "cost_usd": 0.0011326,
+      "elapsed_s": 2.9380901000113226,
+      "final_sql": "SELECT uf, empresas_ativas FROM (SELECT * FROM gold_mart_simples_mei_uf WHERE reference_month = '2026-10') AS gold_mart_simples_mei_uf WHERE uf = 'SP' AND is_organizacao_politica = FALSE LIMIT 200"
     },
     {
       "id": "simples_brasil",
@@ -73,10 +73,10 @@
       "queries": 1,
       "failed_queries": 0,
       "first_query_ok": true,
-      "input_tokens": 9323,
-      "output_tokens": 519,
-      "cost_usd": 0.0011918000000000002,
-      "elapsed_s": 3.056636699999217,
+      "input_tokens": 9703,
+      "output_tokens": 493,
+      "cost_usd": 0.0012168,
+      "elapsed_s": 3.5343490000232123,
       "final_sql": "SELECT SUM(empresas_ativas) AS empresas_ativas, SUM(optantes_simples) AS optantes_simples, ROUND(100.0 * SUM(optantes_simples) / SUM(empresas_ativas), 2) AS pct_simples FROM (SELECT * FROM gold_mart_simples_mei_uf WHERE reference_month = '2026-10') AS gold_mart_simples_mei_uf WHERE is_organizacao_politica = FALSE LIMIT 200"
     },
     {
@@ -84,18 +84,18 @@
       "category": "agregacao",
       "kind": "data",
       "question": "Quantas matrizes ativas há em MG, sem contar organizações políticas?",
-      "passed": false,
-      "reason": "resultado diferente do esperado",
+      "passed": true,
+      "reason": "",
       "status": "answered",
       "llm_calls": 2,
       "queries": 1,
       "failed_queries": 0,
       "first_query_ok": true,
-      "input_tokens": 9320,
-      "output_tokens": 790,
-      "cost_usd": 0.001327,
-      "elapsed_s": 4.198656400025357,
-      "final_sql": "SELECT uf, is_organizacao_politica, SUM(matrizes_ativas) AS matrizes_ativas, SUM(estabelecimentos_ativos) AS estabelecimentos_ativos FROM (SELECT * FROM gold_mart_estabelecimentos_ativos WHERE reference_month = '2026-10') AS gold_mart_estabelecimentos_ativos WHERE uf = 'MG' GROUP BY uf, is_organizacao_politica LIMIT 200"
+      "input_tokens": 9619,
+      "output_tokens": 570,
+      "cost_usd": 0.0012469,
+      "elapsed_s": 3.4142185000237077,
+      "final_sql": "SELECT uf, SUM(matrizes_ativas) AS matrizes_ativas FROM (SELECT * FROM gold_mart_estabelecimentos_ativos WHERE reference_month = '2026-10') AS gold_mart_estabelecimentos_ativos WHERE uf = 'MG' AND is_organizacao_politica = FALSE GROUP BY uf LIMIT 200"
     },
     {
       "id": "aberturas_2023",
@@ -109,11 +109,11 @@
       "queries": 1,
       "failed_queries": 0,
       "first_query_ok": true,
-      "input_tokens": 9336,
-      "output_tokens": 677,
-      "cost_usd": 0.0012721,
-      "elapsed_s": 3.9214532999903895,
-      "final_sql": "SELECT ano, SUM(estabelecimentos_abertos) AS estabelecimentos_abertos, SUM(matrizes_abertas) AS matrizes_abertas, SUM(ainda_ativos) AS ainda_ativos FROM (SELECT * FROM gold_mart_aberturas_mensal WHERE reference_month = '2026-10') AS gold_mart_aberturas_mensal WHERE ano = 2023 AND is_organizacao_politica = FALSE GROUP BY ano LIMIT 200"
+      "input_tokens": 9718,
+      "output_tokens": 581,
+      "cost_usd": 0.0012623,
+      "elapsed_s": 3.4771843999624252,
+      "final_sql": "SELECT SUM(estabelecimentos_abertos) AS estabelecimentos_abertos_2023, SUM(matrizes_abertas) AS matrizes_abertas_2023, SUM(ainda_ativos) AS ainda_ativos_2023 FROM (SELECT * FROM gold_mart_aberturas_mensal WHERE reference_month = '2026-10') AS gold_mart_aberturas_mensal WHERE ano = 2023 AND is_organizacao_politica = FALSE LIMIT 200"
     },
     {
       "id": "pct_ainda_ativos_2020",
@@ -127,29 +127,29 @@
       "queries": 1,
       "failed_queries": 0,
       "first_query_ok": true,
-      "input_tokens": 9364,
-      "output_tokens": 870,
-      "cost_usd": 0.0013714,
-      "elapsed_s": 4.797517099999823,
-      "final_sql": "SELECT SUM(ainda_ativos) AS ainda_ativos, SUM(estabelecimentos_abertos) AS abertos, ROUND(100.0 * SUM(ainda_ativos) / SUM(estabelecimentos_abertos), 2) AS pct_ativos FROM (SELECT * FROM gold_mart_aberturas_mensal WHERE reference_month = '2026-10') AS gold_mart_aberturas_mensal WHERE ano = 2020 AND is_organizacao_politica = FALSE LIMIT 200"
+      "input_tokens": 9768,
+      "output_tokens": 616,
+      "cost_usd": 0.0012848000000000002,
+      "elapsed_s": 3.375947399996221,
+      "final_sql": "SELECT SUM(ainda_ativos) AS ainda_ativos, SUM(estabelecimentos_abertos) AS estabelecimentos_abertos, ROUND(100.0 * SUM(ainda_ativos) / SUM(estabelecimentos_abertos), 2) AS pct_ainda_ativos FROM (SELECT * FROM gold_mart_aberturas_mensal WHERE reference_month = '2026-10') AS gold_mart_aberturas_mensal WHERE ano = 2020 AND is_organizacao_politica = FALSE LIMIT 200"
     },
     {
       "id": "socios_pessoa_fisica",
       "category": "agregacao",
       "kind": "data",
       "question": "Quantos vínculos de sócio são de pessoas físicas?",
-      "passed": false,
-      "reason": "resultado diferente do esperado",
+      "passed": true,
+      "reason": "",
       "status": "answered",
       "llm_calls": 2,
       "queries": 1,
       "failed_queries": 0,
       "first_query_ok": true,
-      "input_tokens": 9271,
-      "output_tokens": 600,
-      "cost_usd": 0.0012271,
-      "elapsed_s": 3.6058338999864645,
-      "final_sql": "SELECT identificador_socio, tipo_socio, SUM(socios) AS vinculos FROM (SELECT * FROM gold_mart_socios_qualificacao WHERE reference_month = '2026-10') AS gold_mart_socios_qualificacao GROUP BY identificador_socio, tipo_socio ORDER BY identificador_socio LIMIT 200"
+      "input_tokens": 9621,
+      "output_tokens": 465,
+      "cost_usd": 0.0011946,
+      "elapsed_s": 3.1301891999901272,
+      "final_sql": "SELECT identificador_socio, tipo_socio, SUM(socios) AS vinculos FROM (SELECT * FROM gold_mart_socios_qualificacao WHERE reference_month = '2026-10') AS gold_mart_socios_qualificacao WHERE identificador_socio = '2' GROUP BY identificador_socio, tipo_socio LIMIT 200"
     },
     {
       "id": "ativas_por_porte",
@@ -163,11 +163,11 @@
       "queries": 1,
       "failed_queries": 0,
       "first_query_ok": true,
-      "input_tokens": 9322,
-      "output_tokens": 672,
-      "cost_usd": 0.0012682000000000001,
-      "elapsed_s": 5.162238399963826,
-      "final_sql": "SELECT porte_empresa, porte_descricao, SUM(empresas_ativas) AS empresas_ativas FROM (SELECT * FROM gold_mart_perfil_porte_natureza WHERE reference_month = '2026-10') AS gold_mart_perfil_porte_natureza WHERE is_organizacao_politica = FALSE GROUP BY porte_empresa, porte_descricao ORDER BY empresas_ativas DESC LIMIT 200"
+      "input_tokens": 9698,
+      "output_tokens": 745,
+      "cost_usd": 0.0013423,
+      "elapsed_s": 4.1492006000480615,
+      "final_sql": "SELECT porte_empresa, porte_descricao, SUM(empresas_ativas) AS empresas_ativas FROM (SELECT * FROM gold_mart_perfil_porte_natureza WHERE reference_month = '2026-10') AS gold_mart_perfil_porte_natureza WHERE is_organizacao_politica = FALSE GROUP BY porte_empresa, porte_descricao ORDER BY porte_empresa LIMIT 200"
     },
     {
       "id": "ativas_por_grupo_natureza",
@@ -181,10 +181,10 @@
       "queries": 1,
       "failed_queries": 0,
       "first_query_ok": true,
-      "input_tokens": 9360,
-      "output_tokens": 1017,
-      "cost_usd": 0.0014445,
-      "elapsed_s": 5.427032699983101,
+      "input_tokens": 9740,
+      "output_tokens": 887,
+      "cost_usd": 0.0014175,
+      "elapsed_s": 5.0024097000132315,
       "final_sql": "SELECT natureza_grupo, SUM(empresas_ativas) AS empresas_ativas FROM (SELECT * FROM gold_mart_perfil_porte_natureza WHERE reference_month = '2026-10') AS gold_mart_perfil_porte_natureza WHERE is_organizacao_politica = FALSE GROUP BY natureza_grupo ORDER BY natureza_grupo LIMIT 200"
     },
     {
@@ -199,10 +199,10 @@
       "queries": 1,
       "failed_queries": 0,
       "first_query_ok": true,
-      "input_tokens": 9388,
+      "input_tokens": 9768,
       "output_tokens": 968,
-      "cost_usd": 0.0014228,
-      "elapsed_s": 5.320289900002535,
+      "cost_usd": 0.0014608000000000002,
+      "elapsed_s": 5.324705999984872,
       "final_sql": "SELECT porte_empresa, porte_descricao, SUM(empresas_ativas) AS empresas_ativas, SUM(capital_social_total) AS capital_social_total FROM (SELECT * FROM gold_mart_perfil_porte_natureza WHERE reference_month = '2026-10') AS gold_mart_perfil_porte_natureza WHERE is_organizacao_politica = FALSE GROUP BY porte_empresa, porte_descricao ORDER BY porte_empresa LIMIT 200"
     },
     {
@@ -217,11 +217,11 @@
       "queries": 1,
       "failed_queries": 0,
       "first_query_ok": true,
-      "input_tokens": 9764,
-      "output_tokens": 1270,
-      "cost_usd": 0.0016113999999999998,
-      "elapsed_s": 5.746976400027052,
-      "final_sql": "SELECT cnae_secao, MAX(cnae_secao_descricao) AS secao_descricao, SUM(optantes_mei) AS estabelecimentos_optantes_mei FROM (SELECT * FROM gold_mart_estabelecimentos_ativos WHERE reference_month = '2026-10') AS gold_mart_estabelecimentos_ativos WHERE is_organizacao_politica = FALSE GROUP BY cnae_secao ORDER BY estabelecimentos_optantes_mei DESC LIMIT 200"
+      "input_tokens": 10141,
+      "output_tokens": 1340,
+      "cost_usd": 0.0016841,
+      "elapsed_s": 6.593285300012212,
+      "final_sql": "SELECT cnae_secao, MAX(cnae_secao_descricao) AS cnae_secao_descricao, SUM(optantes_mei) AS estabelecimentos_optantes_mei FROM (SELECT * FROM gold_mart_estabelecimentos_ativos WHERE reference_month = '2026-10') AS gold_mart_estabelecimentos_ativos WHERE is_organizacao_politica = FALSE GROUP BY cnae_secao ORDER BY cnae_secao LIMIT 200"
     },
     {
       "id": "aberturas_mg_por_mes_2023",
@@ -235,10 +235,10 @@
       "queries": 1,
       "failed_queries": 0,
       "first_query_ok": true,
-      "input_tokens": 9603,
-      "output_tokens": 1213,
-      "cost_usd": 0.0015668000000000001,
-      "elapsed_s": 5.824174800014589,
+      "input_tokens": 9983,
+      "output_tokens": 1351,
+      "cost_usd": 0.0016738000000000002,
+      "elapsed_s": 5.866823699965607,
       "final_sql": "SELECT ano_mes, SUM(estabelecimentos_abertos) AS estabelecimentos_abertos, SUM(matrizes_abertas) AS matrizes_abertas, SUM(ainda_ativos) AS ainda_ativos FROM (SELECT * FROM gold_mart_aberturas_mensal WHERE reference_month = '2026-10') AS gold_mart_aberturas_mensal WHERE uf = 'MG' AND ano = 2023 AND is_organizacao_politica = FALSE GROUP BY ano_mes ORDER BY ano_mes LIMIT 200"
     },
     {
@@ -253,10 +253,10 @@
       "queries": 1,
       "failed_queries": 0,
       "first_query_ok": true,
-      "input_tokens": 9325,
-      "output_tokens": 708,
-      "cost_usd": 0.0012865,
-      "elapsed_s": 4.106311100011226,
+      "input_tokens": 9705,
+      "output_tokens": 727,
+      "cost_usd": 0.0013340000000000001,
+      "elapsed_s": 4.861081299954094,
       "final_sql": "SELECT uf, empresas_ativas FROM (SELECT * FROM gold_mart_simples_mei_uf WHERE reference_month = '2026-10') AS gold_mart_simples_mei_uf WHERE is_organizacao_politica = FALSE ORDER BY empresas_ativas DESC LIMIT 5"
     },
     {
@@ -264,18 +264,18 @@
       "category": "ranking",
       "kind": "data",
       "question": "Qual UF tem a maior porcentagem de empresas optantes pelo MEI, sem contar organizações políticas?",
-      "passed": false,
-      "reason": "resultado diferente do esperado",
+      "passed": true,
+      "reason": "",
       "status": "answered",
       "llm_calls": 2,
       "queries": 1,
       "failed_queries": 0,
       "first_query_ok": true,
-      "input_tokens": 9389,
-      "output_tokens": 782,
-      "cost_usd": 0.0013299000000000002,
-      "elapsed_s": 4.4188410000060685,
-      "final_sql": "SELECT uf, empresas_ativas, optantes_mei, pct_mei FROM (SELECT * FROM gold_mart_simples_mei_uf WHERE reference_month = '2026-10') AS gold_mart_simples_mei_uf WHERE is_organizacao_politica = FALSE ORDER BY pct_mei DESC LIMIT 5"
+      "input_tokens": 9708,
+      "output_tokens": 778,
+      "cost_usd": 0.0013598,
+      "elapsed_s": 5.737097800010815,
+      "final_sql": "SELECT uf, pct_mei, optantes_mei, empresas_ativas FROM (SELECT * FROM gold_mart_simples_mei_uf WHERE reference_month = '2026-10') AS gold_mart_simples_mei_uf WHERE is_organizacao_politica = FALSE AND uf <> 'EX' ORDER BY pct_mei DESC LIMIT 1"
     },
     {
       "id": "top3_municipios_sp",
@@ -289,10 +289,10 @@
       "queries": 1,
       "failed_queries": 0,
       "first_query_ok": true,
-      "input_tokens": 9427,
-      "output_tokens": 891,
-      "cost_usd": 0.0013882,
-      "elapsed_s": 5.053510899946559,
+      "input_tokens": 9802,
+      "output_tokens": 920,
+      "cost_usd": 0.0014402,
+      "elapsed_s": 5.19128999998793,
       "final_sql": "SELECT municipio, municipio_nome, SUM(estabelecimentos_ativos) AS estabelecimentos_ativos FROM (SELECT * FROM gold_mart_estabelecimentos_ativos WHERE reference_month = '2026-10') AS gold_mart_estabelecimentos_ativos WHERE uf = 'SP' AND is_organizacao_politica = FALSE GROUP BY municipio, municipio_nome ORDER BY estabelecimentos_ativos DESC LIMIT 3"
     },
     {
@@ -300,36 +300,36 @@
       "category": "ranking",
       "kind": "data",
       "question": "Qual é a qualificação de sócio mais comum? Mostre a descrição e a quantidade.",
-      "passed": false,
-      "reason": "resultado diferente do esperado",
+      "passed": true,
+      "reason": "",
       "status": "answered",
       "llm_calls": 2,
       "queries": 1,
       "failed_queries": 0,
       "first_query_ok": true,
-      "input_tokens": 9475,
-      "output_tokens": 708,
-      "cost_usd": 0.0013015000000000001,
-      "elapsed_s": 4.012339000008069,
-      "final_sql": "SELECT qualificacao_socio, qualificacao_descricao, SUM(socios) AS total_socios FROM (SELECT * FROM gold_mart_socios_qualificacao WHERE reference_month = '2026-10') AS gold_mart_socios_qualificacao GROUP BY qualificacao_socio, qualificacao_descricao ORDER BY total_socios DESC LIMIT 10"
+      "input_tokens": 9697,
+      "output_tokens": 830,
+      "cost_usd": 0.0013847,
+      "elapsed_s": 5.477558000013232,
+      "final_sql": "SELECT qualificacao_socio, qualificacao_descricao, SUM(socios) AS total_socios FROM (SELECT * FROM gold_mart_socios_qualificacao WHERE reference_month = '2026-10') AS gold_mart_socios_qualificacao GROUP BY qualificacao_socio, qualificacao_descricao ORDER BY total_socios DESC LIMIT 1"
     },
     {
       "id": "secao_com_mais_ativos",
       "category": "juncao",
       "kind": "data",
       "question": "Qual a descrição da seção da CNAE com mais estabelecimentos ativos, sem contar organizações políticas?",
-      "passed": false,
-      "reason": "resultado diferente do esperado",
+      "passed": true,
+      "reason": "",
       "status": "answered",
       "llm_calls": 2,
       "queries": 1,
       "failed_queries": 0,
       "first_query_ok": true,
-      "input_tokens": 9466,
-      "output_tokens": 798,
-      "cost_usd": 0.0013456,
-      "elapsed_s": 4.5332571000326425,
-      "final_sql": "SELECT cnae_secao, cnae_secao_descricao, SUM(estabelecimentos_ativos) AS estabelecimentos_ativos FROM (SELECT * FROM gold_mart_estabelecimentos_ativos WHERE reference_month = '2026-10') AS gold_mart_estabelecimentos_ativos WHERE is_organizacao_politica = FALSE GROUP BY cnae_secao, cnae_secao_descricao ORDER BY estabelecimentos_ativos DESC LIMIT 5"
+      "input_tokens": 9767,
+      "output_tokens": 737,
+      "cost_usd": 0.0013452,
+      "elapsed_s": 3.9106931999558583,
+      "final_sql": "SELECT cnae_secao, cnae_secao_descricao, SUM(estabelecimentos_ativos) AS estabelecimentos_ativos FROM (SELECT * FROM gold_mart_estabelecimentos_ativos WHERE reference_month = '2026-10') AS gold_mart_estabelecimentos_ativos WHERE is_organizacao_politica = FALSE GROUP BY cnae_secao, cnae_secao_descricao ORDER BY estabelecimentos_ativos DESC LIMIT 1"
     },
     {
       "id": "descricao_cnae",
@@ -343,10 +343,10 @@
       "queries": 1,
       "failed_queries": 0,
       "first_query_ok": true,
-      "input_tokens": 9221,
-      "output_tokens": 232,
-      "cost_usd": 0.0010381000000000001,
-      "elapsed_s": 2.160453899996355,
+      "input_tokens": 9601,
+      "output_tokens": 228,
+      "cost_usd": 0.0010741000000000001,
+      "elapsed_s": 2.2131890000309795,
       "final_sql": "SELECT codigo, descricao, divisao, secao FROM (SELECT * FROM gold_dim_cnae WHERE reference_month = '2026-10') AS gold_dim_cnae WHERE codigo = '4781400' LIMIT 200"
     },
     {
@@ -361,10 +361,10 @@
       "queries": 1,
       "failed_queries": 0,
       "first_query_ok": true,
-      "input_tokens": 9185,
-      "output_tokens": 219,
-      "cost_usd": 0.0010280000000000003,
-      "elapsed_s": 2.1550070999655873,
+      "input_tokens": 9565,
+      "output_tokens": 242,
+      "cost_usd": 0.0010775000000000001,
+      "elapsed_s": 2.337773900013417,
       "final_sql": "SELECT codigo, descricao FROM (SELECT * FROM gold_dim_municipio WHERE reference_month = '2026-10') AS gold_dim_municipio WHERE codigo = '7107' LIMIT 200"
     },
     {
@@ -379,11 +379,11 @@
       "queries": 1,
       "failed_queries": 0,
       "first_query_ok": true,
-      "input_tokens": 9521,
-      "output_tokens": 1310,
-      "cost_usd": 0.0016070999999999998,
-      "elapsed_s": 5.8330554000567645,
-      "final_sql": "SELECT uf, SUM(estabelecimentos_abertos) AS aberturas_2024, SUM(matrizes_abertas) AS matrizes_abertas, SUM(ainda_ativos) AS ainda_ativos FROM (SELECT * FROM gold_mart_aberturas_mensal WHERE reference_month = '2026-10') AS gold_mart_aberturas_mensal WHERE ano = 2024 AND is_organizacao_politica = FALSE GROUP BY uf ORDER BY aberturas_2024 DESC LIMIT 10"
+      "input_tokens": 9999,
+      "output_tokens": 980,
+      "cost_usd": 0.0014899,
+      "elapsed_s": 5.48767649999354,
+      "final_sql": "SELECT uf, SUM(estabelecimentos_abertos) AS aberturas_2024, SUM(matrizes_abertas) AS matrizes_2024 FROM (SELECT * FROM gold_mart_aberturas_mensal WHERE reference_month = '2026-10') AS gold_mart_aberturas_mensal WHERE ano = 2024 AND is_organizacao_politica = FALSE GROUP BY uf ORDER BY aberturas_2024 DESC LIMIT 200"
     },
     {
       "id": "ressalva_picos_de_abertura",
@@ -397,11 +397,11 @@
       "queries": 2,
       "failed_queries": 0,
       "first_query_ok": true,
-      "input_tokens": 16398,
-      "output_tokens": 1757,
-      "cost_usd": 0.0025183000000000002,
-      "elapsed_s": 8.799835299956612,
-      "final_sql": "SELECT ano, is_organizacao_politica, SUM(estabelecimentos_abertos) AS estabelecimentos_abertos, SUM(matrizes_abertas) AS matrizes_abertas, SUM(ainda_ativos) AS ainda_ativos FROM (SELECT * FROM gold_mart_aberturas_mensal WHERE reference_month = '2026-10') AS gold_mart_aberturas_mensal WHERE ano >= 2012 GROUP BY ano, is_organizacao_politica ORDER BY ano, is_organizacao_politica LIMIT 200"
+      "input_tokens": 16978,
+      "output_tokens": 1650,
+      "cost_usd": 0.0025228000000000004,
+      "elapsed_s": 10.054519700002857,
+      "final_sql": "SELECT ano, is_organizacao_politica, SUM(estabelecimentos_abertos) AS estabelecimentos_abertos, SUM(matrizes_abertas) AS matrizes_abertas, SUM(ainda_ativos) AS ainda_ativos FROM (SELECT * FROM gold_mart_aberturas_mensal WHERE reference_month = '2026-10') AS gold_mart_aberturas_mensal WHERE ano BETWEEN 2012 AND 2026 GROUP BY ano, is_organizacao_politica ORDER BY ano, is_organizacao_politica LIMIT 200"
     },
     {
       "id": "recusa_razao_social",
@@ -415,10 +415,10 @@
       "queries": 0,
       "failed_queries": 0,
       "first_query_ok": null,
-      "input_tokens": 4544,
-      "output_tokens": 178,
-      "cost_usd": 0.0005434000000000001,
-      "elapsed_s": 1.551712199987378,
+      "input_tokens": 4734,
+      "output_tokens": 249,
+      "cost_usd": 0.0005979000000000001,
+      "elapsed_s": 1.8732597999623977,
       "final_sql": null
     },
     {
@@ -433,10 +433,10 @@
       "queries": 0,
       "failed_queries": 0,
       "first_query_ok": null,
-      "input_tokens": 4537,
-      "output_tokens": 294,
-      "cost_usd": 0.0006007,
-      "elapsed_s": 1.863665700017009,
+      "input_tokens": 4727,
+      "output_tokens": 160,
+      "cost_usd": 0.0005527,
+      "elapsed_s": 1.336909600009676,
       "final_sql": null
     },
     {
@@ -451,10 +451,10 @@
       "queries": 0,
       "failed_queries": 0,
       "first_query_ok": null,
-      "input_tokens": 4529,
-      "output_tokens": 334,
-      "cost_usd": 0.0006199,
-      "elapsed_s": 2.12072080001235,
+      "input_tokens": 4719,
+      "output_tokens": 298,
+      "cost_usd": 0.0006209000000000001,
+      "elapsed_s": 2.034545000002254,
       "final_sql": null
     },
     {
@@ -469,10 +469,10 @@
       "queries": 0,
       "failed_queries": 0,
       "first_query_ok": null,
-      "input_tokens": 4556,
-      "output_tokens": 441,
-      "cost_usd": 0.0006761,
-      "elapsed_s": 2.865462900022976,
+      "input_tokens": 4746,
+      "output_tokens": 415,
+      "cost_usd": 0.0006821,
+      "elapsed_s": 2.55991680000443,
       "final_sql": null
     },
     {
@@ -487,10 +487,10 @@
       "queries": 0,
       "failed_queries": 0,
       "first_query_ok": null,
-      "input_tokens": 4532,
-      "output_tokens": 182,
-      "cost_usd": 0.0005442,
-      "elapsed_s": 1.5644399000448175,
+      "input_tokens": 4722,
+      "output_tokens": 235,
+      "cost_usd": 0.0005897000000000001,
+      "elapsed_s": 1.8307024000096135,
       "final_sql": null
     },
     {
@@ -505,10 +505,10 @@
       "queries": 0,
       "failed_queries": 0,
       "first_query_ok": null,
-      "input_tokens": 4535,
-      "output_tokens": 177,
-      "cost_usd": 0.000542,
-      "elapsed_s": 1.513658200041391,
+      "input_tokens": 4725,
+      "output_tokens": 159,
+      "cost_usd": 0.000552,
+      "elapsed_s": 1.5610712000052445,
       "final_sql": null
     }
   ]

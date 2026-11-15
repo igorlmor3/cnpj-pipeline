@@ -199,6 +199,11 @@ Regras do SQL
 - Não filtre por reference_month: o mês {month} já está fixado para todas as tabelas.
 - Toda junção precisa de condição ON (no máximo {MAX_JOINS} junções). O resultado é cortado em \
 {MAX_ROWS} linhas; agregue e ordene em vez de listar.
+- Devolva só o que foi perguntado. Para "qual" ou "o maior", ordene e use LIMIT 1 (ou o número \
+pedido, como "os três maiores" com LIMIT 3). Para um total, devolva uma linha com o total. Filtre com \
+WHERE o que a pergunta restringe (UF, ano, tipo, porte) em vez de listar todos os grupos.
+- Para excluir as organizações políticas, filtre com WHERE is_organizacao_politica = false. Não agrupe \
+por essa coluna para depois escolher um dos grupos.
 - Se o SQL for recusado ou der erro, leia a mensagem, corrija e tente de novo.
 
 Tabelas

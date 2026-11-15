@@ -76,6 +76,17 @@ def test_context_explains_the_political_cnae_caveat(real_columns):
     assert "diga qual dos dois você usou" in text
 
 
+def test_context_asks_for_exactly_what_was_asked(real_columns):
+    text = build_context(real_columns, month=MONTH)
+    assert "Devolva só o que foi perguntado" in text
+    assert "LIMIT 1" in text
+    assert "um total, devolva uma linha" in text
+    assert "Filtre com WHERE" in text
+    # excluir o grupo politico e filtrar, nao agrupar e escolher depois
+    assert "filtre com WHERE is_organizacao_politica = false" in text
+    assert "Não agrupe por essa coluna" in text
+
+
 def test_context_lists_every_cnae_section(real_columns):
     text = build_context(real_columns, month=MONTH)
     for letter, description, _, _ in CNAE_SECOES:

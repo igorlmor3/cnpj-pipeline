@@ -30,7 +30,7 @@ from typing import Any
 from cnpj_pipeline.agent.ask import Answer, ask, build_system_prompt
 from cnpj_pipeline.agent.budget import HAIKU_5_5, Budget, Pricing
 from cnpj_pipeline.agent.context import TABLES
-from cnpj_pipeline.agent.evaluation_cases import CASES, EvalCase, by_id
+from cnpj_pipeline.agent.evaluation_cases import ALL_CASES, SUITES, EvalCase, by_id
 from cnpj_pipeline.agent.executor import DuckDBExecutor, Executor, run_query
 from cnpj_pipeline.agent.llm import DEFAULT_MODEL, LLMClient, LLMTurn, ToolCall
 from cnpj_pipeline.cloud.athena import gold_columns
@@ -207,7 +207,7 @@ def evaluate(
 class ReferenceLLM:
     """Responde cada pergunta com a consulta de referencia do caso. Nao gasta nada."""
 
-    def __init__(self, cases: tuple[EvalCase, ...] = CASES) -> None:
+    def __init__(self, cases: tuple[EvalCase, ...] = ALL_CASES) -> None:
         self._by_question = {c.question: c for c in cases}
 
     def step(self, system: str, messages: list[dict[str, Any]], *, max_tokens: int) -> LLMTurn:
@@ -386,10 +386,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--price-out", type=float, default=HAIKU_5_5.output_per_mtok, help="US$ por milhao de tokens de saida"
     )
-    parser.add_argument("--cases", help="ids separados por virgula; padrao: todos")
+    parser.add_argument(
+        "--suite",
+        choices=sorted(SUITES),
+        default="dev",
+        help="conjunto de casos: dev (ajuste do prompt), holdout (reservado, nunca visto) ou all",
+    )
+    parser.add_argument("--cases", help="ids separados por virgula; tem prioridade sobre --suite")
     args = parser.parse_args(argv)
 
-    cases = by_id(args.cases.split(",")) if args.cases else CASES
+    cases = by_id(args.cases.split(",")) if args.cases else SUITES[args.suite]
     llm: LLMClient
     budget: Budget | None
     if args.reference:
@@ -408,6 +414,8 @@ def main(argv: list[str] | None = None) -> int:
             limit_usd=args.budget_usd, period=args.month, pricing=Pricing(args.price_in, args.price_out)
         )
         label, model = args.model, args.model
+    if args.suite != "dev" and not args.cases:
+        label = f"{label}_{args.suite}"
 
     columns = gold_columns(args.gold_dir, args.month, list(TABLES))
     system = build_system_prompt(columns, month=args.month)

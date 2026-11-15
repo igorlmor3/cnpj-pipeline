@@ -29,7 +29,14 @@ from cnpj_pipeline.agent.evaluation import (
     rows_match,
     summarize,
 )
-from cnpj_pipeline.agent.evaluation_cases import CASES, EvalCase, by_id
+from cnpj_pipeline.agent.evaluation_cases import (
+    ALL_CASES,
+    CASES,
+    HOLDOUT_CASES,
+    SUITES,
+    EvalCase,
+    by_id,
+)
 from cnpj_pipeline.agent.executor import DuckDBExecutor
 from cnpj_pipeline.agent.llm import LLMTurn, ToolCall
 from cnpj_pipeline.cloud.athena import gold_columns
@@ -68,7 +75,7 @@ class QuestionLLM:
     def __init__(self, sql_for, final: str = "Pronto.") -> None:
         self.sql_for = sql_for  # funcao: EvalCase -> str | None
         self.final = final
-        self._by_question = {c.question: c for c in CASES}
+        self._by_question = {c.question: c for c in ALL_CASES}
 
     def step(self, system: str, messages: list[dict[str, Any]], *, max_tokens: int) -> LLMTurn:
         case = self._by_question[messages[0]["content"]]
@@ -139,23 +146,39 @@ def test_rows_match(expected, got, ordered, result):
 # --------------------------------------------------------------------------- #
 
 
-def test_the_case_set_is_well_formed():
-    assert len({c.id for c in CASES}) == len(CASES)
-    assert len({c.question for c in CASES}) == len(CASES)  # o modo de referencia indexa pela pergunta
-    assert {c.kind for c in CASES} == {"data", "caveat", "refusal"}
-    for c in CASES:
+@pytest.mark.parametrize("cases", [CASES, HOLDOUT_CASES], ids=["dev", "holdout"])
+def test_each_case_set_is_well_formed(cases):
+    assert len({c.id for c in cases}) == len(cases)
+    assert {c.kind for c in cases} == {"data", "caveat", "refusal"}
+    for c in cases:
         if c.kind == "refusal":
             assert c.reference_sql is None and not c.must_contain
         else:
             assert c.reference_sql, c.id
         if c.kind == "caveat":
             assert "is_organizacao_politica" in c.must_contain
-    assert any(c.kind == "data" and c.ordered for c in CASES)
+    assert any(c.kind == "data" and c.ordered for c in cases)
+
+
+def test_the_suites_do_not_share_ids_questions_or_references():
+    assert len({c.id for c in ALL_CASES}) == len(ALL_CASES)
+    # o modo de referencia indexa pela pergunta
+    assert len({c.question for c in ALL_CASES}) == len(ALL_CASES)
+    dev_sql = {c.reference_sql for c in CASES if c.reference_sql}
+    assert not [c.id for c in HOLDOUT_CASES if c.reference_sql in dev_sql]
+    assert all(c.id.startswith("ho_") for c in HOLDOUT_CASES)
+    assert not any(c.id.startswith("ho_") for c in CASES)
+    assert SUITES == {"dev": CASES, "holdout": HOLDOUT_CASES, "all": ALL_CASES}
+
+
+def test_the_holdout_covers_every_category_of_the_dev_set():
+    assert {c.category for c in HOLDOUT_CASES} == {c.category for c in CASES}
+    assert len(HOLDOUT_CASES) >= 20
 
 
 def test_every_reference_runs_through_the_guard_on_the_real_gold(executor):
-    expected = expected_rows(CASES, executor=executor, month=MONTH)
-    assert set(expected) == {c.id for c in CASES if c.reference_sql}
+    expected = expected_rows(ALL_CASES, executor=executor, month=MONTH)
+    assert set(expected) == {c.id for c in ALL_CASES if c.reference_sql}
 
 
 def test_the_references_are_deterministic_and_run_through_the_guard(executor, system):
@@ -168,12 +191,12 @@ def test_the_references_are_deterministic_and_run_through_the_guard(executor, sy
             ran.append(sql)
             return executor.run(sql, max_rows=max_rows)
 
-    expected_rows(CASES, executor=Spy(), month=MONTH)
+    expected_rows(ALL_CASES, executor=Spy(), month=MONTH)
     assert ran and all("reference_month" in sql for sql in ran)  # o mes foi fixado pela guarda
 
     # empates sem desempate davam resultados diferentes de uma execucao para outra
     for _ in range(10):
-        results = evaluate(CASES, month=MONTH, system=system, llm=ReferenceLLM(), executor=executor)
+        results = evaluate(ALL_CASES, month=MONTH, system=system, llm=ReferenceLLM(), executor=executor)
         assert [r.id for r in results if not r.passed] == []
 
 
@@ -259,9 +282,9 @@ def test_judge_caveat_cases():
 
 
 def test_the_reference_mode_passes_every_case(executor, system):
-    results = evaluate(CASES, month=MONTH, system=system, llm=ReferenceLLM(), executor=executor)
+    results = evaluate(ALL_CASES, month=MONTH, system=system, llm=ReferenceLLM(), executor=executor)
     assert [r.reason for r in results if not r.passed] == []
-    assert len(results) == len(CASES)
+    assert len(results) == len(ALL_CASES)
 
 
 def test_a_model_that_queries_the_wrong_thing_fails_the_data_cases(executor, system):
@@ -421,6 +444,33 @@ def test_the_cli_reference_mode_writes_the_report_and_exits_zero(gold_root, tmp_
     assert payload["summary"]["accuracy"] == 1.0 and payload["model"] is None
 
 
+def test_the_cli_runs_the_dev_suite_by_default_and_names_the_others(gold_root, tmp_path, capsys):
+    out = tmp_path / "out"
+    base = ["--month", MONTH, "--reference", "--gold-dir", str(gold_root), "--out-dir", str(out)]
+    assert main(base + ["--suite", "holdout"]) == 0
+    assert f"{len(HOLDOUT_CASES)} de {len(HOLDOUT_CASES)} casos certos" in capsys.readouterr().out
+    payload = json.loads((out / f"{MONTH}_referencia_holdout.json").read_text(encoding="utf-8"))
+    assert [c["id"] for c in payload["cases"]] == [c.id for c in HOLDOUT_CASES]
+    assert not (out / f"{MONTH}_referencia.json").exists()  # a suite dev nao foi sobrescrita
+
+    assert main(base + ["--suite", "all"]) == 0
+    assert f"{len(ALL_CASES)} de {len(ALL_CASES)} casos certos" in capsys.readouterr().out
+    assert (out / f"{MONTH}_referencia_all.md").exists()
+
+    assert main(base) == 0
+    assert (out / f"{MONTH}_referencia.md").exists()
+
+
+def test_the_cli_cases_option_takes_precedence_over_the_suite(gold_root, tmp_path):
+    out = tmp_path / "out"
+    code = main(
+        ["--month", MONTH, "--reference", "--suite", "holdout", "--cases", "ativas_sp",
+         "--gold-dir", str(gold_root), "--out-dir", str(out)]
+    )  # fmt: skip
+    payload = json.loads((out / f"{MONTH}_referencia.json").read_text(encoding="utf-8"))
+    assert code == 0 and [c["id"] for c in payload["cases"]] == ["ativas_sp"]
+
+
 def test_the_cli_can_run_a_subset_of_cases(gold_root, tmp_path):
     out = tmp_path / "out"
     code = main(
@@ -447,7 +497,7 @@ def test_the_cli_exits_nonzero_if_the_reference_mode_has_a_failure(gold_root, tm
             "ruim", "t", "data", "Pergunta que a referencia erra?", f"SELECT 1 FROM {SIMPLES} WHERE 1 = 0"
         ),
     )
-    monkeypatch.setattr(evaluation, "CASES", broken)
+    monkeypatch.setitem(evaluation.SUITES, "dev", broken)
     monkeypatch.setattr(evaluation, "by_id", lambda ids: broken)
 
     class Wrong(ReferenceLLM):

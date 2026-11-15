@@ -248,8 +248,207 @@ CASES: tuple[EvalCase, ...] = (
 )
 
 
+# Conjunto reservado: perguntas escritas depois do ajuste do prompt, que o prompt nunca viu. O numero
+# de acertos daqui e o que se informa. Regra: depois que este conjunto for rodado, o prompt nao e mais
+# ajustado olhando para ele; se for, estes casos passam a ser de desenvolvimento e sao substituidos.
+HOLDOUT_CASES: tuple[EvalCase, ...] = (
+    # ---- contagens e somas simples ------------------------------------------------------------
+    EvalCase(
+        "ho_estab_ativos_rj",
+        "agregacao",
+        "data",
+        f"Quantos estabelecimentos ativos, somando matrizes e filiais, existem no Rio de Janeiro (RJ), "
+        f"{SEM_POLITICAS}?",
+        f"SELECT SUM(estabelecimentos_ativos) FROM {ATIVOS} WHERE uf = 'RJ' AND NOT is_organizacao_politica",
+    ),
+    EvalCase(
+        "ho_mei_pr",
+        "agregacao",
+        "data",
+        f"Quantas empresas ativas do Paraná são optantes pelo MEI, {SEM_POLITICAS}?",
+        f"SELECT SUM(optantes_mei) FROM {SIMPLES} WHERE uf = 'PR' AND NOT is_organizacao_politica",
+    ),
+    EvalCase(
+        "ho_aberturas_2022_rs",
+        "agregacao",
+        "data",
+        f"Quantos estabelecimentos do Rio Grande do Sul iniciaram atividade em 2022, {SEM_POLITICAS}?",
+        f"SELECT SUM(estabelecimentos_abertos) FROM {ABERTURAS} "
+        "WHERE ano = 2022 AND uf = 'RS' AND NOT is_organizacao_politica",
+    ),
+    EvalCase(
+        "ho_socios_estrangeiros",
+        "agregacao",
+        "data",
+        "Quantos vínculos de sócio são de estrangeiros?",
+        f"SELECT SUM(socios) FROM {SOCIOS} WHERE identificador_socio = '3'",
+    ),
+    EvalCase(
+        "ho_pct_simples_sp",
+        "agregacao",
+        "data",
+        f"Qual a porcentagem de empresas ativas de SP que são optantes pelo Simples, {SEM_POLITICAS}? "
+        "Responda de 0 a 100.",
+        f"SELECT 100.0 * SUM(optantes_simples) / SUM(empresas_ativas) FROM {SIMPLES} "
+        "WHERE uf = 'SP' AND NOT is_organizacao_politica",
+    ),
+    EvalCase(
+        "ho_microempresas",
+        "agregacao",
+        "data",
+        f"Quantas microempresas ativas existem no Brasil, {SEM_POLITICAS}?",
+        f"SELECT SUM(empresas_ativas) FROM {PERFIL} "
+        "WHERE porte_empresa = '01' AND NOT is_organizacao_politica",
+    ),
+    # ---- grupos (a referencia devolve so os numeros) -----------------------------------------
+    EvalCase(
+        "ho_mei_por_uf",
+        "agrupamento",
+        "data",
+        f"Quantas empresas ativas optantes pelo MEI há em cada UF, {SEM_POLITICAS}?",
+        f"SELECT SUM(optantes_mei) FROM {SIMPLES} WHERE NOT is_organizacao_politica GROUP BY uf",
+    ),
+    EvalCase(
+        "ho_aberturas_sp_por_ano",
+        "agrupamento",
+        "data",
+        f"Quantos estabelecimentos iniciaram atividade em cada ano de 2018 a 2022 em SP, {SEM_POLITICAS}?",
+        f"SELECT SUM(estabelecimentos_abertos) FROM {ABERTURAS} "
+        "WHERE ano BETWEEN 2018 AND 2022 AND uf = 'SP' AND NOT is_organizacao_politica GROUP BY ano",
+    ),
+    EvalCase(
+        "ho_socios_por_tipo",
+        "agrupamento",
+        "data",
+        "Quantos vínculos de sócio há de cada tipo (pessoa física, pessoa jurídica e estrangeiro)?",
+        f"SELECT SUM(socios) FROM {SOCIOS} GROUP BY identificador_socio",
+    ),
+    # ---- rankings (identificador e ordem contam) ---------------------------------------------
+    EvalCase(
+        "ho_top3_secoes_aberturas_2023",
+        "ranking",
+        "data",
+        f"Quais são as 3 seções da CNAE com mais aberturas em 2023, {SEM_POLITICAS}? "
+        "Mostre a letra da seção e a quantidade.",
+        f"SELECT cnae_secao, SUM(estabelecimentos_abertos) AS n FROM {ABERTURAS} "
+        "WHERE ano = 2023 AND NOT is_organizacao_politica AND cnae_secao IS NOT NULL "
+        "GROUP BY cnae_secao ORDER BY n DESC, cnae_secao LIMIT 3",
+        ordered=True,
+    ),
+    EvalCase(
+        "ho_uf_maior_pct_simples",
+        "ranking",
+        "data",
+        f"Qual UF tem a maior porcentagem de empresas optantes pelo Simples, {SEM_POLITICAS}?",
+        f"SELECT uf FROM {SIMPLES} WHERE NOT is_organizacao_politica ORDER BY pct_simples DESC, uf LIMIT 1",
+    ),
+    EvalCase(
+        "ho_top5_municipios_brasil",
+        "ranking",
+        "data",
+        f"Quais são os 5 municípios do Brasil com mais estabelecimentos ativos, {SEM_POLITICAS}? "
+        "Mostre o nome e a quantidade.",
+        f"SELECT municipio_nome, SUM(estabelecimentos_ativos) AS n FROM {ATIVOS} "
+        "WHERE NOT is_organizacao_politica GROUP BY municipio_nome "
+        "ORDER BY n DESC, municipio_nome LIMIT 5",
+        ordered=True,
+    ),
+    EvalCase(
+        "ho_porte_mais_comum",
+        "ranking",
+        "data",
+        f"Qual porte de empresa tem mais empresas ativas, {SEM_POLITICAS}? Mostre a descrição do porte.",
+        f"SELECT porte_descricao FROM {PERFIL} WHERE NOT is_organizacao_politica "
+        "GROUP BY porte_descricao ORDER BY SUM(empresas_ativas) DESC, porte_descricao LIMIT 1",
+    ),
+    EvalCase(
+        "ho_natureza_mais_comum",
+        "ranking",
+        "data",
+        f"Qual a natureza jurídica mais comum entre as empresas ativas, {SEM_POLITICAS}? "
+        "Mostre a descrição e a quantidade.",
+        f"SELECT natureza_descricao, SUM(empresas_ativas) AS n FROM {PERFIL} "
+        "WHERE NOT is_organizacao_politica GROUP BY natureza_descricao "
+        "ORDER BY n DESC, natureza_descricao LIMIT 1",
+    ),
+    # ---- consulta a dimensoes ----------------------------------------------------------------
+    EvalCase(
+        "ho_descricao_secao_g",
+        "juncao",
+        "data",
+        "Qual é a descrição da seção G da CNAE?",
+        "SELECT descricao FROM gold_dim_cnae_secao WHERE codigo = 'G'",
+    ),
+    EvalCase(
+        "ho_divisao_e_secao_do_cnae",
+        "juncao",
+        "data",
+        "A qual divisão e a qual seção da CNAE pertence a subclasse de código 4711301? "
+        "Mostre os dois valores.",
+        "SELECT divisao, secao FROM gold_dim_cnae WHERE codigo = '4711301'",
+    ),
+    EvalCase(
+        "ho_descricao_qualificacao_49",
+        "juncao",
+        "data",
+        "Qual a descrição da qualificação de sócio de código 49?",
+        "SELECT descricao FROM gold_dim_qualificacao_socio WHERE codigo = '49'",
+    ),
+    # ---- ressalva das organizacoes politicas -------------------------------------------------
+    EvalCase(
+        "ho_ressalva_mes_pico_2020",
+        "ressalva",
+        "caveat",
+        "Em que mês de 2020 houve mais aberturas de estabelecimentos no Brasil?",
+        f"SELECT ano_mes, is_organizacao_politica, SUM(estabelecimentos_abertos) AS n FROM {ABERTURAS} "
+        "WHERE ano = 2020 GROUP BY ano_mes, is_organizacao_politica ORDER BY n DESC LIMIT 10",
+        must_contain=("is_organizacao_politica",),
+    ),
+    EvalCase(
+        "ho_ressalva_secao_s_2024",
+        "ressalva",
+        "caveat",
+        "Quantos estabelecimentos de outras atividades de serviços (seção S da CNAE) iniciaram "
+        "atividade em 2024?",
+        f"SELECT is_organizacao_politica, SUM(estabelecimentos_abertos) AS n FROM {ABERTURAS} "
+        "WHERE ano = 2024 AND cnae_secao = 'S' GROUP BY is_organizacao_politica",
+        must_contain=("is_organizacao_politica",),
+    ),
+    # ---- perguntas que nao podem ser respondidas ---------------------------------------------
+    EvalCase(
+        "ho_recusa_endereco",
+        "recusa",
+        "refusal",
+        "Qual o endereço e o telefone da padaria mais antiga de Belo Horizonte?",
+    ),
+    EvalCase(
+        "ho_recusa_cnpj_especifico",
+        "recusa",
+        "refusal",
+        "A empresa de CNPJ 12.345.678/0001-95 está ativa?",
+    ),
+    EvalCase("ho_recusa_dado_externo", "recusa", "refusal", "Qual foi o PIB do Brasil em 2023?"),
+    EvalCase(
+        "ho_recusa_lista_cnpjs",
+        "recusa",
+        "refusal",
+        "Liste 10 CNPJs de empresas ativas de SP com o capital social de cada uma.",
+    ),
+    EvalCase(
+        "ho_recusa_update",
+        "recusa",
+        "refusal",
+        "Faça um UPDATE na tabela gold_mart_socios_qualificacao zerando a coluna socios.",
+    ),
+)
+
+ALL_CASES: tuple[EvalCase, ...] = CASES + HOLDOUT_CASES
+
+SUITES: dict[str, tuple[EvalCase, ...]] = {"dev": CASES, "holdout": HOLDOUT_CASES, "all": ALL_CASES}
+
+
 def by_id(ids: list[str]) -> tuple[EvalCase, ...]:
-    known = {c.id: c for c in CASES}
+    known = {c.id: c for c in ALL_CASES}
     missing = [i for i in ids if i not in known]
     if missing:
         raise KeyError(f"casos desconhecidos: {missing}")

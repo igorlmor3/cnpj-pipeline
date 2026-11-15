@@ -26,18 +26,27 @@ Modelo e gasto: o provedor escolhido é a API da Anthropic, com o `claude-haiku-
 
 ## Avaliação
 
-O conjunto tem 26 perguntas em 6 categorias: agregação, agrupamento, ranking, junção com dimensões, ressalva das organizações políticas e recusa. Cada pergunta de dados traz uma consulta de referência, executada na mesma gold e pela mesma guarda do agente; a resposta do modelo conta como certa se o resultado da sua última consulta bem-sucedida bater com o da referência (acurácia por execução, não comparação de texto de SQL). Por isso o conjunto vale para qualquer mês.
+Há dois conjuntos de perguntas. O conjunto de desenvolvimento (`dev`) tem 26 perguntas e serve para ajustar o prompt. O conjunto reservado (`holdout`) tem 24 perguntas escritas depois desse ajuste, que o prompt nunca viu, e o seu resultado é o número que se informa. Os dois cobrem 6 categorias: agregação, agrupamento, ranking, junção com dimensões, ressalva das organizações políticas e recusa. Cada pergunta de dados traz uma consulta de referência, executada na mesma gold e pela mesma guarda do agente; a resposta do modelo conta como certa se o resultado da sua última consulta bem-sucedida bater com o da referência (acurácia por execução, não comparação de texto de SQL). Por isso os conjuntos valem para qualquer mês.
 
 Regras de comparação: inteiros exatos, números não inteiros com 1 casa decimal, texto sem diferença de caixa (acento conta), colunas a mais ou em outra ordem aceitas, ordem das linhas só nos rankings. Em perguntas com vários grupos a referência devolve só os números, porque o modelo pode rotular o grupo pelo código ou pela descrição; o custo dessa escolha é que o rótulo de cada grupo não é conferido. Referências com `ORDER BY` e `LIMIT` têm desempate por identificador, porque o DuckDB não garante a ordem entre empatados (a falta disso fez um caso falhar de forma intermitente nos testes). Se a pergunta de ranking tiver empate no corte numa gold real, o resultado do modelo pode divergir sem estar errado.
 
 Os outros dois tipos: nas perguntas de ressalva o SQL precisa ter considerado `is_organizacao_politica` (e, numa delas, a resposta precisa mencionar as eleições), sem comparar o resultado, porque excluir ou separar as organizações políticas são duas respostas válidas; nas de recusa (razão social de um CNPJ, nomes de sócios, poema, pedido para ignorar instruções e ler a silver, apagar tabela, revelar as instruções) o correto é terminar sem resposta baseada em consulta.
 
+### Por que há um conjunto reservado
+
+Ajustar o prompt olhando para as falhas de um conjunto e medir de novo no mesmo conjunto mede a capacidade de decorar aquelas perguntas, não de responder perguntas novas. A primeira execução com o modelo real no conjunto `dev` acertou 21 de 26 (80,8%). As cinco falhas tinham o mesmo padrão: o modelo devolvia mais linhas do que o pedido (`LIMIT 5` ou `LIMIT 10` numa pergunta de "qual é o maior", ou todos os tipos de sócio numa pergunta sobre um deles) e, num caso, agrupava por organização política em vez de filtrar. Foram acrescentadas duas regras gerais ao prompt (devolver só o que foi perguntado; excluir organizações políticas com `WHERE`, sem agrupar). A segunda execução acertou 26 de 26, o que é um resultado otimista, porque o ajuste partiu dessas mesmas perguntas.
+
+Por isso as perguntas do `holdout` foram escritas depois, sem consultar o relatório do modelo, e a regra é: depois de rodar o `holdout`, o prompt não é ajustado olhando para as suas falhas. Se for, esses casos passam a ser de desenvolvimento e são substituídos por perguntas novas. Os dois relatórios do `dev` (antes e depois do ajuste) ficam no histórico do Git.
+
 Como rodar, a partir da raiz do repositório:
 
 ```
-python -m cnpj_pipeline.agent.evaluation --month 2026-10 --reference
+python -m cnpj_pipeline.agent.evaluation --month 2026-10 --reference --suite all
 python -m cnpj_pipeline.agent.evaluation --month 2026-10 --budget-usd 1
+python -m cnpj_pipeline.agent.evaluation --month 2026-10 --budget-usd 1 --suite holdout
 ```
+
+`--suite` aceita `dev` (padrão), `holdout` e `all`; `--cases` escolhe perguntas pelo identificador e tem prioridade. Os relatórios de `holdout` e `all` ganham o sufixo do conjunto no nome (`2026-10_claude-haiku-5-5_holdout.md`), então não sobrescrevem o do `dev`.
 
 O modo `--reference` usa as próprias consultas de referência no lugar do modelo: valida o conjunto e o programa sem custo, e é o teste que roda no CI. Sem ele, o modelo é chamado com a chave de `ANTHROPIC_API_KEY` e o gasto da execução fica limitado por `--budget-usd`. Cada execução grava em `docs/agent_eval/` um relatório em Markdown (acerto por categoria, primeira consulta sem erro, chamadas ao modelo, custo e latência por pergunta, e o SQL das falhas) e um JSON; nenhum dos dois traz linhas de resultado. Os testes provam que a avaliação reprova respostas erradas (consulta errada, recusa de tudo, ressalva ignorada, ordem trocada, orçamento esgotado), e não só que aprova as certas.
 
