@@ -56,6 +56,9 @@ CAPITAL_NATUREZAS = 5
 # Limite de tamanho de cada arquivo, para o site carregar rapido e o repositorio nao inchar.
 MAX_FILE_BYTES = 150_000
 
+# Arquivo gravado por outro comando (o gravador de exemplos do agente): a exportacao nao o apaga.
+AGENT_EXAMPLES_FILE = "agent_examples.json"
+
 MARTS = (
     "mart_aberturas_mensal",
     "mart_estabelecimentos_ativos",
@@ -839,7 +842,7 @@ def write_month(texts: dict[str, str], out_dir: Path, month: str) -> Path:
     target = out_dir / month
     target.mkdir(parents=True, exist_ok=True)
     for stale in target.glob("*.json"):
-        if stale.name not in texts:
+        if stale.name not in texts and stale.name != AGENT_EXAMPLES_FILE:
             stale.unlink()
     for filename, text in texts.items():
         (target / filename).write_text(text, encoding="utf-8", newline="\n")

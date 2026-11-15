@@ -214,6 +214,15 @@ def test_limit_is_added_clamped_or_kept():
     assert run(f"SELECT uf FROM {MART} LIMIT 100000").sql.endswith(f"LIMIT {MAX_ROWS}")
 
 
+def test_a_limit_chosen_by_the_query_is_not_a_cap_but_the_programs_limit_is():
+    assert run(f"SELECT uf FROM {MART}").capped is True
+    assert run(f"SELECT uf FROM {MART} LIMIT 5").capped is False
+    assert run(f"SELECT uf FROM {MART} LIMIT 100000").capped is True
+    assert run(f"SELECT uf FROM {MART} LIMIT {MAX_ROWS}").capped is True
+    assert run(f"SELECT uf FROM {MART} LIMIT {MAX_ROWS - 1}").capped is False
+    assert guard(f"SELECT uf FROM {MART} LIMIT 20", month=MONTH, max_rows=10).capped is True
+
+
 def test_limit_applies_to_the_whole_union():
     result = run(f"SELECT uf FROM {MART} UNION ALL SELECT uf FROM {MART}")
     assert result.sql.endswith(f"LIMIT {MAX_ROWS}")

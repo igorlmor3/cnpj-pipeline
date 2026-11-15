@@ -653,6 +653,15 @@ def test_stale_files_are_removed_from_the_month_directory(gold, tmp_path):
     assert not stale.exists()
 
 
+def test_the_recorded_agent_examples_survive_a_new_export(gold, tmp_path):
+    out = tmp_path / "site"
+    examples = out / MONTH / site_export.AGENT_EXAMPLES_FILE
+    examples.parent.mkdir(parents=True)
+    examples.write_text('{"exemplos": []}', encoding="utf-8")
+    export(gold, out)
+    assert examples.read_text(encoding="utf-8") == '{"exemplos": []}'
+
+
 def test_months_index_lists_complete_months_in_order(gold, tmp_path):
     out = tmp_path / "site"
     export(gold, out)

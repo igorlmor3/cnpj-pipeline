@@ -66,6 +66,9 @@ class GuardResult:
     sql: str  # SQL final, que deve ser o unico executado
     tables: tuple[str, ...]  # tabelas lidas, ordenadas
     limit: int  # limite de linhas aplicado
+    capped: bool = (
+        True  # o limite veio do programa (a consulta nao tinha um menor); False se foi escolha da consulta
+    )
 
 
 def _allowed_list(allowed: frozenset[str]) -> str:
@@ -151,15 +154,18 @@ def _month_subquery(name: str, alias: str, month: str) -> exp.Subquery:
     return exp.Subquery(this=inner, alias=exp.TableAlias(this=exp.to_identifier(alias)))
 
 
-def _apply_limit(statement: exp.Expression, max_rows: int) -> int:
+def _apply_limit(statement: exp.Expression, max_rows: int) -> tuple[int, bool]:
+    """Devolve o limite aplicado e se ele foi imposto pelo programa (e nao escolhido pela consulta)."""
     current = statement.args.get("limit")
     wanted = max_rows
+    capped = True
     if current is not None:
         value = current.expression
         if isinstance(value, exp.Literal) and not value.is_string and value.name.isdigit():
             wanted = min(int(value.name), max_rows)
+            capped = int(value.name) >= max_rows
     statement.set("limit", exp.Limit(expression=exp.Literal.number(wanted)))
-    return wanted
+    return wanted, capped
 
 
 def guard(
@@ -185,6 +191,6 @@ def guard(
         alias = table.alias or table.name
         table.replace(_month_subquery(names[id(table)], alias, month))
 
-    limit = _apply_limit(statement, max_rows)
+    limit, capped = _apply_limit(statement, max_rows)
     final = statement.sql(dialect=write, comments=False)
-    return GuardResult(sql=final, tables=tuple(sorted(set(names.values()))), limit=limit)
+    return GuardResult(sql=final, tables=tuple(sorted(set(names.values()))), limit=limit, capped=capped)

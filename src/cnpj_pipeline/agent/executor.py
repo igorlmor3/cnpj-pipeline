@@ -63,7 +63,7 @@ class QueryResult:
     sql: str  # o SQL que foi de fato executado (depois da guarda)
     columns: list[str]
     rows: list[list[Any]]
-    may_be_truncated: bool  # o limite de linhas foi atingido
+    may_be_truncated: bool  # o limite de linhas imposto pelo programa foi atingido (pode haver mais linhas)
     bytes_scanned: int | None
     elapsed_s: float
     tables: tuple[str, ...] = field(default_factory=tuple)
@@ -92,7 +92,8 @@ def run_query(
         sql=guarded.sql,
         columns=list(raw.columns),
         rows=rows,
-        may_be_truncated=len(rows) >= guarded.limit,
+        # Um LIMIT menor escolhido pela propria consulta (por exemplo, as 5 maiores) nao e truncamento.
+        may_be_truncated=guarded.capped and len(rows) >= guarded.limit,
         bytes_scanned=raw.bytes_scanned,
         elapsed_s=clock() - started,
         tables=guarded.tables,

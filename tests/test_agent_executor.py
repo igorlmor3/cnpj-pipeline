@@ -77,6 +77,18 @@ def test_the_limit_is_enforced_and_reported(local):
     assert result.may_be_truncated is True
 
 
+def test_reaching_a_limit_the_query_chose_is_not_truncation(local):
+    result = run_query(f"SELECT uf FROM {SIMPLES} ORDER BY uf LIMIT 2", executor=local, month=MONTH)
+    assert len(result.rows) == 2
+    assert result.may_be_truncated is False
+
+
+def test_a_limit_above_the_cap_is_still_reported_as_truncation(local):
+    result = run_query(f"SELECT uf FROM {SIMPLES} LIMIT 1000", executor=local, month=MONTH, max_rows=2)
+    assert len(result.rows) == 2
+    assert result.may_be_truncated is True
+
+
 def test_engine_errors_become_a_safe_message(local):
     with pytest.raises(QueryFailed) as err:
         run_query(f"SELECT coluna_que_nao_existe FROM {SIMPLES}", executor=local, month=MONTH)
