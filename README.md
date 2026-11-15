@@ -348,10 +348,12 @@ Nível 1 aplicado em uma conta real (região us-east-1) com o Terraform de `infr
 | --- | --- |
 | Publicação da gold (`cloud.publish --layers gold`) | 14 arquivos (13 modelos e o manifesto), 1.593,4 MB, cerca de 2 min 40 s |
 | Criação das tabelas (`cloud.athena create-tables --layer gold`) | 13 tabelas `gold_<modelo>` em cerca de 21 s |
-| Consulta de teste em `gold_mart_simples_mei_uf` | respondeu com as 5 UFs de mais empresas ativas; SP à frente, com 8.373.339 |
+| Consulta em `gold_mart_simples_mei_uf` (5 UFs com mais empresas ativas, sem organizações políticas) | 614 ms de execução, 0,89 KB lidos; SP à frente, com 8.354.422 (antes da marcação do CNAE 9492800, a mesma consulta dava 8.373.339) |
+| Contagem de estabelecimentos de SP em `gold_fato_estabelecimento` (73,81 milhões de linhas) | 2,7 s de execução, 39,52 MB lidos (283,32 MB de entrada processada); resultado 21.369.926 |
 
 - O tempo do envio é dominado pelo `fato_estabelecimento` (cerca de 2 min 30 s); as dimensões e os marts levam segundos. O tempo depende da conexão de upload da máquina local, que não foi registrada.
-- A consulta de teste foi feita sem medir o tempo nem o volume lido, e o custo real ainda não foi conferido no painel de cobrança. Os números de custo ficam pendentes no roadmap.
+- O volume lido é a medida usada na cobrança do Athena. A contagem sobre o fato leu 39,52 MB porque o Parquet em colunas lê só a coluna `uf` e a partição de `reference_month`, e não os 1,48 GiB do arquivo. Ao preço de lista de US$ 5 por TB lido, 39,52 MB custam da ordem de US$ 0,0002.
+- No painel de cobrança, o total estimado de novembro de 2026 aparece como US$ 0,00, com os quatro serviços usados (S3, Glue, Athena e transferência de dados) zerados, dentro do plano gratuito da conta. É uma estimativa dos primeiros dias, com a fatura ainda pendente, e não o custo final do mês.
 - O usuário que publica tem política de menor privilégio (somente o bucket e o Athena); o usuário que aplica o Terraform é separado, e as chaves de acesso são criadas no console, fora do código.
 
 ### Verificações de qualidade e máquina
@@ -390,7 +392,8 @@ Máquina onde o mês real foi processado e verificado: Windows 11, processador I
 - [ ] Benchmarks documentados (o relatório de qualidade já traz os tempos do mês real; falta a amostra grande)
 - [x] AWS nível 1, código: Terraform, publicação no S3 e tabelas no Athena (testados com clientes simulados)
 - [x] AWS nível 1, aplicado em conta real, gold do mês real publicada e consultada no Athena (tempo registrado)
-- [ ] AWS nível 1, registrar o custo real e o volume lido por consulta no Athena
+- [x] AWS nível 1, registrar o volume lido por consulta no Athena e o custo estimado nos primeiros dias
+- [ ] AWS nível 1, conferir a fatura final de novembro depois que o mês fechar
 - [ ] AWS nível 2: pipeline rodando em container no ECS Fargate com acesso por papel IAM
 - [ ] Orquestração do fluxo completo
 - [x] Primeira análise e principais insights sobre o cadastro de empresas (docs/analysis/2026-10.md)

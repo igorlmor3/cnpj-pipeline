@@ -86,7 +86,7 @@ As tabelas usam partition projection em `reference_month`, então um novo mês p
 
 ## Custos e cuidados
 
-- Armazenamento e consultas custam centavos neste volume. O Athena cobra por dado lido; o limite por consulta do workgroup e o filtro por `reference_month` evitam surpresas.
+- Armazenamento e consultas custam centavos neste volume: nas medições do mês real, uma consulta sobre o fato inteiro (73,81 milhões de linhas) leu 39,52 MB, e uma sobre um mart leu menos de 1 KB. O Athena cobra por dado lido; o limite por consulta do workgroup e o filtro por `reference_month` evitam surpresas.
 - Não crie NAT Gateway nem outros recursos cobrados por hora sem necessidade.
 - Confira o gasto em Billing and Cost Management de vez em quando, mesmo com o alerta ativo.
 - Para desmontar tudo: `terraform destroy` dentro de `infra/`. O bucket é esvaziado junto, porque os dados podem ser regenerados pelo pipeline.
