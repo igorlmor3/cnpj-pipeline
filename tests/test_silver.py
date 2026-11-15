@@ -478,7 +478,7 @@ def test_manifest_and_report_contain_only_counts(tmp_path):
     assert entry["parquet"] == f"empresas/reference_month={MONTH}/empresas.parquet"
     assert entry["columns"]["capital_social"]["nullified"] == 1
     assert entry["columns"]["razao_social"]["changed"] == 1
-    assert manifest["rules_status"].startswith("provisorias")
+    assert manifest["rules_status"].startswith("documentadas")
 
     report = (report_dir / f"{MONTH}.md").read_text(encoding="utf-8")
     assert "capital_social" in report

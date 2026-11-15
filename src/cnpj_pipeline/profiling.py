@@ -82,7 +82,7 @@ MAX_LEN_FOR_PATTERNS = 20
 
 DECIMAL_COMMA_COLUMNS = frozenset({"capital_social"})
 
-# Chave de negocio presumida de cada tabela (hipotese a confirmar com o dicionario).
+# Chave de negocio de cada tabela, usada para detectar duplicidades.
 KEYS: dict[str, tuple[str, ...]] = {
     "Empresas": ("cnpj_basico",),
     "Estabelecimentos": ("cnpj_basico", "cnpj_ordem", "cnpj_dv"),

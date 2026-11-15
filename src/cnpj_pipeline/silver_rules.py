@@ -1,9 +1,7 @@
 """Regras de limpeza e tipagem da camada silver, por tabela e coluna.
 
-TODAS AS REGRAS DESTE ARQUIVO SAO PROVISORIAS. Elas partem do layout historico e de
-hipoteses sobre os dados, e devem ser confirmadas ou corrigidas depois do profiling do
-mes real (docs/profiling/). Cada mudanca de regra deve ser registrada em
-docs/data_quality_rules.md.
+As regras deste arquivo partem do layout dos arquivos e dos achados do profiling do mes real
+(docs/profiling/). Cada mudanca de regra deve ser registrada em docs/data_quality_rules.md.
 
 Cada coluna recebe um "tipo de regra" (kind):
 

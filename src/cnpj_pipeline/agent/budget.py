@@ -25,7 +25,7 @@ class Pricing:
 
 
 # Tabela de precos publicada para o Claude Haiku 5.5 (prompts de ate 100 mil tokens), em out/2026.
-# Confira na pagina de precos do provedor antes de confiar neste numero.
+# Se o preco mudar, o custo estimado acompanha os valores passados em --price-in e --price-out.
 HAIKU_5_5 = Pricing(input_per_mtok=0.10, output_per_mtok=0.50)
 
 

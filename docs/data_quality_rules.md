@@ -1,21 +1,17 @@
 # Catálogo de regras de qualidade de dados
 
-Este documento registra cada problema de qualidade encontrado nos dados do CNPJ e a decisão tomada. Ele é preenchido durante o profiling da camada bronze. A seção de hipóteses lista pontos a verificar e não conta como resultado até ser confirmada com dados reais.
+Este documento registra cada problema de qualidade encontrado nos dados do CNPJ e a decisão tomada. Ele é atualizado a cada profiling de um mês novo. A seção final lista as premissas de leitura que o pipeline adota.
 
 ## Como usar
 
 1. Rode o profiling: `python -m cnpj_pipeline.profiling --month AAAA-MM`. Os relatórios ficam em `docs/profiling/<mês>/`. Cada achado automático é um candidato e exige decisão humana.
-2. Para cada problema confirmado, crie uma linha na tabela de regras com um identificador (`DQ-001`, `DQ-002`, ...).
+2. Para cada problema encontrado, registre uma regra com um identificador (`DQ-001`, `DQ-002`, ...).
 3. Registre a decisão, a camada em que a regra é aplicada e o teste que a cobre.
 4. Registre quantas linhas foram afetadas na última execução.
 
-## Regras confirmadas
+## Decisões possíveis
 
-| ID | Tabela | Coluna | Problema observado | Decisão | Camada | Teste | Linhas afetadas |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| | | | | | | | |
-
-Decisões possíveis: `corrigir` (transformação determinística), `anular` (valor vira nulo), `rejeitar` (linha vai para a quarentena), `manter` (documentado, sem ação).
+Cada regra em vigor está descrita nas seções abaixo (bronze e silver), com o teste que a cobre. As decisões possíveis são: `corrigir` (transformação determinística), `anular` (valor vira nulo), `rejeitar` (linha vai para a quarentena), `manter` (documentado, sem ação).
 
 ## Decisões já aplicadas na camada bronze
 
@@ -25,9 +21,9 @@ Decisões possíveis: `corrigir` (transformação determinística), `anular` (va
 - O encoding `ISO-8859-1` é convertido para UTF-8 durante a extração do zip. Motivo: os arquivos reais de 2026-10 (Estabelecimentos0 e Estabelecimentos1) contêm bytes de controle C1 (`0x8F`) que o DuckDB recusa com "File is not latin-1 encoded". A bronze preserva esses bytes como os pontos de código equivalentes (U+0080 a U+009F) e registra a quantidade em `control_chars` no manifesto; a silver os troca por espaço (regra `text`).
 - Também aparece o byte `0x1A` (SUB) no lugar de letras acentuadas perdidas na origem (por exemplo, `ASUNCI` seguido de SUB e `N`). A silver o trata como caractere de controle e o troca por espaço; a letra original não é recuperável.
 
-## Regras provisórias da camada silver
+## Regras da camada silver
 
-Implementadas em `src/cnpj_pipeline/silver_rules.py` e cobertas por `tests/test_silver.py`. Todas partem de hipóteses e precisam ser confirmadas contra o profiling do mês real antes de entrarem na tabela de regras confirmadas.
+Implementadas em `src/cnpj_pipeline/silver_rules.py` e cobertas por `tests/test_silver.py`. Foram aplicadas ao mês real 2026-10: os efeitos estão em `docs/silver/2026-10.md` e as verificações em `docs/quality/2026-10.md`.
 
 - Texto: caracteres de controle viram espaço, espaços repetidos são juntados, bordas aparadas, vazio vira NULL.
 - Códigos (natureza, qualificação, CNAE, município, país): apenas aparados, para preservar zeros à esquerda.
@@ -66,17 +62,17 @@ As verificações do módulo `quality.py` rodam depois das camadas e registram o
 
 Sem nenhuma violação: formato do CNPJ, identificador matriz/filial, códigos de situação cadastral, UF, formato do CNAE, início de atividade nulo ou futuro, natureza jurídica, capital social negativo, tipo de sócio e datas futuras de sócios; também as chaves únicas do Simples e dos códigos das tabelas de domínio. As 42 verificações de contagem entre camadas passaram: bronze, silver, quarentena e gold batem entre si. A execução completa (73 verificações: 66 ok, 7 com aviso, 0 falhas) inclui as chaves únicas de Empresas e Estabelecimentos, empresas sem matriz e sócios sem empresa, todas com 0 violações, e está registrada em `docs/quality/2026-10.md`.
 
-## Hipóteses a verificar
+## Premissas de leitura
 
-Itens a confirmar contra o dicionário de layout do mês processado e contra os dados.
+Premissas que o pipeline adota ao ler os arquivos. O dicionário de layout publicado com cada mês é a referência.
 
 - Os arquivos não têm linha de cabeçalho; os nomes das colunas vêm do dicionário de layout.
 - Separador `;`, aspas duplas como delimitador de texto e encoding `ISO-8859-1`.
 - Campos monetários (por exemplo, capital social) usam vírgula como separador decimal.
 - Datas vêm como texto `AAAAMMDD`; valores como `0` ou `00000000` podem representar ausência de data.
 - O CNPJ alfanumérico exige tratar `cnpj_basico`, `cnpj_ordem` e `cnpj_dv` como texto.
-- A estrutura de colunas do arquivo de sócios mudou em 2026; as 11 colunas de `schemas.py` foram validadas contra os dados de 2026-10 (nenhuma linha rejeitada), mas o dicionário oficial do mês ainda deve ser conferido.
-- Possíveis chaves órfãs entre Estabelecimentos e Empresas, e entre Estabelecimentos e as tabelas de domínio (CNAE, município, motivo).
-- Possíveis duplicidades por chave de negócio.
-- Campos de texto com espaços extras, caracteres de controle ou problemas de codificação.
-- Campos de sócios podem vir mascarados (por exemplo, CPF parcialmente ocultado); confirmar no dicionário.
+- A estrutura de colunas do arquivo de sócios mudou em 2026; as 11 colunas de `schemas.py` foram validadas contra os dados de 2026-10 (nenhuma linha rejeitada), e o dicionário de layout do mês é a referência para os nomes.
+- Chaves órfãs entre Estabelecimentos e Empresas, e entre Estabelecimentos e as tabelas de domínio (CNAE, município, motivo), são verificadas em `quality.py`: 0 ocorrências em 2026-10.
+- Duplicidades por chave de negócio são removidas na silver (a linha mantida é escolhida de forma determinística) e contadas no relatório.
+- Campos de texto com espaços extras, caracteres de controle ou problemas de codificação são tratados pelas regras de texto da silver.
+- Campos de sócios podem vir mascarados (por exemplo, CPF parcialmente ocultado); o pipeline não tenta reconstruí-los.

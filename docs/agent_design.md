@@ -36,7 +36,7 @@ Os outros dois tipos: nas perguntas de ressalva o SQL precisa ter considerado `i
 
 Ajustar o prompt olhando para as falhas de um conjunto e medir de novo no mesmo conjunto mede a capacidade de decorar aquelas perguntas, não de responder perguntas novas. A primeira execução com o modelo real no conjunto `dev` acertou 21 de 26 (80,8%). As cinco falhas tinham o mesmo padrão: o modelo devolvia mais linhas do que o pedido (`LIMIT 5` ou `LIMIT 10` numa pergunta de "qual é o maior", ou todos os tipos de sócio numa pergunta sobre um deles) e, num caso, agrupava por organização política em vez de filtrar. Foram acrescentadas duas regras gerais ao prompt (devolver só o que foi perguntado; excluir organizações políticas com `WHERE`, sem agrupar). A segunda execução acertou 26 de 26, o que é um resultado otimista, porque o ajuste partiu dessas mesmas perguntas.
 
-Por isso as perguntas do `holdout` foram escritas depois, sem consultar o relatório do modelo, e a regra é: depois de rodar o `holdout`, o prompt não é ajustado olhando para as suas falhas. Se for, esses casos passam a ser de desenvolvimento e são substituídos por perguntas novas. Os dois relatórios do `dev` (antes e depois do ajuste) ficam no histórico do Git.
+Por isso as perguntas do `holdout` foram escritas depois, sem consultar o relatório do modelo, e a regra é: depois de rodar o `holdout`, o prompt não é ajustado olhando para as suas falhas. Se for, esses casos passam a ser de desenvolvimento e são substituídos por perguntas novas. Os dois relatórios do `dev` (antes e depois do ajuste) ficam no histórico do Git. A primeira execução do `holdout` acertou 23 de 24 (95,8%); a falha foi uma pergunta sobre um tipo de sócio em que o modelo listou todos os tipos em vez de filtrar, o mesmo padrão que as regras do prompt corrigiram no `dev`. Esse resultado não foi usado para ajustar o prompt.
 
 Como rodar, a partir da raiz do repositório:
 
@@ -80,8 +80,8 @@ Decidido: provedor Anthropic, teto de US$ 5 por mês. O agente ao vivo começa c
 2. Contexto semântico gerado das colunas reais da gold e de `gold_models.py`; um teste falha se aparecer coluna sem glossa (feito).
 3. Executor com duas pontas (DuckDB local e Athena), limite de linhas, tempo máximo com cancelamento e mensagens de erro sem caminhos, ARNs nem número de conta (feito).
 4. Cliente do modelo de linguagem, laço de correção (devolvendo a mensagem da guarda ao modelo), controle de gasto e cliente falso para testes (feito).
-5. Conjunto de avaliação e relatório de acerto (código e testes feitos; falta a execução com o modelo real, que gera os números do README).
-6. Exportação dos agregados da gold para JSON (dados do site), só com contagens e o mês de referência.
+5. Conjunto de avaliação e relatório de acerto (feito: `dev` 21 de 26 antes do ajuste do prompt e 26 de 26 depois; `holdout` 23 de 24, que é o número informado no README).
+6. Exportação dos agregados da gold para JSON (dados do site), só com contagens e o mês de referência (feito, ver `docs/site_data.md`).
 7. Função da API do agente (credencial própria por papel IAM, limites por visitante e interruptor).
 8. Site em React com a análise, o relatório de qualidade e o agente (com perguntas de exemplo pré-gravadas).
 9. Abertura ao público, só depois de testar os limites e o interruptor.

@@ -3,7 +3,7 @@
 Le data/bronze/<tabela>/reference_month=<mes>/*.parquet (tudo texto) e grava
 data/silver/<tabela>/reference_month=<mes>/<tabela>.parquet com tipos corretos.
 
-O que esta camada faz (regras provisorias em silver_rules.py):
+O que esta camada faz (regras em silver_rules.py):
 - aplica a regra de cada coluna: datas viram DATE, decimais viram DECIMAL, S/N vira BOOLEAN,
   textos sao limpos, valores invalidos viram NULL (e sao contados);
 - envia para a quarentena as linhas com chave obrigatoria invalida e as chaves duplicadas
@@ -339,7 +339,7 @@ def write_manifest(silver_dir: Path, month: str, results: list[TableResult]) -> 
     manifest = {
         "reference_month": month,
         "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
-        "rules_status": "provisorias: confirmar contra o profiling do mes real",
+        "rules_status": "documentadas em docs/data_quality_rules.md",
         "tables": dict(sorted(tables.items())),
     }
     silver_dir.mkdir(parents=True, exist_ok=True)
@@ -351,7 +351,7 @@ def render_report(month: str, tables: dict[str, dict]) -> str:
     lines = [
         f"# Camada silver: regras aplicadas ({month})",
         "",
-        "As regras são provisórias e devem ser confirmadas contra o profiling do mês real.",
+        "As regras aplicadas estão documentadas em `docs/data_quality_rules.md`.",
         "Este relatório contém apenas contagens.",
         "",
         "## Resumo por tabela",

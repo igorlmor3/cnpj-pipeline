@@ -3,11 +3,11 @@
 Os arquivos da Receita nao tem linha de cabecalho; a ordem e os nomes vem do
 dicionario de layout publicado junto com os dados de cada mes.
 
-ATENCAO: os nomes abaixo seguem o layout historico (anterior a 2026) e precisam
-ser conferidos contra o dicionario do mes processado. A Receita alterou a
-estrutura do arquivo de socios em 2026. A camada bronze compara a quantidade de
-colunas do arquivo com a quantidade definida aqui e interrompe o processamento
-se forem diferentes, entao um layout novo nunca passa despercebido.
+Os nomes abaixo seguem o layout historico e foram validados contra os dados reais
+de 2026-10 (nenhuma linha rejeitada). A Receita alterou a estrutura do arquivo de
+socios em 2026. A camada bronze compara a quantidade de colunas do arquivo com a
+quantidade definida aqui e interrompe o processamento se forem diferentes, entao um
+layout novo nunca passa despercebido.
 
 Na camada bronze todas as colunas sao lidas como texto. Os tipos corretos
 (datas, decimais, inteiros) sao aplicados na camada silver.

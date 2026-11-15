@@ -12,7 +12,8 @@ Executor.
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping, Sequence
+import time
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -145,13 +146,18 @@ def ask(
     max_llm_calls: int = MAX_LLM_CALLS,
     max_queries: int = MAX_QUERIES,
     max_tokens: int = MAX_OUTPUT_TOKENS,
+    deadline_s: float | None = None,
+    clock: Callable[[], float] = time.monotonic,
 ) -> Answer:
     """Responde a uma pergunta. Nunca levanta por causa do visitante, do modelo ou do motor:
-    o resultado vem sempre como Answer, com um status."""
+    o resultado vem sempre como Answer, com um status. Com `deadline_s`, nao inicia uma nova chamada
+    ao modelo depois de passado esse tempo (o resultado e `failed`); serve para caber no tempo maximo
+    de uma funcao na nuvem."""
     question = question.strip()
     if not question or len(question) > MAX_QUESTION_CHARS:
         return Answer("invalid_question", REFUSALS["invalid_question"].format(n=MAX_QUESTION_CHARS))
 
+    started = clock()
     messages: list[dict[str, Any]] = [{"role": "user", "content": question}]
     queries: list[QueryRecord] = []
     calls = tokens_in = tokens_out = 0
@@ -170,6 +176,8 @@ def ask(
 
     try:
         for _ in range(max_llm_calls):
+            if deadline_s is not None and clock() - started >= deadline_s:
+                return finish("failed")
             if budget is not None:
                 budget.check()
             turn: LLMTurn = llm.step(system, messages, max_tokens=max_tokens)

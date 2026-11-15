@@ -21,10 +21,9 @@ GOLD_DIR = DATA_DIR / "gold"
 # Template da URL de cada arquivo. Placeholders: {month} (AAAA-MM) e {filename}.
 #
 # A Receita Federal publica os arquivos em um compartilhamento publico Nextcloud, acessado por
-# WebDAV. O padrao abaixo (pasta Dados/Cadastros/CNPJ/<AAAA-MM>/<arquivo>.zip) e o descrito pela
-# documentacao do pacote comunitario rfbpy e NAO foi confirmado diretamente contra o servidor
-# por quem escreveu este projeto. Se falhar, confira no site oficial e sobrescreva com
-# CNPJ_URL_TEMPLATE no .env ou com --url-template na linha de comando.
+# WebDAV. O padrao abaixo (pasta Dados/Cadastros/CNPJ/<AAAA-MM>/<arquivo>.zip) e o usado nos
+# downloads do mes 2026-10. Para outro caminho ou espelho, sobrescreva com CNPJ_URL_TEMPLATE
+# no .env ou com --url-template na linha de comando.
 OFFICIAL_BASE_URL = "https://arquivos.receitafederal.gov.br/public.php/webdav/Dados/Cadastros/CNPJ"
 DEFAULT_URL_TEMPLATE = OFFICIAL_BASE_URL + "/{month}/{filename}"
 WEBDAV_MARKER = "/public.php/webdav/"

@@ -2,7 +2,7 @@
 
 Pipeline ETL em lote sobre os dados abertos do CNPJ da Receita Federal do Brasil. O objetivo do projeto é tratar um dataset público grande (alvo de 5 a 10 GB de dado bruto) com problemas reais de qualidade: arquivos sem cabeçalho, separador `;`, encoding `ISO-8859-1`, vírgula decimal, datas em texto e valores sentinela.
 
-Status: em desenvolvimento. As camadas raw, bronze e silver, o profiling e a demonstração com dados sintéticos foram validados com o mês real 2026-10. A camada gold também foi executada sobre o mês real, com todas as verificações de qualidade passando. A gold do mês real também foi publicada na AWS (S3, Glue e Athena) e consultada com SQL. O agente de IA, o site e a automação do fluxo são as próximas etapas e estão descritas em [Visão geral do projeto](#visão-geral-do-projeto). A seção [Roadmap](#roadmap) mostra o que já existe e o que falta.
+Status: em desenvolvimento. As camadas raw, bronze e silver, o profiling e a demonstração com dados sintéticos foram validados com o mês real 2026-10. A camada gold também foi executada sobre o mês real, com todas as verificações de qualidade passando. A gold do mês real também foi publicada na AWS (S3, Glue e Athena) e consultada com SQL. O agente de texto para SQL (guarda, contexto, executores, cliente do modelo, controle de gasto e avaliação com o modelo real) e a exportação de agregados para o site estão prontos. A API pública do agente, o site e a automação do fluxo são as próximas etapas e estão descritas em [Visão geral do projeto](#visão-geral-do-projeto). A seção [Roadmap](#roadmap) mostra o que já existe e o que falta.
 
 ## Fonte dos dados
 
@@ -11,7 +11,7 @@ Status: em desenvolvimento. As camadas raw, bronze e silver, o profiling e a dem
 
 Os arquivos são publicados mensalmente como `.zip` com CSVs. As tabelas são Empresas, Estabelecimentos e Sócios (divididas em várias partes) e as tabelas de domínio Cnaes, Motivos, Municípios, Naturezas, Países, Qualificações e Simples.
 
-A Receita alterou o layout da página e o caminho dos arquivos no início de 2026. Os arquivos ficam em um compartilhamento público Nextcloud acessado por WebDAV, e o template de URL padrão do script segue esse formato (documentado pelo pacote comunitário `rfbpy`). Esse padrão ainda não foi confirmado diretamente contra o servidor da Receita. O template é configurável (`CNPJ_URL_TEMPLATE` ou `--url-template`) e deve ser conferido no site oficial se o primeiro download falhar. O dicionário de layout publicado junto com os arquivos de cada mês é a referência para os esquemas das tabelas.
+A Receita alterou o layout da página e o caminho dos arquivos no início de 2026. Os arquivos ficam em um compartilhamento público Nextcloud acessado por WebDAV, e o template de URL padrão do script segue esse formato (documentado pelo pacote comunitário `rfbpy`). Esse padrão é o usado nos downloads do mês 2026-10. O template é configurável (`CNPJ_URL_TEMPLATE` ou `--url-template`). O dicionário de layout publicado junto com os arquivos de cada mês é a referência para os esquemas das tabelas.
 
 ## Arquitetura planejada
 
@@ -44,7 +44,7 @@ O projeto está planejado em cinco frentes. A primeira está implementada; as de
    - Nível 1: o pipeline continua rodando localmente e publica o Parquet (bronze, silver e gold) em um bucket S3, com o mesmo particionamento por `reference_month`. Um catálogo no AWS Glue e consultas no Athena permitem rodar SQL sobre os dados na nuvem. A infraestrutura é descrita em Terraform (`infra/`), com um usuário IAM restrito ao bucket e alerta de orçamento. O código tem testes com clientes simulados e o ambiente já foi aplicado em uma conta real, com a gold do mês 2026-10 publicada e consultada no Athena. Veja [Publicação na AWS (nível 1)](#publicação-na-aws-nível-1).
    - Nível 2: o pipeline passa a rodar na nuvem, em um container no ECS Fargate (a imagem Docker já existe), lendo e gravando `s3://` diretamente. O acesso passa a ser feito por papel IAM da tarefa, sem chaves.
 3. **Análise e insights (primeira versão pronta).** Um relatório com os principais achados sobre o cadastro de empresas, gerado a partir da camada gold, em [docs/analysis/2026-10.md](docs/analysis/2026-10.md): perfil por porte e natureza jurídica, Simples e MEI por UF, crescimento de aberturas por setor e a distorção que as eleições municipais causam na série de aberturas. Um site público com gráficos continua planejado.
-4. **Agente de IA para perguntas sobre os dados (planejado).** Um agente de texto para SQL: o modelo recebe o esquema da gold, escreve uma consulta, ela roda em modo somente leitura e o resultado é explicado em linguagem natural. Embeddings ficam restritos a partes pequenas, como busca por descrição de CNAE ou natureza jurídica. O agente só enxerga tabelas permitidas e toda consulta passa por validação antes de executar.
+4. **Agente de IA para perguntas sobre os dados (em desenvolvimento).** Um agente de texto para SQL: o modelo recebe o esquema da gold, escreve uma consulta, ela roda em modo somente leitura e o resultado é explicado em linguagem natural. Embeddings ficam restritos a partes pequenas, como busca por descrição de CNAE ou natureza jurídica. O agente só enxerga tabelas permitidas e toda consulta passa por validação antes de executar.
 5. **Site em React com Tailwind (planejado).** Uma página pública com a análise, gráficos a partir de agregados pré-calculados e o agente de perguntas. Hospedagem estática, fora da AWS, para não depender do prazo do plano gratuito.
 
 Princípios que valem para todas as frentes:
@@ -68,6 +68,8 @@ As escolhas feitas para cada decisão, com as alternativas consideradas, estão 
 │   ├── architecture.md    decisões de arquitetura
 │   ├── data_quality_rules.md   catálogo de problemas de qualidade e decisões
 │   ├── agent_design.md    desenho do agente de texto para SQL e suas defesas
+│   ├── agent_eval/        relatórios de avaliação do agente (contagens, métricas e SQL)
+│   ├── site_data.md       arquivos JSON do site e o que torna a saída segura para publicar
 │   ├── profiling/         relatórios gerados pelo profiling (apenas agregados)
 │   ├── silver/            relatório das regras aplicadas na silver (apenas contagens)
 │   ├── gold/              relatório dos modelos e das verificações da gold (apenas contagens)
@@ -85,7 +87,8 @@ As escolhas feitas para cada decisão, com as alternativas consideradas, estão 
 │   ├── gold.py            silver para gold: construção, verificações de qualidade e manifesto
 │   ├── quality.py         verificações de qualidade sobre a silver e entre camadas, e tempos medidos
 │   ├── cloud/             publicação no S3 (publish.py) e tabelas/consultas no Athena (athena.py)
-│   ├── agent/             agente de texto para SQL; por ora, a guarda de SQL (sql_guard.py)
+│   ├── agent/             agente de texto para SQL: guarda, contexto, executores, cliente do modelo, laço, gasto e avaliação
+│   ├── site_export.py     exportação de agregados da gold para JSON (dados do site)
 │   ├── sample.py          gerador de zips sintéticos com defeitos plantados
 │   └── demo.py            amostra, bronze, profiling, silver e gold de ponta a ponta
 ├── infra/                 Terraform da AWS (bucket, Glue, Athena, IAM, orçamento)
@@ -151,7 +154,7 @@ python -m cnpj_pipeline.download --month 2026-11 --dry-run
 
 O servidor oficial fica atrás de um balanceador que às vezes responde vazio ou derruba a conexão, e baixar pelo navegador costuma travar sem retomar. O script lida com isso: retoma downloads interrompidos (arquivo `.part` e cabeçalho HTTP `Range`), repete tentativas com backoff exponencial (inclusive para respostas vazias e limites de taxa 408/429), confere o tamanho final contra o `Content-Length` e grava `manifest.json` com tamanho e SHA-256 de cada arquivo. Partes que retornam 404 em tabelas divididas são ignoradas com aviso. Se nenhuma parte de uma tabela for obtida, o script termina com código de saída diferente de zero.
 
-Para testar a conexão antes do download grande, baixe só as tabelas pequenas: `python -m cnpj_pipeline.download --month 2026-10 --tables cnaes motivos`. Se o servidor oficial estiver indisponível, `--url-template` aceita um espelho de terceiros com os mesmos zips (por exemplo, o espelho da Casa dos Dados, `https://dados-abertos-rf-cnpj.casadosdados.com.br/arquivos/<data-da-pasta>/{filename}`). Nesse caso, confira os nomes dos arquivos na página do espelho e registre no README qual fonte foi usada, porque o manifesto guarda a URL e o SHA-256 de cada arquivo, mas não prova que o espelho é idêntico ao original.
+Para testar a conexão antes do download grande, baixe só as tabelas pequenas: `python -m cnpj_pipeline.download --month 2026-10 --tables cnaes motivos`. Se o servidor oficial estiver indisponível, `--url-template` aceita um espelho de terceiros com os mesmos zips (por exemplo, o espelho da Casa dos Dados, `https://dados-abertos-rf-cnpj.casadosdados.com.br/arquivos/<data-da-pasta>/{filename}`). O manifesto guarda a URL e o SHA-256 de cada arquivo baixado, mas não prova que o espelho é idêntico ao original.
 
 Se os arquivos já foram baixados manualmente, coloque-os em `data/raw/<AAAA-MM>/` e rode `python -m cnpj_pipeline.download --month AAAA-MM --manifest-only` para gerar o manifesto sem acessar a rede. Rodar o download normal com o mesmo mês também funciona: arquivos completos são reconhecidos, pulados e incluídos no manifesto.
 
@@ -179,7 +182,7 @@ Comportamento:
 - Cada Parquet inclui `_source_file`, `_reference_month` e `_ingested_at`. O diretório `reference_month=...` segue a convenção Hive, então o DuckDB também expõe `reference_month` ao ler a pasta inteira.
 - Um manifesto `data/bronze/_manifest_<mes>.json` registra linhas, rejeitadas, tamanhos e tempo de cada arquivo. Esses números alimentam a tabela de resultados abaixo.
 
-Os nomes das colunas em `schemas.py` seguem o layout histórico e precisam ser conferidos contra o dicionário de layout do mês processado.
+Os nomes das colunas em `schemas.py` seguem o layout histórico e foram validados contra os dados de 2026-10 (10 tabelas, sem linhas rejeitadas).
 
 ## Profiling
 
@@ -374,18 +377,34 @@ Os 7 avisos são informativos e não bloqueiam: 11.574 matrizes com ordem difere
 
 Máquina onde o mês real foi processado e verificado: Windows 11, processador Intel de 12 CPUs lógicas, 16 GiB de memória, Python 3.13.2 e DuckDB 2.0.0. Nesta verificação, o limite de memória do DuckDB era 4 GB e o pico do processo foi 4.050 MiB. Os tempos das camadas vêm dos manifestos de cada execução e estão no mesmo relatório: bronze 316 s, silver 1.742 s e gold 1.320 s, somando os itens de cada camada.
 
+### Agente de texto para SQL
+
+O agente escreve SQL (dialeto Trino) sobre os marts e as dimensões da gold, e cada consulta passa pela guarda antes de rodar. A avaliação compara o resultado da última consulta do modelo com o de uma consulta de referência executada pela mesma guarda (acurácia por execução, não comparação de texto de SQL). Modelo `claude-haiku-5-5`, mês 2026-10, gold real.
+
+| Conjunto | Perguntas | Certas | Custo total |
+| --- | ---: | ---: | ---: |
+| `dev`, antes do ajuste do prompt | 26 | 21 (80,8%) | US$ 0,0312 |
+| `dev`, depois do ajuste | 26 | 26 (100%) | US$ 0,0315 |
+| `holdout` (perguntas que o prompt nunca viu) | 24 | 23 (95,8%) | US$ 0,0272 |
+
+O número a citar é o do `holdout`. O do `dev` depois do ajuste é otimista: o ajuste (duas regras gerais no prompt) partiu das falhas desse mesmo conjunto.
+
+No `holdout`, todas as consultas rodaram sem erro na primeira tentativa, as 5 recusas (endereço de empresa, CNPJ específico, dado fora do cadastro, lista de CNPJs e um `UPDATE`) e as 2 perguntas de ressalva das organizações políticas foram tratadas corretamente, e a média foi de 1,8 chamadas ao modelo e US$ 0,0011 por pergunta, com latência mediana de 3,2 s (p95 de 5,2 s). A única falha foi uma pergunta sobre um tipo de sócio (estrangeiros), em que o modelo devolveu os três tipos em vez de filtrar: o mesmo padrão que as regras do prompt corrigiram no `dev`, então a correção não é completa.
+
+Limites desta medição: 24 perguntas é uma amostra pequena (um acerto a mais ou a menos muda 4 pontos percentuais), o rótulo de cada grupo não é conferido nas perguntas com vários grupos, e há um único mês e um único modelo. A avaliação confere o resultado da consulta, não o texto da resposta (exceto nas perguntas de ressalva que exigem mencionar as eleições). O método, as regras de comparação e a regra do conjunto reservado estão em [docs/agent_design.md](docs/agent_design.md), e os relatórios completos em [docs/agent_eval/](docs/agent_eval/).
+
 ## Roadmap
 
 - [x] Estrutura do repositório, CI, Docker
 - [x] Download parametrizado com retomada e manifesto
 - [x] Módulo de profiling (testado com dados sintéticos)
 - [x] Rodar o profiling no mês real (amostra de 5%)
-- [ ] Preencher o catálogo de qualidade de dados com as regras confirmadas
+- [x] Catálogo de regras de qualidade de dados (`docs/data_quality_rules.md`)
 - [x] Esquemas das tabelas validados contra os dados reais de 2026-10 (10 tabelas, sem linhas rejeitadas)
 - [x] Camada bronze (CSV para Parquet em streaming, testada com dados sintéticos)
 - [x] Validar a bronze com o mês real e registrar as métricas
 - [x] Camada silver (tipagem, limpeza, quarentena e deduplicação, testada com dados sintéticos)
-- [ ] Confirmar as demais regras da silver contra o profiling do mês real (parte já ajustada)
+- [x] Regras da silver aplicadas ao mês real e verificadas pelas checagens de qualidade (`docs/quality/2026-10.md`)
 - [x] Gerador de amostra sintética e demo ponta a ponta, testados no CI
 - [x] Camada gold (dimensões, fato e marts a partir da silver, com verificações; testada com dados sintéticos e executada no mês real)
 - [x] Rodar a gold no mês real e registrar contagens, tempo e tamanho
@@ -395,13 +414,14 @@ Máquina onde o mês real foi processado e verificado: Windows 11, processador I
 - [x] AWS nível 1, código: Terraform, publicação no S3 e tabelas no Athena (testados com clientes simulados)
 - [x] AWS nível 1, aplicado em conta real, gold do mês real publicada e consultada no Athena (tempo registrado)
 - [x] AWS nível 1, registrar o volume lido por consulta no Athena e o custo estimado nos primeiros dias
-- [ ] AWS nível 1, conferir a fatura final de novembro depois que o mês fechar
 - [ ] AWS nível 2: pipeline rodando em container no ECS Fargate com acesso por papel IAM
 - [ ] Orquestração do fluxo completo
 - [x] Primeira análise e principais insights sobre o cadastro de empresas (docs/analysis/2026-10.md)
 - [x] Marcar o CNAE de organizações políticas na gold, para ler as aberturas com e sem ele
 - [x] Agente de IA, parte 1: guarda de SQL (só SELECT, só marts e dimensões, mês fixado pelo programa) e desenho em [docs/agent_design.md](docs/agent_design.md)
-- [ ] Agente de IA, parte 2: contexto semântico, executor, cliente do modelo, avaliação e limites de uso
+- [x] Agente de IA, parte 2: contexto semântico, executores (DuckDB e Athena), cliente do modelo, laço de correção, controle de gasto e avaliação com o modelo real
+- [x] Exportação dos agregados da gold para JSON, com supressão de recortes pequenos ([docs/site_data.md](docs/site_data.md))
+- [ ] Agente de IA, parte 3: API pública com limite por visitante, teto de gasto e chave de desligamento
 - [ ] Site em React com Tailwind publicando a análise e o agente
 
 ## Dados e licença

@@ -189,6 +189,41 @@ def test_the_model_cannot_loop_forever(executor, system):
     assert executor.ran == []
 
 
+class Ticking:
+    """Relogio falso: cada leitura avanca `step` segundos."""
+
+    def __init__(self, step: float) -> None:
+        self.now = 0.0
+        self.step = step
+
+    def __call__(self) -> float:
+        value = self.now
+        self.now += self.step
+        return value
+
+
+def test_a_deadline_stops_new_model_calls_but_keeps_what_was_queried(executor, system):
+    llm = FakeLLM(turn("", GOOD_SQL), turn("nao deve ser chamado"))
+    # 1a leitura (inicio) = 0, 2a (antes da 1a chamada) = 6, 3a (antes da 2a chamada) = 12 >= 10
+    answer = run_ask(llm, executor, system, deadline_s=10, clock=Ticking(6.0))
+
+    assert answer.status == "failed" and answer.text == REFUSALS["failed"]
+    assert len(llm.calls) == 1 and len(answer.queries) == 1
+
+
+def test_a_deadline_already_passed_never_calls_the_model(executor, system):
+    llm = FakeLLM(turn("nao deve ser chamado"))
+    answer = run_ask(llm, executor, system, deadline_s=1, clock=Ticking(5.0))
+
+    assert answer.status == "failed" and llm.calls == []
+
+
+def test_without_a_deadline_the_question_is_answered_normally(executor, system):
+    llm = FakeLLM(turn("", GOOD_SQL), turn("ok"))
+    answer = run_ask(llm, executor, system, deadline_s=None, clock=lambda: 10**9)
+    assert answer.status == "answered"
+
+
 def test_a_successful_query_without_a_final_text_is_a_failure(executor, system):
     llm = FakeLLM(turn("", GOOD_SQL), turn(""))
     answer = run_ask(llm, executor, system)
