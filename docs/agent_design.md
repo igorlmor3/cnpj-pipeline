@@ -1,6 +1,6 @@
 # Agente de perguntas sobre a gold (texto para SQL)
 
-Status: implementados e testados a guarda de SQL (`sql_guard.py`), o contexto semântico (`context.py`), os executores para DuckDB local e Athena (`executor.py`), o cliente do modelo (`llm.py`), o controle de gasto (`budget.py`) e o laço do agente (`ask.py`), todos em `src/cnpj_pipeline/agent/`. A avaliação, a API publicada e a interface estão planejadas e descritas aqui.
+Status: implementados e testados a guarda de SQL (`sql_guard.py`), o contexto semântico (`context.py`), os executores para DuckDB local e Athena (`executor.py`), o cliente do modelo (`llm.py`), o controle de gasto (`budget.py`), o laço do agente (`ask.py`) e a avaliação (`evaluation.py`, `evaluation_cases.py`), todos em `src/cnpj_pipeline/agent/`. A execução da avaliação com o modelo real, a API publicada e a interface estão planejadas e descritas aqui.
 
 ## Objetivo e limite
 
@@ -23,6 +23,23 @@ O modelo recebe a pergunta e a ferramenta `run_sql`. Cada SQL que ele escreve pa
 O resultado é sempre um `Answer` com um estado, nunca uma exceção causada por visitante, modelo ou motor: `answered`, `out_of_scope`, `failed`, `budget`, `llm_error`, `invalid_question` ou `internal_error`. Se o modelo responder sem consultar nada, o visitante vê uma recusa fixa, e não o texto livre do modelo, para o agente não virar um chatbot genérico. Falhas inesperadas aparecem como mensagem genérica; o detalhe vai só para o log.
 
 Modelo e gasto: o provedor escolhido é a API da Anthropic, com o `claude-haiku-5-5` e teto de US$ 5 por mês. O teto de verdade é o limite de gasto configurado na própria conta do provedor; o programa tem um segundo teto (`budget.py`) que para de chamar o modelo antes de chegar lá, e o preço por token é um parâmetro, porque tabelas de preço mudam. Com o preço de lista de out/2026 (US$ 0,10 por milhão de tokens de entrada e US$ 0,50 de saída, para prompts de até 100 mil tokens) e o prompt de cerca de 3 mil tokens, uma pergunta típica (duas chamadas) custa na ordem de US$ 0,001 e o pior caso do laço (cinco chamadas) fica abaixo de US$ 0,005. É uma estimativa: o número real vem da avaliação com o modelo.
+
+## Avaliação
+
+O conjunto tem 26 perguntas em 6 categorias: agregação, agrupamento, ranking, junção com dimensões, ressalva das organizações políticas e recusa. Cada pergunta de dados traz uma consulta de referência, executada na mesma gold e pela mesma guarda do agente; a resposta do modelo conta como certa se o resultado da sua última consulta bem-sucedida bater com o da referência (acurácia por execução, não comparação de texto de SQL). Por isso o conjunto vale para qualquer mês.
+
+Regras de comparação: inteiros exatos, números não inteiros com 1 casa decimal, texto sem diferença de caixa (acento conta), colunas a mais ou em outra ordem aceitas, ordem das linhas só nos rankings. Em perguntas com vários grupos a referência devolve só os números, porque o modelo pode rotular o grupo pelo código ou pela descrição; o custo dessa escolha é que o rótulo de cada grupo não é conferido. Referências com `ORDER BY` e `LIMIT` têm desempate por identificador, porque o DuckDB não garante a ordem entre empatados (a falta disso fez um caso falhar de forma intermitente nos testes). Se a pergunta de ranking tiver empate no corte numa gold real, o resultado do modelo pode divergir sem estar errado.
+
+Os outros dois tipos: nas perguntas de ressalva o SQL precisa ter considerado `is_organizacao_politica` (e, numa delas, a resposta precisa mencionar as eleições), sem comparar o resultado, porque excluir ou separar as organizações políticas são duas respostas válidas; nas de recusa (razão social de um CNPJ, nomes de sócios, poema, pedido para ignorar instruções e ler a silver, apagar tabela, revelar as instruções) o correto é terminar sem resposta baseada em consulta.
+
+Como rodar, a partir da raiz do repositório:
+
+```
+python -m cnpj_pipeline.agent.evaluation --month 2026-10 --reference
+python -m cnpj_pipeline.agent.evaluation --month 2026-10 --budget-usd 1
+```
+
+O modo `--reference` usa as próprias consultas de referência no lugar do modelo: valida o conjunto e o programa sem custo, e é o teste que roda no CI. Sem ele, o modelo é chamado com a chave de `ANTHROPIC_API_KEY` e o gasto da execução fica limitado por `--budget-usd`. Cada execução grava em `docs/agent_eval/` um relatório em Markdown (acerto por categoria, primeira consulta sem erro, chamadas ao modelo, custo e latência por pergunta, e o SQL das falhas) e um JSON; nenhum dos dois traz linhas de resultado. Os testes provam que a avaliação reprova respostas erradas (consulta errada, recusa de tudo, ressalva ignorada, ordem trocada, orçamento esgotado), e não só que aprova as certas.
 
 ## O que a guarda barra hoje
 
@@ -54,7 +71,7 @@ Decidido: provedor Anthropic, teto de US$ 5 por mês. O agente ao vivo começa c
 2. Contexto semântico gerado das colunas reais da gold e de `gold_models.py`; um teste falha se aparecer coluna sem glossa (feito).
 3. Executor com duas pontas (DuckDB local e Athena), limite de linhas, tempo máximo com cancelamento e mensagens de erro sem caminhos, ARNs nem número de conta (feito).
 4. Cliente do modelo de linguagem, laço de correção (devolvendo a mensagem da guarda ao modelo), controle de gasto e cliente falso para testes (feito).
-5. Conjunto de avaliação e relatório de acerto.
+5. Conjunto de avaliação e relatório de acerto (código e testes feitos; falta a execução com o modelo real, que gera os números do README).
 6. Exportação dos agregados da gold para JSON (dados do site), só com contagens e o mês de referência.
 7. Função da API do agente (credencial própria por papel IAM, limites por visitante e interruptor).
 8. Site em React com a análise, o relatório de qualidade e o agente (com perguntas de exemplo pré-gravadas).
