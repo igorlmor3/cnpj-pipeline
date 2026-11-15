@@ -2,7 +2,7 @@
 
 Pipeline ETL em lote sobre os dados abertos do CNPJ da Receita Federal do Brasil. O objetivo do projeto é tratar um dataset público grande (alvo de 5 a 10 GB de dado bruto) com problemas reais de qualidade: arquivos sem cabeçalho, separador `;`, encoding `ISO-8859-1`, vírgula decimal, datas em texto e valores sentinela.
 
-Status: em desenvolvimento. As camadas raw, bronze e silver, o profiling e a demonstração com dados sintéticos foram validados com o mês real 2026-10. A camada gold também foi executada sobre o mês real, com todas as verificações de qualidade passando. A gold do mês real também foi publicada na AWS (S3, Glue e Athena) e consultada com SQL. O agente de texto para SQL (guarda, contexto, executores, cliente do modelo, controle de gasto e avaliação com o modelo real) e a exportação de agregados para o site estão prontos. A API pública do agente está publicada na AWS (função Lambda com limite de perguntas por visitante, teto de gasto e chave de desligamento). O site em React está escrito, testado e pronto para publicar no GitHub Pages (pasta [site/](site/README.md)); a automação do fluxo é a próxima etapa, descrita em [Visão geral do projeto](#visão-geral-do-projeto). A seção [Roadmap](#roadmap) mostra o que já existe e o que falta.
+Status: versão pública no ar, com o site em https://igorlmor3.github.io/cnpj-pipeline/. O pipeline (raw, bronze, silver e gold) foi executado sobre o mês real 2026-10, com todas as verificações de qualidade passando, e a gold foi publicada na AWS (S3, Glue e Athena) e consultada com SQL. O agente de texto para SQL foi avaliado com o modelo real (23 de 24 no conjunto reservado) e sua API pública está publicada na AWS, com limite de perguntas por visitante, teto de gasto e chave de desligamento. O site em React (pasta [site/](site/README.md)) está publicado no GitHub Pages, com as respostas gravadas do agente e a caixa de perguntas ao vivo. Seguem no [Roadmap](#roadmap) a execução do pipeline na nuvem (nível 2), a orquestração do fluxo e o teste de desempenho em amostra grande.
 
 ## Fonte dos dados
 
@@ -37,7 +37,7 @@ O motor de transformação é o DuckDB. As decisões tomadas e as ainda em abert
 
 ## Visão geral do projeto
 
-O projeto tem cinco frentes. O pipeline, a publicação na AWS (nível 1), a análise e o agente com a sua API pública e o código do site já existem; o nível 2 da AWS, a orquestração e a publicação do site seguem o [Roadmap](#roadmap).
+O projeto tem cinco frentes. O pipeline, a publicação na AWS (nível 1), a análise e o agente com a sua API pública e o site publicado já existem; o nível 2 da AWS e a orquestração seguem o [Roadmap](#roadmap).
 
 1. **Pipeline de dados (implementado até a gold).** Download com retomada, bronze, profiling, silver e gold, todos testados com dados sintéticos e executados no CI. O fluxo completo já rodou sobre o mês real 2026-10.
 2. **Publicação na AWS (nível 1 aplicado e validado com a gold do mês real; nível 2 planejado).** Será feita em dois níveis, nesta ordem:
@@ -45,7 +45,7 @@ O projeto tem cinco frentes. O pipeline, a publicação na AWS (nível 1), a an�
    - Nível 2: o pipeline passa a rodar na nuvem, em um container no ECS Fargate (a imagem Docker já existe), lendo e gravando `s3://` diretamente. O acesso passa a ser feito por papel IAM da tarefa, sem chaves.
 3. **Análise e insights (primeira versão pronta).** Um relatório com os principais achados sobre o cadastro de empresas, gerado a partir da camada gold, em [docs/analysis/2026-10.md](docs/analysis/2026-10.md): perfil por porte e natureza jurídica, Simples e MEI por UF, crescimento de aberturas por setor e a distorção que as eleições municipais causam na série de aberturas. O site público com gráficos está em [site/](site/README.md).
 4. **Agente de IA para perguntas sobre os dados (implementado, com API pública).** Um agente de texto para SQL: o modelo recebe o esquema da gold, escreve uma consulta, ela roda em modo somente leitura e o resultado é explicado em linguagem natural. Embeddings ficam restritos a partes pequenas, como busca por descrição de CNAE ou natureza jurídica. O agente só enxerga tabelas permitidas e toda consulta passa por validação antes de executar. A API pública é uma função na AWS Lambda com limite de perguntas por visitante e por dia, teto de gasto e uma chave de desligamento; os passos de publicação estão em [infra/README.md](infra/README.md).
-5. **Site em React com Tailwind (código pronto; publicação no GitHub Pages).** Uma página pública no estilo de catálogo, com a análise, gráficos a partir de agregados pré-calculados e o agente de perguntas. Hospedagem estática, fora da AWS, para não depender do prazo do plano gratuito. Veja [site/README.md](site/README.md).
+5. **Site em React com Tailwind (publicado no GitHub Pages).** Uma página pública no estilo de catálogo, com a análise, gráficos a partir de agregados pré-calculados e o agente de perguntas. Hospedagem estática, fora da AWS, para não depender do prazo do plano gratuito. Veja [site/README.md](site/README.md).
 
 Princípios que valem para todas as frentes:
 
@@ -426,7 +426,7 @@ Limites desta medição: 24 perguntas é uma amostra pequena (um acerto a mais o
 - [x] Agente de IA, parte 3: API pública com limite por visitante, teto de gasto e chave de desligamento (função na AWS, publicada e respondendo)
 - [x] Agente de IA, parte 4: gravador de respostas de exemplo com o modelo real, para o site mostrar sem custo por visita (`agent/record_examples.py`, testado com modelo simulado)
 - [x] Site em React com Tailwind: código, testes e build (pasta `site/`, 66 testes)
-- [ ] Site publicado no GitHub Pages com o agente ao vivo e as respostas gravadas
+- [x] Site publicado no GitHub Pages com o agente ao vivo e as respostas gravadas (https://igorlmor3.github.io/cnpj-pipeline/)
 
 ## Dados e licença
 
