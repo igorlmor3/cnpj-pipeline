@@ -67,6 +67,7 @@ As escolhas feitas para cada decisão, com as alternativas consideradas, estão 
 ├── docs/
 │   ├── architecture.md    decisões de arquitetura
 │   ├── data_quality_rules.md   catálogo de problemas de qualidade e decisões
+│   ├── agent_design.md    desenho do agente de texto para SQL e suas defesas
 │   ├── profiling/         relatórios gerados pelo profiling (apenas agregados)
 │   ├── silver/            relatório das regras aplicadas na silver (apenas contagens)
 │   ├── gold/              relatório dos modelos e das verificações da gold (apenas contagens)
@@ -84,6 +85,7 @@ As escolhas feitas para cada decisão, com as alternativas consideradas, estão 
 │   ├── gold.py            silver para gold: construção, verificações de qualidade e manifesto
 │   ├── quality.py         verificações de qualidade sobre a silver e entre camadas, e tempos medidos
 │   ├── cloud/             publicação no S3 (publish.py) e tabelas/consultas no Athena (athena.py)
+│   ├── agent/             agente de texto para SQL; por ora, a guarda de SQL (sql_guard.py)
 │   ├── sample.py          gerador de zips sintéticos com defeitos plantados
 │   └── demo.py            amostra, bronze, profiling, silver e gold de ponta a ponta
 ├── infra/                 Terraform da AWS (bucket, Glue, Athena, IAM, orçamento)
@@ -398,7 +400,8 @@ Máquina onde o mês real foi processado e verificado: Windows 11, processador I
 - [ ] Orquestração do fluxo completo
 - [x] Primeira análise e principais insights sobre o cadastro de empresas (docs/analysis/2026-10.md)
 - [x] Marcar o CNAE de organizações políticas na gold, para ler as aberturas com e sem ele
-- [ ] Agente de IA de texto para SQL com validação de consultas e limites de uso
+- [x] Agente de IA, parte 1: guarda de SQL (só SELECT, só marts e dimensões, mês fixado pelo programa) e desenho em [docs/agent_design.md](docs/agent_design.md)
+- [ ] Agente de IA, parte 2: contexto semântico, executor, cliente do modelo, avaliação e limites de uso
 - [ ] Site em React com Tailwind publicando a análise e o agente
 
 ## Dados e licença
