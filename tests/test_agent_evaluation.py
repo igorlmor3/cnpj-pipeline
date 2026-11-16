@@ -6,6 +6,8 @@ O ponto central e provar que a avaliacao reprova respostas erradas, nao so que a
 from __future__ import annotations
 
 import json
+from collections import Counter
+from dataclasses import replace
 from typing import Any
 
 import pytest
@@ -27,6 +29,7 @@ from cnpj_pipeline.agent.evaluation import (
     render_report,
     results_json,
     rows_match,
+    stability,
     summarize,
 )
 from cnpj_pipeline.agent.evaluation_cases import (
@@ -426,6 +429,174 @@ def test_the_json_has_the_summary_and_no_result_rows():
     assert payload["summary"]["accuracy"] == 1.0 and payload["model"] == "m"
     assert payload["cases"][0]["id"] == "a"
     assert "rows" not in json.dumps(payload)
+
+
+# --------------------------------------------------------------------------- #
+# Repeticoes e estabilidade
+# --------------------------------------------------------------------------- #
+
+WRONG_SQL = f"SELECT SUM(empresas_ativas) FROM {SIMPLES} WHERE uf = 'ZZ'"
+
+
+class FlakyLLM(QuestionLLM):
+    """Acerta 'ativas_sp' nas repeticoes impares e erra nas pares; erra sempre 'top5_ufs_ativas'."""
+
+    def __init__(self) -> None:
+        super().__init__(self._pick)
+        self.starts: Counter[str] = Counter()
+
+    def _pick(self, case: EvalCase) -> str | None:
+        if case.id == "top5_ufs_ativas":
+            return WRONG_SQL
+        if case.id == "ativas_sp" and self.starts[case.id] % 2 == 0:
+            return WRONG_SQL
+        return case.reference_sql
+
+    def step(self, system: str, messages: list[dict[str, Any]], *, max_tokens: int) -> LLMTurn:
+        if len(messages) == 1:
+            self.starts[self._by_question[messages[0]["content"]].id] += 1
+        return super().step(system, messages, max_tokens=max_tokens)
+
+
+FLAKY_IDS = ["ativas_sp", "top5_ufs_ativas", "ativas_por_porte"]
+
+
+def test_evaluate_runs_each_case_the_requested_number_of_times(executor, system):
+    cases = by_id(FLAKY_IDS)
+    results = evaluate(cases, month=MONTH, system=system, llm=ReferenceLLM(), executor=executor, repeats=3)
+
+    assert [(r.id, r.run) for r in results] == [(c.id, n) for c in cases for n in (1, 2, 3)]
+    once = evaluate(cases, month=MONTH, system=system, llm=ReferenceLLM(), executor=executor)
+    assert [r.run for r in once] == [1, 1, 1]
+
+
+@pytest.mark.parametrize("repeats", [0, -1])
+def test_evaluate_rejects_a_repeat_count_below_one(executor, system, repeats):
+    with pytest.raises(EvaluationError):
+        evaluate(
+            by_id(FLAKY_IDS),
+            month=MONTH,
+            system=system,
+            llm=ReferenceLLM(),
+            executor=executor,
+            repeats=repeats,
+        )
+
+
+def test_stability_separates_stable_unstable_and_always_wrong_cases(executor, system):
+    results = evaluate(
+        by_id(FLAKY_IDS), month=MONTH, system=system, llm=FlakyLLM(), executor=executor, repeats=3
+    )
+    by_case = {c.id: c for c in stability(results)}
+
+    stable, flaky, wrong = by_case["ativas_por_porte"], by_case["ativas_sp"], by_case["top5_ufs_ativas"]
+    assert (stable.verdict, stable.passes, stable.runs, stable.distinct_sql) == ("estavel", 3, 3, 1)
+    assert (flaky.verdict, flaky.passes, flaky.runs, flaky.distinct_sql) == ("instavel", 2, 3, 2)
+    assert flaky.reasons == {"resultado diferente do esperado": 1}
+    assert (wrong.verdict, wrong.passes, wrong.distinct_sql) == ("sempre errado", 0, 1)
+    assert wrong.reasons == {"resultado diferente do esperado": 3}
+    assert flaky.pass_rate == pytest.approx(2 / 3) and stable.pass_rate == 1.0
+
+
+def test_a_single_run_per_case_is_classified_without_ambiguity():
+    verdicts = {c.id: c.verdict for c in stability([result("a"), result("b", passed=False, reason="x")])}
+    assert verdicts == {"a": "estavel", "b": "sempre errado"}
+
+
+def repeated(id, outcomes, sql="SELECT 1"):
+    return [
+        replace(result(id, passed=ok, reason="" if ok else "resultado diferente do esperado", sql=sql), run=n)
+        for n, ok in enumerate(outcomes, start=1)
+    ]
+
+
+def test_the_report_with_repeats_has_a_stability_section_instead_of_the_per_case_table():
+    results = (
+        repeated("firme", [True] * 3)
+        + repeated("oscila", [True, False, True])
+        + repeated("erra", [False] * 3)
+    )
+    text = render_report(results, month=MONTH, label="m", generated_on="2026-11-16", model="m")
+
+    assert "Cada caso rodou 3 vezes" in text and "Execuções certas | 5 de 9" in text
+    assert "## Estabilidade" in text and "## Casos" not in text
+    assert "| firme | 3 de 3 | 1 | estavel | - |" in text
+    assert "| oscila | 2 de 3 | 1 | instavel | resultado diferente do esperado (1x) |" in text
+    assert "| erra | 0 de 3 | 1 | sempre errado | resultado diferente do esperado (3x) |" in text
+    assert text.index("| erra |") < text.index("| oscila |") < text.index("| firme |")  # piores primeiro
+    assert "Instáveis (certos em parte das repetições) | 1" in text
+    assert "lacuna do prompt" in text and "variação do modelo" in text
+
+
+def test_the_report_of_a_single_run_keeps_the_per_case_table():
+    text = render_report([result()], month=MONTH, label="m", generated_on="2026-11-16", model="m")
+    assert "## Casos" in text and "## Estabilidade" not in text and "Casos certos | 1 de 1" in text
+    assert "Cada caso rodou" not in text
+
+
+def test_the_failures_section_shows_each_wrong_sql_once():
+    same = repeated("erra", [False] * 3, sql="SELECT errado")
+    other = repeated("oscila", [False, False], sql="SELECT a") + repeated("oscila", [True], sql="SELECT b")
+    other[2] = replace(other[2], run=3)
+    other[1] = replace(other[1], final_sql="SELECT c")
+    text = render_report(same + other, month=MONTH, label="m", generated_on="2026-11-16", model="m")
+
+    assert text.count("SELECT errado") == 1
+    assert "SELECT a" in text and "SELECT c" in text and "SELECT b" not in text
+
+
+def test_the_json_has_the_stability_only_when_there_are_repeats():
+    many = results_json(
+        repeated("a", [True, False]), month=MONTH, label="x", generated_on="2026-11-16", model="m"
+    )
+    payload = json.loads(many)
+    assert payload["repeats"] == 2
+    assert payload["stability"] == [
+        {
+            "id": "a", "category": "x", "runs": 2, "passes": 1, "distinct_sql": 1,
+            "reasons": {"resultado diferente do esperado": 1}, "verdict": "instavel", "pass_rate": 0.5,
+        }
+    ]  # fmt: skip
+    assert [c["run"] for c in payload["cases"]] == [1, 2]
+
+    single = json.loads(
+        results_json([result()], month=MONTH, label="x", generated_on="2026-11-16", model="m")
+    )
+    assert "stability" not in single and "repeats" not in single
+
+
+def test_the_cli_with_repeats_names_the_files_and_prints_the_stability(gold_root, tmp_path, capsys):
+    out = tmp_path / "out"
+    code = main(
+        [
+            "--month",
+            MONTH,
+            "--reference",
+            "--repeats",
+            "3",
+            "--gold-dir",
+            str(gold_root),
+            "--out-dir",
+            str(out),
+        ]
+    )
+    payload = json.loads((out / f"{MONTH}_referencia_x3.json").read_text(encoding="utf-8"))
+    total = len(SUITES["dev"])
+
+    assert code == 0 and payload["repeats"] == 3 and payload["summary"]["cases"] == 3 * total
+    assert (out / f"{MONTH}_referencia_x3.md").exists() and not (out / f"{MONTH}_referencia.md").exists()
+    shown = capsys.readouterr().out
+    assert (
+        f"{3 * total} de {3 * total} execucoes certas" in shown and f"estaveis {total}, instaveis 0" in shown
+    )
+
+
+@pytest.mark.parametrize("value", ["0", "21", "-2"])
+def test_the_cli_rejects_a_repeat_count_out_of_range(gold_root, tmp_path, value, capsys):
+    with pytest.raises(SystemExit) as stopped:
+        main(["--month", MONTH, "--reference", "--repeats", value, "--gold-dir", str(gold_root)])
+
+    assert stopped.value.code == 2 and "--repeats" in capsys.readouterr().err
 
 
 # --------------------------------------------------------------------------- #

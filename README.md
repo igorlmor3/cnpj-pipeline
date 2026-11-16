@@ -2,7 +2,7 @@
 
 Pipeline ETL em lote sobre os dados abertos do CNPJ da Receita Federal do Brasil. O objetivo do projeto é tratar um dataset público grande (alvo de 5 a 10 GB de dado bruto) com problemas reais de qualidade: arquivos sem cabeçalho, separador `;`, encoding `ISO-8859-1`, vírgula decimal, datas em texto e valores sentinela.
 
-Status: versão pública no ar, com o site em https://igorlmor3.github.io/cnpj-pipeline/. O pipeline (raw, bronze, silver e gold) foi executado sobre o mês real 2026-10, com todas as verificações de qualidade passando, e a gold foi publicada na AWS (S3, Glue e Athena) e consultada com SQL. O agente de texto para SQL foi avaliado com o modelo real (23 de 24 no conjunto reservado) e sua API pública está publicada na AWS, com limite de perguntas por visitante, teto de gasto e chave de desligamento. O site em React (pasta [site/](site/README.md)) está publicado no GitHub Pages, com as respostas gravadas do agente e a caixa de perguntas ao vivo. Seguem no [Roadmap](#roadmap) a execução do pipeline na nuvem (nível 2), a orquestração do fluxo e o teste de desempenho em amostra grande.
+Status: versão pública no ar, com o site em https://igorlmor3.github.io/cnpj-pipeline/. O pipeline (raw, bronze, silver e gold) foi executado sobre o mês real 2026-10, com todas as verificações de qualidade passando, e a gold foi publicada na AWS (S3, Glue e Athena) e consultada com SQL. O agente de texto para SQL foi avaliado com o modelo real (conjunto reservado: 23 de 24 em uma execução e 120 de 120 em cinco repetições) e sua API pública está publicada na AWS, com limite de perguntas por visitante, teto de gasto e chave de desligamento. O site em React (pasta [site/](site/README.md)) está publicado no GitHub Pages, com as respostas gravadas do agente e a caixa de perguntas ao vivo. Seguem no [Roadmap](#roadmap) a execução do pipeline na nuvem (nível 2), a orquestração do fluxo e o teste de desempenho em amostra grande.
 
 ## Fonte dos dados
 
@@ -387,13 +387,16 @@ O agente escreve SQL (dialeto Trino) sobre os marts e as dimensões da gold, e c
 | --- | ---: | ---: | ---: |
 | `dev`, antes do ajuste do prompt | 26 | 21 (80,8%) | US$ 0,0312 |
 | `dev`, depois do ajuste | 26 | 26 (100%) | US$ 0,0315 |
-| `holdout` (perguntas que o prompt nunca viu) | 24 | 23 (95,8%) | US$ 0,0272 |
+| `holdout` (perguntas que o prompt nunca viu), uma execução | 24 | 23 (95,8%) | US$ 0,0272 |
+| `holdout`, cinco repetições de cada pergunta (`--repeats 5`) | 24 x 5 = 120 | 120 (100%) | US$ 0,1317 |
 
-O número a citar é o do `holdout`. O do `dev` depois do ajuste é otimista: o ajuste (duas regras gerais no prompt) partiu das falhas desse mesmo conjunto.
+O número a citar é o do `holdout`: 23 de 24 na primeira execução e 120 de 120 nas cinco repetições. O do `dev` depois do ajuste é otimista: o ajuste (duas regras gerais no prompt) partiu das falhas desse mesmo conjunto.
 
-No `holdout`, todas as consultas rodaram sem erro na primeira tentativa, as 5 recusas (endereço de empresa, CNPJ específico, dado fora do cadastro, lista de CNPJs e um `UPDATE`) e as 2 perguntas de ressalva das organizações políticas foram tratadas corretamente, e a média foi de 1,8 chamadas ao modelo e US$ 0,0011 por pergunta, com latência mediana de 3,2 s (p95 de 5,2 s). A única falha foi uma pergunta sobre um tipo de sócio (estrangeiros), em que o modelo devolveu os três tipos em vez de filtrar: o mesmo padrão que as regras do prompt corrigiram no `dev`, então a correção não é completa.
+No `holdout`, todas as consultas rodaram sem erro na primeira tentativa, as 5 recusas (endereço de empresa, CNPJ específico, dado fora do cadastro, lista de CNPJs e um `UPDATE`) e as 2 perguntas de ressalva das organizações políticas foram tratadas corretamente, e a média foi de 1,8 chamadas ao modelo e US$ 0,0011 por pergunta, com latência mediana de 3,2 s (p95 de 5,2 s). A única falha foi uma pergunta sobre um tipo de sócio (estrangeiros), em que o modelo devolveu os três tipos em vez de filtrar: o mesmo padrão que as regras do prompt corrigiram no `dev`.
 
-Limites desta medição: 24 perguntas é uma amostra pequena (um acerto a mais ou a menos muda 4 pontos percentuais), o rótulo de cada grupo não é conferido nas perguntas com vários grupos, e há um único mês e um único modelo. A avaliação confere o resultado da consulta, não o texto da resposta (exceto nas perguntas de ressalva que exigem mencionar as eleições). O método, as regras de comparação e a regra do conjunto reservado estão em [docs/agent_design.md](docs/agent_design.md), e os relatórios completos em [docs/agent_eval/](docs/agent_eval/).
+Para separar variação do modelo de lacuna do prompt, o `holdout` foi rodado de novo com cada pergunta repetida cinco vezes, com o mesmo prompt e a mesma gold ([relatório](docs/agent_eval/2026-10_claude-haiku-5-5_holdout_x5.md)). Todas as 24 perguntas acertaram em todas as repetições (24 estáveis, 0 instáveis, 0 sempre erradas), inclusive a de sócios estrangeiros, que acertou 5 de 5 e escreveu 4 consultas diferentes com o mesmo resultado. Somando as duas execuções, essa pergunta errou 1 vez em 6, então a falha de antes é compatível com variação do modelo; cinco repetições não conseguem excluir uma taxa de erro pequena, de alguns por cento. Na repetição, a latência mediana foi de 2,7 s (p95 de 4,4 s) e o custo médio de US$ 0,0011 por pergunta.
+
+Limites desta medição: 24 perguntas é uma amostra pequena (um acerto a mais ou a menos muda 4 pontos percentuais, e repetir a mesma pergunta mede a estabilidade do modelo, não a cobertura de tipos de pergunta), o rótulo de cada grupo não é conferido nas perguntas com vários grupos, e há um único mês e um único modelo. A avaliação confere o resultado da consulta, não o texto da resposta (exceto nas perguntas de ressalva que exigem mencionar as eleições). O método, as regras de comparação e a regra do conjunto reservado estão em [docs/agent_design.md](docs/agent_design.md), e os relatórios completos em [docs/agent_eval/](docs/agent_eval/).
 
 ## Roadmap
 
@@ -421,9 +424,10 @@ Limites desta medição: 24 perguntas é uma amostra pequena (um acerto a mais o
 - [x] Primeira análise e principais insights sobre o cadastro de empresas (docs/analysis/2026-10.md)
 - [x] Marcar o CNAE de organizações políticas na gold, para ler as aberturas com e sem ele
 - [x] Agente de IA, parte 1: guarda de SQL (só SELECT, só marts e dimensões, mês fixado pelo programa) e desenho em [docs/agent_design.md](docs/agent_design.md)
-- [x] Agente de IA, parte 2: contexto semântico, executores (DuckDB e Athena), cliente do modelo, laço de correção, controle de gasto e avaliação com o modelo real (conjuntos `dev` e reservado, 23 de 24 no reservado)
+- [x] Agente de IA, parte 2: contexto semântico, executores (DuckDB e Athena), cliente do modelo, laço de correção, controle de gasto e avaliação com o modelo real (conjuntos `dev` e reservado, 23 de 24 no reservado em uma execução e 120 de 120 em cinco repetições)
 - [x] Exportação dos agregados da gold para JSON, com supressão de recortes pequenos ([docs/site_data.md](docs/site_data.md))
 - [x] Agente de IA, parte 3: API pública com limite por visitante, teto de gasto e chave de desligamento (função na AWS, publicada e respondendo)
+- [x] Avaliação com repetições (`--repeats`): classificação de cada pergunta em estável, instável ou sempre errada, com o relatório de estabilidade do conjunto reservado
 - [x] Agente de IA, parte 4: gravador de respostas de exemplo com o modelo real, para o site mostrar sem custo por visita (`agent/record_examples.py`, testado com modelo simulado)
 - [x] Site em React com Tailwind: código, testes e build (pasta `site/`, 66 testes)
 - [x] Site publicado no GitHub Pages com o agente ao vivo e as respostas gravadas (https://igorlmor3.github.io/cnpj-pipeline/)

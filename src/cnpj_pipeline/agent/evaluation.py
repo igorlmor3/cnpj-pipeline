@@ -2,6 +2,7 @@
 
     python -m cnpj_pipeline.agent.evaluation --month 2026-10 --reference
     python -m cnpj_pipeline.agent.evaluation --month 2026-10 --budget-usd 1
+    python -m cnpj_pipeline.agent.evaluation --month 2026-10 --suite holdout --repeats 5
 
 O modo --reference usa as proprias consultas de referencia no lugar do modelo: valida o conjunto de
 perguntas e este programa sem gastar nada. Sem ele, o modelo da Anthropic e chamado (a chave vem de
@@ -36,6 +37,7 @@ from cnpj_pipeline.agent.llm import DEFAULT_MODEL, LLMClient, LLMTurn, ToolCall
 from cnpj_pipeline.cloud.athena import gold_columns
 
 MAX_PROJECTION_COLUMNS = 8
+MAX_REPEATS = 20
 ONE_DECIMAL = Decimal("0.1")
 
 
@@ -104,6 +106,7 @@ class CaseResult:
     cost_usd: float
     elapsed_s: float
     final_sql: str | None = None
+    run: int = 1  # repeticao (1 a N) quando a avaliacao roda cada caso mais de uma vez
 
 
 def expected_rows(
@@ -153,6 +156,7 @@ def run_case(
     executor: Executor,
     budget: Budget | None,
     clock: Callable[[], float] = time.monotonic,
+    run: int = 1,
 ) -> CaseResult:
     started = clock()
     answer = ask(case.question, month=month, system=system, llm=llm, executor=executor, budget=budget)
@@ -176,6 +180,7 @@ def run_case(
         cost_usd=answer.cost_usd,
         elapsed_s=elapsed,
         final_sql=ok[-1].sql if ok else None,
+        run=run,
     )
 
 
@@ -188,14 +193,20 @@ def evaluate(
     executor: Executor,
     budget: Budget | None = None,
     clock: Callable[[], float] = time.monotonic,
+    repeats: int = 1,
 ) -> list[CaseResult]:
+    """Roda cada caso `repeats` vezes. Os resultados saem na ordem dos casos, com as repeticoes de um
+    caso em sequencia; o gasto de todas elas conta no mesmo orcamento."""
+    if repeats < 1:
+        raise EvaluationError("repeats deve ser pelo menos 1")
     expected = expected_rows(cases, executor=executor, month=month)
     return [
         run_case(
             c, expected.get(c.id), month=month, system=system, llm=llm, executor=executor,
-            budget=budget, clock=clock,
+            budget=budget, clock=clock, run=n,
         )
         for c in cases
+        for n in range(1, repeats + 1)
     ]  # fmt: skip
 
 
@@ -274,6 +285,58 @@ def summarize(results: list[CaseResult]) -> Summary:
     )
 
 
+@dataclass(frozen=True)
+class CaseStability:
+    """Como um caso se comportou ao longo das repeticoes."""
+
+    id: str
+    category: str
+    runs: int
+    passes: int
+    distinct_sql: int  # quantos SQL finais diferentes o modelo escreveu
+    reasons: dict[str, int]  # motivo da falha -> quantas vezes
+    verdict: str  # "estavel", "instavel" ou "sempre errado"
+
+    @property
+    def pass_rate(self) -> float:
+        return self.passes / self.runs
+
+
+VERDICT_STABLE = "estavel"
+VERDICT_UNSTABLE = "instavel"
+VERDICT_ALWAYS_WRONG = "sempre errado"
+
+
+def stability(results: list[CaseResult]) -> list[CaseStability]:
+    """Agrupa as repeticoes por caso. Um caso e estavel se acertou em todas, sempre errado se falhou
+    em todas e instavel no meio: o primeiro grupo e o segundo apontam o prompt, o terceiro, o modelo."""
+    grouped: dict[str, list[CaseResult]] = {}
+    for r in results:
+        grouped.setdefault(r.id, []).append(r)
+    out: list[CaseStability] = []
+    for case_id, runs in grouped.items():
+        passes = sum(r.passed for r in runs)
+        verdict = (
+            VERDICT_STABLE
+            if passes == len(runs)
+            else VERDICT_ALWAYS_WRONG
+            if passes == 0
+            else VERDICT_UNSTABLE
+        )
+        out.append(
+            CaseStability(
+                id=case_id,
+                category=runs[0].category,
+                runs=len(runs),
+                passes=passes,
+                distinct_sql=len({r.final_sql for r in runs if r.final_sql}),
+                reasons=dict(Counter(r.reason for r in runs if r.reason)),
+                verdict=verdict,
+            )
+        )
+    return out
+
+
 def _num(value: float, digits: int = 1) -> str:
     """Numero com virgula decimal, para o relatorio em portugues."""
     return f"{value:.{digits}f}".replace(".", ",")
@@ -283,10 +346,34 @@ def _pct(value: float | None) -> str:
     return "-" if value is None else f"{_num(value * 100)}%"
 
 
+def _stability_section(results: list[CaseResult]) -> list[str]:
+    cases = stability(results)
+    by_verdict = Counter(c.verdict for c in cases)
+    out = [
+        "",
+        "## Estabilidade",
+        "",
+        "| Classificação | Casos |",
+        "|---|---|",
+        f"| Estáveis (certos em todas as repetições) | {by_verdict[VERDICT_STABLE]} |",
+        f"| Instáveis (certos em parte das repetições) | {by_verdict[VERDICT_UNSTABLE]} |",
+        f"| Sempre errados | {by_verdict[VERDICT_ALWAYS_WRONG]} |",
+        "",
+        "| Caso | Certas | SQL distintos | Classificação | Motivos da falha |",
+        "|---|---|---|---|---|",
+    ]
+    for c in sorted(cases, key=lambda c: (c.verdict == VERDICT_STABLE, c.pass_rate, c.id)):
+        reasons = "; ".join(f"{reason} ({n}x)" for reason, n in c.reasons.items()) or "-"
+        out.append(f"| {c.id} | {c.passes} de {c.runs} | {c.distinct_sql} | {c.verdict} | {reasons} |")
+    return out
+
+
 def render_report(
     results: list[CaseResult], *, month: str, label: str, generated_on: str, model: str | None
 ) -> str:
     s = summarize(results)
+    repeats = max(r.run for r in results)
+    correct_label = "Execuções certas" if repeats > 1 else "Casos certos"
     out = [
         f"# Avaliação do agente: {label}, mês {month}",
         "",
@@ -297,12 +384,16 @@ def render_report(
             else "Modo de referência: as consultas de referência no lugar do modelo."
         ),
         "O relatório traz contagens, métricas e SQL; nenhuma linha de resultado.",
+    ]
+    if repeats > 1:
+        out += [f"Cada caso rodou {repeats} vezes, com o mesmo prompt e a mesma gold."]
+    out += [
         "",
         "## Resumo",
         "",
         "| Métrica | Valor |",
         "|---|---|",
-        f"| Casos certos | {s.passed} de {s.cases} ({_pct(s.accuracy)}) |",
+        f"| {correct_label} | {s.passed} de {s.cases} ({_pct(s.accuracy)}) |",
         f"| Primeira consulta sem erro | {_pct(s.first_query_ok_rate)} |",
         f"| Consultas recusadas ou com erro (total) | {s.failed_queries} |",
         f"| Chamadas ao modelo por pergunta (média) | {_num(s.mean_llm_calls)} |",
@@ -316,22 +407,29 @@ def render_report(
         "|---|---|---|",
     ]
     out += [f"| {cat} | {b['passed']} | {b['cases']} |" for cat, b in s.by_category.items()]
-    out += [
-        "",
-        "## Casos",
-        "",
-        "| Caso | Resultado | Chamadas | Consultas | Custo (US$) | Motivo da falha |",
-        "|---|---|---|---|---|---|",
-    ]
-    for r in results:
-        out.append(
-            f"| {r.id} | {'certo' if r.passed else 'errado'} | {r.llm_calls} | {r.queries} "
-            f"| {_num(r.cost_usd, 4)} | {r.reason or '-'} |"
-        )
+    if repeats > 1:
+        out += _stability_section(results)
+    else:
+        out += [
+            "",
+            "## Casos",
+            "",
+            "| Caso | Resultado | Chamadas | Consultas | Custo (US$) | Motivo da falha |",
+            "|---|---|---|---|---|---|",
+        ]
+        for r in results:
+            out.append(
+                f"| {r.id} | {'certo' if r.passed else 'errado'} | {r.llm_calls} | {r.queries} "
+                f"| {_num(r.cost_usd, 4)} | {r.reason or '-'} |"
+            )
     failures = [r for r in results if not r.passed]
     if failures:
         out += ["", "## Falhas", ""]
+        shown: set[tuple[str, str | None]] = set()
         for r in failures:
+            if (r.id, r.final_sql) in shown:
+                continue  # o mesmo SQL errado repetido nao se mostra duas vezes
+            shown.add((r.id, r.final_sql))
             out += [f"**{r.id}** ({r.status}): {r.question}", ""]
             if r.final_sql:
                 out += ["```sql", r.final_sql, "```", ""]
@@ -346,15 +444,23 @@ def render_report(
         "- Nas de ressalva, o SQL precisa ter considerado `is_organizacao_politica`.",
         "- Nas de recusa, o certo é terminar sem resposta baseada em consulta.",
         "- O custo usa a tabela de preços informada na execução; o valor cobrado é o da fatura do provedor.",
-        "",
     ]
+    if repeats > 1:
+        out += [
+            "- Estável: acertou em todas as repetições. Sempre errado: errou em todas, o que aponta uma "
+            "lacuna do prompt ou do contexto. Instável: acertou em umas e errou em outras, o que aponta "
+            "variação do modelo.",
+            "- Com poucas repetições, um caso instável pode parecer estável por acaso; quanto mais "
+            "repetições, mais confiável a classificação.",
+        ]
+    out.append("")
     return "\n".join(out)
 
 
 def results_json(
     results: list[CaseResult], *, month: str, label: str, generated_on: str, model: str | None
 ) -> str:
-    payload = {
+    payload: dict[str, Any] = {
         "month": month,
         "label": label,
         "model": model,
@@ -362,6 +468,9 @@ def results_json(
         "summary": asdict(summarize(results)),
         "cases": [asdict(r) for r in results],
     }
+    if max(r.run for r in results) > 1:
+        payload["repeats"] = max(r.run for r in results)
+        payload["stability"] = [asdict(c) | {"pass_rate": c.pass_rate} for c in stability(results)]
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
@@ -393,7 +502,15 @@ def main(argv: list[str] | None = None) -> int:
         help="conjunto de casos: dev (ajuste do prompt), holdout (reservado, nunca visto) ou all",
     )
     parser.add_argument("--cases", help="ids separados por virgula; tem prioridade sobre --suite")
+    parser.add_argument(
+        "--repeats",
+        type=int,
+        default=1,
+        help=f"vezes que cada caso roda (1 a {MAX_REPEATS}); com mais de 1 o relatorio traz a estabilidade",
+    )
     args = parser.parse_args(argv)
+    if not 1 <= args.repeats <= MAX_REPEATS:
+        parser.error(f"--repeats deve ficar entre 1 e {MAX_REPEATS}")
 
     cases = by_id(args.cases.split(",")) if args.cases else SUITES[args.suite]
     llm: LLMClient
@@ -421,13 +538,16 @@ def main(argv: list[str] | None = None) -> int:
     system = build_system_prompt(columns, month=args.month)
     executor = DuckDBExecutor(args.gold_dir)
     try:
-        results = evaluate(cases, month=args.month, system=system, llm=llm, executor=executor, budget=budget)
+        results = evaluate(
+            cases, month=args.month, system=system, llm=llm, executor=executor, budget=budget,
+            repeats=args.repeats,
+        )  # fmt: skip
     finally:
         executor.close()
 
     generated_on = datetime.now(UTC).date().isoformat()
     args.out_dir.mkdir(parents=True, exist_ok=True)
-    stem = f"{args.month}_{label}"
+    stem = f"{args.month}_{label}" + (f"_x{args.repeats}" if args.repeats > 1 else "")
     (args.out_dir / f"{stem}.md").write_text(
         render_report(results, month=args.month, label=label, generated_on=generated_on, model=model),
         encoding="utf-8",
@@ -437,10 +557,19 @@ def main(argv: list[str] | None = None) -> int:
         encoding="utf-8",
     )
     summary = summarize(results)
-    print(
-        f"{summary.passed} de {summary.cases} casos certos ({_pct(summary.accuracy)}); "
-        f"custo total US$ {_num(summary.total_cost_usd, 4)}"
-    )
+    if args.repeats > 1:
+        verdicts = Counter(c.verdict for c in stability(results))
+        print(
+            f"{summary.passed} de {summary.cases} execucoes certas ({_pct(summary.accuracy)}); "
+            f"estaveis {verdicts[VERDICT_STABLE]}, instaveis {verdicts[VERDICT_UNSTABLE]}, "
+            f"sempre errados {verdicts[VERDICT_ALWAYS_WRONG]}; "
+            f"custo total US$ {_num(summary.total_cost_usd, 4)}"
+        )
+    else:
+        print(
+            f"{summary.passed} de {summary.cases} casos certos ({_pct(summary.accuracy)}); "
+            f"custo total US$ {_num(summary.total_cost_usd, 4)}"
+        )
     print(f"relatorio em {args.out_dir / (stem + '.md')}")
     return 0 if (not args.reference or summary.passed == summary.cases) else 1
 
