@@ -19,6 +19,8 @@ from cnpj_pipeline.agent.ask import Answer, QueryRecord, build_system_prompt
 from cnpj_pipeline.agent.budget import Budget, Pricing
 from cnpj_pipeline.agent.context import TABLES
 from cnpj_pipeline.agent.evaluation import (
+    REASON_DIFFERENT,
+    REASON_FORMAT,
     CaseResult,
     EvaluationError,
     ReferenceLLM,
@@ -28,6 +30,7 @@ from cnpj_pipeline.agent.evaluation import (
     main,
     render_report,
     results_json,
+    rows_contain,
     rows_match,
     stability,
     summarize,
@@ -36,6 +39,8 @@ from cnpj_pipeline.agent.evaluation_cases import (
     ALL_CASES,
     CASES,
     HOLDOUT_CASES,
+    ROBUSTEZ_CASES,
+    SEM_POLITICAS,
     SUITES,
     EvalCase,
     by_id,
@@ -144,12 +149,31 @@ def test_rows_match(expected, got, ordered, result):
     assert rows_match(expected, got, ordered=ordered) is result
 
 
+@pytest.mark.parametrize(
+    ("expected", "got", "result"),
+    [
+        ([[5]], [[5], [7]], True),  # linha a mais
+        ([[5]], [["pessoa fisica", 5], ["juridica", 7]], True),  # a quebra por grupo traz o valor
+        ([["SP", 2]], [["MG", 1], ["SP", 2]], True),
+        ([[1], [1]], [[1], [2]], False),  # multiconjunto: faltou um 1
+        ([[5]], [[6], [7]], False),
+        ([["SP", 2]], [["SP", 3], ["MG", 2]], False),  # os dois valores existem, mas em linhas diferentes
+        ([["SP", 2]], [["SP"]], False),
+        ([[1], [2]], [[1]], False),  # o esperado tem mais linhas que o devolvido
+        ([], [[1]], False),
+        ([[1]], [], False),
+    ],
+)
+def test_rows_contain(expected, got, result):
+    assert rows_contain(expected, got) is result
+
+
 # --------------------------------------------------------------------------- #
 # Integridade do conjunto de casos
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.parametrize("cases", [CASES, HOLDOUT_CASES], ids=["dev", "holdout"])
+@pytest.mark.parametrize("cases", [CASES, HOLDOUT_CASES, ROBUSTEZ_CASES], ids=["dev", "holdout", "robustez"])
 def test_each_case_set_is_well_formed(cases):
     assert len({c.id for c in cases}) == len(cases)
     assert {c.kind for c in cases} == {"data", "caveat", "refusal"}
@@ -169,14 +193,34 @@ def test_the_suites_do_not_share_ids_questions_or_references():
     assert len({c.question for c in ALL_CASES}) == len(ALL_CASES)
     dev_sql = {c.reference_sql for c in CASES if c.reference_sql}
     assert not [c.id for c in HOLDOUT_CASES if c.reference_sql in dev_sql]
+    assert not [c.id for c in ROBUSTEZ_CASES if c.reference_sql in dev_sql | holdout_sql()]
     assert all(c.id.startswith("ho_") for c in HOLDOUT_CASES)
-    assert not any(c.id.startswith("ho_") for c in CASES)
-    assert SUITES == {"dev": CASES, "holdout": HOLDOUT_CASES, "all": ALL_CASES}
+    assert all(c.id.startswith("rb_") for c in ROBUSTEZ_CASES)
+    assert not any(c.id.startswith(("ho_", "rb_")) for c in CASES)
+    assert SUITES == {"dev": CASES, "holdout": HOLDOUT_CASES, "robustez": ROBUSTEZ_CASES, "all": ALL_CASES}
+    assert len(ALL_CASES) == len(CASES) + len(HOLDOUT_CASES) + len(ROBUSTEZ_CASES)
+
+
+def holdout_sql() -> set[str]:
+    return {c.reference_sql for c in HOLDOUT_CASES if c.reference_sql}
 
 
 def test_the_holdout_covers_every_category_of_the_dev_set():
     assert {c.category for c in HOLDOUT_CASES} == {c.category for c in CASES}
     assert len(HOLDOUT_CASES) >= 20
+
+
+def test_the_robustness_set_covers_what_the_other_two_do_not():
+    assert len(ROBUSTEZ_CASES) >= 30
+    assert {c.kind for c in ROBUSTEZ_CASES} == {"data", "caveat", "refusal"}
+    # categorias proprias: frases informais, filtros por nome, contas derivadas, comparacoes e rankings
+    # que nao sao "o maior"
+    assert {"informal", "filtro_por_nome", "derivada", "comparacao", "ranking_variante"} <= {
+        c.category for c in ROBUSTEZ_CASES
+    }
+    # a ressalva das organizacoes politicas nao vem escrita em pelo menos metade das perguntas de dados
+    data = [c for c in ROBUSTEZ_CASES if c.kind == "data"]
+    assert sum(SEM_POLITICAS not in c.question for c in data) >= len(data) // 2
 
 
 def test_every_reference_runs_through_the_guard_on_the_real_gold(executor):
@@ -248,6 +292,20 @@ def test_judge_data_cases():
     assert "estado failed" in judge(DATA, make_answer("failed", [ok_query([[5]])]), expected)
     assert "estado out_of_scope" in judge(DATA, make_answer("out_of_scope"), expected)
     assert "nenhuma consulta" in judge(DATA, make_answer(queries=[bad_query()]), expected)
+
+
+def test_judge_tells_a_format_error_from_a_wrong_value():
+    expected = [[5]]
+    wrong = judge(DATA, make_answer(queries=[ok_query([[6]])]), expected)
+    breakdown = judge(DATA, make_answer(queries=[ok_query([["a", 5], ["b", 6]])]), expected)
+    assert wrong == REASON_DIFFERENT and breakdown == REASON_FORMAT
+    assert breakdown.startswith(REASON_DIFFERENT)  # continua sendo erro
+
+
+def test_judge_does_not_call_a_wrong_order_a_format_error():
+    expected = [["SP", 2], ["MG", 1]]
+    swapped = ok_query([["MG", 1], ["SP", 2]])
+    assert judge(ORDERED, make_answer(queries=[swapped]), expected) == REASON_DIFFERENT
 
 
 def test_judge_uses_the_last_successful_query():
@@ -623,6 +681,11 @@ def test_the_cli_runs_the_dev_suite_by_default_and_names_the_others(gold_root, t
     payload = json.loads((out / f"{MONTH}_referencia_holdout.json").read_text(encoding="utf-8"))
     assert [c["id"] for c in payload["cases"]] == [c.id for c in HOLDOUT_CASES]
     assert not (out / f"{MONTH}_referencia.json").exists()  # a suite dev nao foi sobrescrita
+
+    assert main(base + ["--suite", "robustez"]) == 0
+    assert f"{len(ROBUSTEZ_CASES)} de {len(ROBUSTEZ_CASES)} casos certos" in capsys.readouterr().out
+    payload = json.loads((out / f"{MONTH}_referencia_robustez.json").read_text(encoding="utf-8"))
+    assert [c["id"] for c in payload["cases"]] == [c.id for c in ROBUSTEZ_CASES]
 
     assert main(base + ["--suite", "all"]) == 0
     assert f"{len(ALL_CASES)} de {len(ALL_CASES)} casos certos" in capsys.readouterr().out

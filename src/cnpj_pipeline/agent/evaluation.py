@@ -39,6 +39,8 @@ from cnpj_pipeline.cloud.athena import gold_columns
 MAX_PROJECTION_COLUMNS = 8
 MAX_REPEATS = 20
 ONE_DECIMAL = Decimal("0.1")
+REASON_DIFFERENT = "resultado diferente do esperado"
+REASON_FORMAT = "resultado diferente do esperado, mas o valor esperado aparece entre as linhas devolvidas"
 
 
 class EvaluationError(RuntimeError):
@@ -79,6 +81,23 @@ def rows_match(expected: list[list[Any]], got: list[list[Any]], *, ordered: bool
     for picks in permutations(range(got_width), width):
         projected = [tuple(row[i] for i in picks) for row in normalized]
         if projected == wanted if ordered else Counter(projected) == Counter(wanted):
+            return True
+    return False
+
+
+def rows_contain(expected: list[list[Any]], got: list[list[Any]]) -> bool:
+    """O esperado aparece inteiro entre as linhas do modelo (que devolveu linhas a mais, por exemplo a
+    quebra por grupo em vez do grupo pedido)? So diagnostico: nao muda o criterio de acerto."""
+    if not expected or not got:
+        return False
+    width, got_width = len(expected[0]), len(got[0])
+    if got_width < width or got_width > MAX_PROJECTION_COLUMNS or len(expected) > len(got):
+        return False
+    wanted = Counter(tuple(_norm(c) for c in row) for row in expected)
+    normalized = [tuple(_norm(c) for c in row) for row in got]
+    for picks in permutations(range(got_width), width):
+        projected = Counter(tuple(row[i] for i in picks) for row in normalized)
+        if not wanted - projected:
             return True
     return False
 
@@ -142,7 +161,9 @@ def judge(case: EvalCase, answer: Answer, expected: list[list[Any]] | None) -> s
             return f"a resposta não menciona '{piece}'"
     if case.compares_result and expected is not None:
         if not rows_match(expected, ok[-1].rows, ordered=case.ordered):
-            return "resultado diferente do esperado"
+            # nos rankings a ordem conta, entao "o valor aparece" nao diz nada sobre o formato
+            contained = not case.ordered and rows_contain(expected, ok[-1].rows)
+            return REASON_FORMAT if contained else REASON_DIFFERENT
     return ""
 
 
@@ -441,6 +462,9 @@ def render_report(
         "consulta de referência: inteiros exatos, números não inteiros com 1 casa decimal, texto sem "
         "diferença de caixa, colunas a mais ou em outra ordem aceitas. Em perguntas com vários grupos "
         "a referência traz só os números, então o rótulo de cada grupo não é conferido.",
+        f'- "{REASON_FORMAT}" separa o erro de formato (o modelo devolveu mais linhas ou colunas do que o '
+        "pedido, como a quebra por grupo em vez do grupo) do valor errado. É só diagnóstico: os dois "
+        "contam como erro.",
         "- Nas de ressalva, o SQL precisa ter considerado `is_organizacao_politica`.",
         "- Nas de recusa, o certo é terminar sem resposta baseada em consulta.",
         "- O custo usa a tabela de preços informada na execução; o valor cobrado é o da fatura do provedor.",
@@ -499,7 +523,8 @@ def main(argv: list[str] | None = None) -> int:
         "--suite",
         choices=sorted(SUITES),
         default="dev",
-        help="conjunto de casos: dev (ajuste do prompt), holdout (reservado, nunca visto) ou all",
+        help="conjunto de casos: dev (ajuste do prompt), holdout (reservado), robustez (frases informais, "
+        "contas derivadas e armadilhas) ou all",
     )
     parser.add_argument("--cases", help="ids separados por virgula; tem prioridade sobre --suite")
     parser.add_argument(
