@@ -91,7 +91,9 @@ As escolhas feitas para cada decisão, com as alternativas consideradas, estão 
 │   ├── api/               função da API pública do agente: limites, orçamento, interruptor e empacotamento
 │   ├── site_export.py     exportação de agregados da gold para JSON (dados do site)
 │   ├── sample.py          gerador de zips sintéticos com defeitos plantados
-│   ├── orchestration.py   comandos de cada etapa por modo (amostra ou mês real), usados pela DAG
+│   ├── orchestration.py   comandos de cada etapa por modo (amostra ou mês real), usados pela DAG e para rodar vários meses
+│   ├── evolution.py       compara fotos mensais consecutivas: novos, removidos e mudanças de situação (mart_movimentos)
+│   ├── site_evolution.py  exporta a série entre meses para o site (evolucao.json)
 │   └── demo.py            amostra, bronze, profiling, silver e gold de ponta a ponta
 ├── orchestration/         Airflow em Docker Compose e a DAG cnpj_monthly
 ├── infra/                 Terraform da AWS (bucket, Glue, Athena, IAM, orçamento e, opcional, a API do agente)
@@ -297,6 +299,18 @@ docker compose up -d        # http://localhost:8080
 
 A lógica de montagem dos comandos fica em `src/cnpj_pipeline/orchestration.py` e é testada sem Airflow; a integridade da DAG é testada com o Airflow 3.4.0 instalado. Decisões, parâmetros e limites estão em [orchestration/README.md](orchestration/README.md).
 
+## Evolução entre meses
+
+Cada mês da Receita é uma foto completa do cadastro. `cnpj_pipeline.orchestration` roda o fluxo para vários meses em sequência (`--months 2026-07 2026-08 2026-09`), e `cnpj_pipeline.evolution` compara fotos consecutivas CNPJ a CNPJ e grava na gold um mart agregado, `mart_movimentos`, com os CNPJs novos, os que sumiram e as mudanças de situação cadastral, por UF e seção da CNAE. Nos CNPJs novos, o mart registra a defasagem entre o início da atividade e o mês da foto, que separa abertura de registro tardio.
+
+```bash
+python -m cnpj_pipeline.orchestration --months 2026-07 2026-08 2026-09
+python -m cnpj_pipeline.evolution --months 2026-07 2026-08 2026-09 2026-10
+python -m cnpj_pipeline.site_evolution --months 2026-07 2026-08 2026-09 2026-10
+```
+
+Duas verificações bloqueantes conferem a aritmética entre as fotos (o total de estabelecimentos e o de ativos da foto atual têm de bater com a anterior mais os movimentos), e a exportação para o site recusa a série se o saldo de ativos dos movimentos não fechar com a diferença entre os estoques. O mart e o JSON só têm contagens: nenhum CNPJ sai da gold. O relatório de cada mês fica em `docs/evolution/`.
+
 ## Qualidade de dados
 
 Cada problema encontrado nos dados é registrado em [docs/data_quality_rules.md](docs/data_quality_rules.md) com a decisão tomada (corrigir, anular ou rejeitar), a camada em que a regra é aplicada e o teste que a cobre. O catálogo é preenchido durante o profiling e não parte de suposições.
@@ -458,6 +472,7 @@ Limites desta medição: 24 a 32 perguntas por conjunto é uma amostra pequena (
 - [ ] AWS nível 2: pipeline rodando em container no ECS Fargate com acesso por papel IAM
 - [x] Orquestração do fluxo completo com Airflow (DAG com portão de qualidade, testada no Airflow 3.4.0 em modo amostra)
 - [x] Primeira análise e principais insights sobre o cadastro de empresas (docs/analysis/2026-10.md)
+- [ ] Série de vários meses e análise da evolução entre fotos (código e testes prontos)
 - [x] Marcar o CNAE de organizações políticas na gold, para ler as aberturas com e sem ele
 - [x] Agente de IA, parte 1: guarda de SQL (só SELECT, só marts e dimensões, mês fixado pelo programa) e desenho em [docs/agent_design.md](docs/agent_design.md)
 - [x] Agente de IA, parte 2: contexto semântico, executores (DuckDB e Athena), cliente do modelo, laço de correção, controle de gasto e avaliação com o modelo real (quatro conjuntos de perguntas, `dev`, `holdout`, `robustez` e `validacao`, com 24 de 25 no reservado `validacao` na primeira execução)

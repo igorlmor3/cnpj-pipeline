@@ -38,6 +38,7 @@ O cadastro de CNPJ já é público estabelecimento por estabelecimento, então a
 | `perfil_natureza.json` | As 12 naturezas jurídicas mais comuns, o resto agrupado, e os totais por grupo |
 | `capital_mediano.json` | Capital social mediano por porte e natureza (5 naturezas mais comuns), sem organizações políticas |
 | `socios.json` | Vínculos de sócio nas 15 qualificações mais comuns, por tipo de sócio |
+| `evolucao.json` (na raiz de `data/`, fora da pasta de cada mês) | Série entre meses: estoque de estabelecimentos e empresas ativas por mês e por UF, movimentos entre fotos consecutivas (novos, removidos, mudanças de situação), as principais transições, a defasagem dos CNPJs novos e o saldo de ativos por UF. Gerado por `cnpj_pipeline.site_evolution` |
 | `pipeline.json` | Linhas, bytes e tempos das camadas e as reconciliações da gold, a partir dos manifestos |
 
 Todo arquivo tem o mesmo envelope: `arquivo`, `esquema`, `mes_referencia`, `titulo`, `descricao`, `ressalvas` (o texto de cada ressalva que o site deve mostrar ao lado dos números), `celulas_suprimidas` quando se aplica e `dados`.
