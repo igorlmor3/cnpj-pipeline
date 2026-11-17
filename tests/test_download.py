@@ -14,13 +14,15 @@ from cnpj_pipeline.download import (
     build_filenames,
     build_url,
     download_file,
+    looks_like_zip,
     main,
     normalize_tables,
     resolve_auth,
     run,
 )
 
-PAYLOAD = bytes(range(256)) * 4096  # 1 MiB
+ZIP = b"PK\x03\x04"  # assinatura de um zip
+PAYLOAD = ZIP + bytes(range(256)) * 4096  # 1 MiB
 
 
 def _sha(data: bytes) -> str:
@@ -180,7 +182,7 @@ def test_fails_after_exhausting_retries(tmp_path, server):
 def test_run_downloads_and_writes_manifest(tmp_path, server):
     server.files["2026-11/Empresas0.zip"] = PAYLOAD
     server.files["2026-11/Empresas1.zip"] = PAYLOAD[:500]
-    server.files["2026-11/Cnaes.zip"] = b"cnaes"
+    server.files["2026-11/Cnaes.zip"] = ZIP + b"cnaes"
 
     code = run("2026-11", ["Empresas", "Cnaes"], **_run_kwargs(tmp_path, server))
 
@@ -188,12 +190,12 @@ def test_run_downloads_and_writes_manifest(tmp_path, server):
     manifest = json.loads((tmp_path / "2026-11" / "manifest.json").read_text(encoding="utf-8"))
     names = [f["filename"] for f in manifest["files"]]
     assert names == ["Cnaes.zip", "Empresas0.zip", "Empresas1.zip"]
-    assert manifest["total_bytes"] == len(PAYLOAD) + 500 + 5
+    assert manifest["total_bytes"] == len(PAYLOAD) + 500 + len(ZIP + b"cnaes")
 
 
 def test_run_ignores_missing_part_but_fails_when_table_is_empty(tmp_path, server):
     # Empresas tem so a parte 0 (parte 1 ausente = 404, ignorada); Cnaes inexistente = erro
-    server.files["2026-11/Empresas0.zip"] = b"x" * 10
+    server.files["2026-11/Empresas0.zip"] = ZIP + b"x" * 10
 
     code_ok = run("2026-11", ["Empresas"], **_run_kwargs(tmp_path, server))
     code_missing = run("2026-11", ["Empresas", "Cnaes"], **_run_kwargs(tmp_path, server))
@@ -209,14 +211,14 @@ def test_run_fails_when_no_file_is_found(tmp_path, server):
 def test_manifest_only_uses_local_files(tmp_path, server):
     month_dir = tmp_path / "2026-11"
     month_dir.mkdir()
-    (month_dir / "Cnaes.zip").write_bytes(b"cnaes")
+    (month_dir / "Cnaes.zip").write_bytes(ZIP + b"cnaes")
 
     code = run("2026-11", ["Cnaes", "Empresas"], **_run_kwargs(tmp_path, server, manifest_only=True))
 
     assert code == 0
     manifest = json.loads((month_dir / "manifest.json").read_text(encoding="utf-8"))
     assert [f["filename"] for f in manifest["files"]] == ["Cnaes.zip"]
-    assert manifest["files"][0]["sha256"] == _sha(b"cnaes")
+    assert manifest["files"][0]["sha256"] == _sha(ZIP + b"cnaes")
 
 
 def test_manifest_only_fails_when_folder_is_empty(tmp_path, server):
@@ -309,3 +311,74 @@ def test_cli_dry_run_uses_official_template_by_default(capsys):
     assert main(["--month", "2026-10", "--tables", "cnaes", "--dry-run"]) == 0
     out = capsys.readouterr().out
     assert "arquivos.receitafederal.gov.br/public.php/webdav/Dados/Cadastros/CNPJ/2026-10/Cnaes.zip" in out
+
+
+# --------------------------------------------------------------------------- #
+# Recusa do firewall: pagina HTML no lugar do zip
+# --------------------------------------------------------------------------- #
+
+
+def test_a_rejection_page_is_retried_and_never_kept_as_the_zip(tmp_path, server):
+    server.files["a.zip"] = PAYLOAD
+    server.html_get["a.zip"] = 2
+
+    result = download_file(server.url("a.zip"), tmp_path / "a.zip", retries=4, backoff=0)
+
+    assert result.status == STATUS_DOWNLOADED
+    assert (tmp_path / "a.zip").read_bytes() == PAYLOAD
+    assert not (tmp_path / "a.zip.part").exists()
+
+
+def test_only_rejection_pages_fail_after_retries_and_leave_no_file(tmp_path, server):
+    server.files["a.zip"] = PAYLOAD
+    server.html_get["a.zip"] = 99
+
+    result = download_file(server.url("a.zip"), tmp_path / "a.zip", retries=2, backoff=0)
+
+    assert result.status == STATUS_FAILED
+    assert "nao e um zip" in (result.error or "")
+    assert not (tmp_path / "a.zip").exists() and not (tmp_path / "a.zip.part").exists()
+
+
+def test_a_rejection_page_already_on_disk_is_not_skipped_even_with_the_expected_size(tmp_path, server):
+    server.files["a.zip"] = PAYLOAD
+    dest = tmp_path / "a.zip"
+    dest.write_bytes(b"<html>" + b"x" * (len(PAYLOAD) - 6))  # mesmo tamanho, outro conteudo
+
+    result = download_file(server.url("a.zip"), dest, backoff=0.0)
+
+    assert result.status == STATUS_DOWNLOADED
+    assert dest.read_bytes() == PAYLOAD
+
+
+def test_looks_like_zip(tmp_path):
+    good, html, empty = tmp_path / "g.zip", tmp_path / "h.zip", tmp_path / "e.zip"
+    good.write_bytes(ZIP + b"resto")
+    html.write_bytes(b"<html><head>Request Rejected")
+    empty.write_bytes(b"")
+    assert looks_like_zip(good)
+    assert (
+        not looks_like_zip(html) and not looks_like_zip(empty) and not looks_like_zip(tmp_path / "none.zip")
+    )
+
+
+def test_manifest_only_leaves_a_rejection_page_out_and_signals_the_problem(tmp_path, server):
+    month_dir = tmp_path / "2026-11"
+    month_dir.mkdir()
+    (month_dir / "Cnaes.zip").write_bytes(ZIP + b"cnaes")
+    (month_dir / "Simples.zip").write_bytes(b"<html><head><title>Request Rejected</title></head>")
+    (month_dir / "manifest.json").write_text(
+        json.dumps(
+            {
+                "month": "2026-11",
+                "files": [{"filename": "Simples.zip", "url": "u", "bytes": 49, "sha256": "x"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    code = run("2026-11", ["Cnaes", "Simples"], **_run_kwargs(tmp_path, server, manifest_only=True))
+
+    assert code == 1
+    manifest = json.loads((month_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert [f["filename"] for f in manifest["files"]] == ["Cnaes.zip"]  # a entrada antiga e invalida saiu

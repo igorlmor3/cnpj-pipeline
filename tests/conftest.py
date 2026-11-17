@@ -15,6 +15,7 @@ class FakeServer:
         self.fail_get: dict[str, int] = {}  # caminho -> quantas respostas 503 antes de servir
         self.fail_status = 503  # status usado nas falhas de fail_get
         self.empty_get: dict[str, int] = {}  # caminho -> quantas respostas 200 vazias antes de servir
+        self.html_get: dict[str, int] = {}  # caminho -> quantas paginas HTML de recusa (200) antes de servir
         self.require_auth: str | None = None  # "usuario:senha" exigido via HTTP basic
         self.honor_range = True
         self.range_requests: list[str] = []
@@ -79,6 +80,18 @@ def server():
                 self.send_response(200)
                 self.send_header("Content-Length", "0")
                 self.end_headers()
+                return
+
+            if state.html_get.get(key, 0) > 0:
+                state.html_get[key] -= 1
+                page = (
+                    b"<html><head><title>Request Rejected</title></head><body>The requested URL was rejected."
+                )
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html")
+                self.send_header("Content-Length", str(len(page)))
+                self.end_headers()
+                self.wfile.write(page)
                 return
 
             range_header = self.headers.get("Range")

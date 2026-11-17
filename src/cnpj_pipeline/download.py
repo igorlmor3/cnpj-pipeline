@@ -25,6 +25,7 @@ import logging
 import re
 import sys
 import time
+from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -41,6 +42,10 @@ USER_AGENT = "cnpj-pipeline/0.1 (projeto de portfolio; engenharia de dados)"
 MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 
 RETRYABLE_CLIENT_ERRORS = (408, 429)
+
+# Todo zip comeca por uma destas assinaturas (arquivo normal ou vazio). Um firewall que recusa o pedido
+# costuma responder 200 com uma pagina HTML curta; sem esta checagem ela viraria um "zip" baixado.
+ZIP_SIGNATURES = (b"PK\x03\x04", b"PK\x05\x06")
 
 STATUS_DOWNLOADED = "downloaded"
 STATUS_SKIPPED = "skipped"
@@ -125,6 +130,15 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: fh.read(CHUNK_SIZE), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def looks_like_zip(path: Path) -> bool:
+    """True se o arquivo comeca com a assinatura de um zip. Falso para paginas de erro e arquivos vazios."""
+    try:
+        with path.open("rb") as fh:
+            return fh.read(4) in ZIP_SIGNATURES
+    except OSError:
+        return False
 
 
 def _remote_size(session: requests.Session, url: str, timeout: float) -> int | None:
@@ -219,7 +233,12 @@ def download_file(
             result.status = STATUS_NOT_FOUND
             return result
 
-        if dest.exists() and expected is not None and dest.stat().st_size == expected:
+        if (
+            dest.exists()
+            and expected is not None
+            and dest.stat().st_size == expected
+            and (dest.suffix != ".zip" or looks_like_zip(dest))
+        ):
             result.status = STATUS_SKIPPED
             result.bytes = expected
             result.sha256 = _sha256(dest) if checksum else None
@@ -230,6 +249,11 @@ def download_file(
         for attempt in range(1, retries + 1):
             try:
                 size = _fetch_once(session, url, part, expected, timeout)
+                if dest.suffix == ".zip" and not looks_like_zip(part):
+                    part.unlink(missing_ok=True)  # nao retomar de uma pagina de erro
+                    raise requests.RequestException(
+                        f"a resposta nao e um zip ({size} bytes); provavel recusa do firewall do servidor"
+                    )
                 part.replace(dest)
                 result.status = STATUS_DOWNLOADED
                 result.bytes = size
@@ -268,14 +292,20 @@ def download_file(
 # --------------------------------------------------------------------------- #
 
 
-def write_manifest(month_dir: Path, month: str, results: list[DownloadResult]) -> Path:
-    """Grava (ou atualiza) month_dir/manifest.json com os arquivos obtidos com sucesso."""
+def write_manifest(
+    month_dir: Path, month: str, results: list[DownloadResult], drop: Sequence[str] = ()
+) -> Path:
+    """Grava (ou atualiza) month_dir/manifest.json com os arquivos obtidos com sucesso.
+
+    `drop` lista arquivos a tirar do manifesto, mesmo que ele ja os tivesse (por exemplo, um zip invalido)."""
     path = month_dir / "manifest.json"
     entries: dict[str, dict] = {}
     if path.exists():
         previous = json.loads(path.read_text(encoding="utf-8"))
         entries = {e["filename"]: e for e in previous.get("files", [])}
 
+    for name in drop:
+        entries.pop(name, None)
     for r in results:
         if r.ok:
             entries[r.filename] = {
@@ -304,6 +334,17 @@ def scan_local(
         for name in filenames:
             path = month_dir / name
             if not path.is_file():
+                continue
+            if path.suffix == ".zip" and not looks_like_zip(path):
+                results.append(
+                    DownloadResult(
+                        filename=name,
+                        url=build_url(url_template, month, name),
+                        status=STATUS_FAILED,
+                        bytes=path.stat().st_size,
+                        error="o arquivo nao e um zip (provavel pagina de erro); apague-o e baixe de novo",
+                    )
+                )
                 continue
             results.append(
                 DownloadResult(
@@ -344,12 +385,16 @@ def run(
 
     if manifest_only:
         found = scan_local(month_dir, month, plan, url_template, checksum)
-        if not found:
+        good = [r for r in found if r.ok]
+        bad = [r for r in found if not r.ok]
+        for r in bad:
+            log.error("%s: %s", r.filename, r.error)
+        if not good:
             log.error("Nenhum arquivo esperado encontrado em %s", month_dir)
             return 1
-        path = write_manifest(month_dir, month, found)
-        log.info("Manifesto gravado em %s com %d arquivo(s)", path, len(found))
-        return 0
+        path = write_manifest(month_dir, month, good, drop=[r.filename for r in bad])
+        log.info("Manifesto gravado em %s com %d arquivo(s)", path, len(good))
+        return 1 if bad else 0
 
     jobs = [
         (table, name, build_url(url_template, month, name))
