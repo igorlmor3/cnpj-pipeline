@@ -82,6 +82,14 @@ def test_context_asks_for_exactly_what_was_asked(real_columns):
     assert "LIMIT 1" in text
     assert "um total, devolva uma linha" in text
     assert "Filtre com WHERE" in text
+    # natureza_grupo guarda a descricao do grupo, nao o digito
+    assert "natureza_grupo (" in text and "Descrição do grupo da natureza jurídica" in text
+    # ranking: o menor e o n-esimo devolvem so a linha pedida
+    assert "o segundo maior" in text and "LIMIT 1 OFFSET 1" in text
+    assert "Não traga linhas além das pedidas" in text
+    # contas ficam no SQL, nao na resposta
+    assert "Faça as contas no SQL" in text and "100.0" in text
+    assert "Não deixe a aritmética para a resposta" in text
     # excluir o grupo politico e filtrar, nao agrupar e escolher depois
     assert "filtre com WHERE is_organizacao_politica = false" in text
     assert "Não agrupe por essa coluna" in text

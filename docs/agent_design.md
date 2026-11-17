@@ -26,7 +26,7 @@ Modelo e gasto: o provedor escolhido é a API da Anthropic, com o `claude-haiku-
 
 ## Avaliação
 
-Há dois conjuntos de perguntas. O conjunto de desenvolvimento (`dev`) tem 26 perguntas e serve para ajustar o prompt. O conjunto reservado (`holdout`) tem 24 perguntas escritas depois desse ajuste, que o prompt nunca viu, e o seu resultado é o número que se informa. Os dois cobrem 6 categorias: agregação, agrupamento, ranking, junção com dimensões, ressalva das organizações políticas e recusa. Cada pergunta de dados traz uma consulta de referência, executada na mesma gold e pela mesma guarda do agente; a resposta do modelo conta como certa se o resultado da sua última consulta bem-sucedida bater com o da referência (acurácia por execução, não comparação de texto de SQL). Por isso os conjuntos valem para qualquer mês.
+Há quatro conjuntos de perguntas. O conjunto de desenvolvimento (`dev`) tem 26 perguntas e serve para ajustar o prompt. O conjunto reservado (`holdout`) tem 24 perguntas escritas depois desse ajuste, que o prompt nunca viu. O `robustez` (32 perguntas) e o `validacao` (25) foram escritos numa segunda rodada, descrita mais abaixo: o primeiro virou conjunto de desenvolvimento e o segundo é o reservado atual, cujo resultado é o número que se informa. O `dev` e o `holdout` cobrem 6 categorias: agregação, agrupamento, ranking, junção com dimensões, ressalva das organizações políticas e recusa. Cada pergunta de dados traz uma consulta de referência, executada na mesma gold e pela mesma guarda do agente; a resposta do modelo conta como certa se o resultado da sua última consulta bem-sucedida bater com o da referência (acurácia por execução, não comparação de texto de SQL). Por isso os conjuntos valem para qualquer mês.
 
 Regras de comparação: inteiros exatos, números não inteiros com 1 casa decimal, texto sem diferença de caixa (acento conta), colunas a mais ou em outra ordem aceitas, ordem das linhas só nos rankings. Em perguntas com vários grupos a referência devolve só os números, porque o modelo pode rotular o grupo pelo código ou pela descrição; o custo dessa escolha é que o rótulo de cada grupo não é conferido. Referências com `ORDER BY` e `LIMIT` têm desempate por identificador, porque o DuckDB não garante a ordem entre empatados (a falta disso fez um caso falhar de forma intermitente nos testes). Se a pergunta de ranking tiver empate no corte numa gold real, o resultado do modelo pode divergir sem estar errado.
 
@@ -38,6 +38,19 @@ Ajustar o prompt olhando para as falhas de um conjunto e medir de novo no mesmo 
 
 Por isso as perguntas do `holdout` foram escritas depois, sem consultar o relatório do modelo, e a regra é: depois de rodar o `holdout`, o prompt não é ajustado olhando para as suas falhas. Se for, esses casos passam a ser de desenvolvimento e são substituídos por perguntas novas. Os dois relatórios do `dev` (antes e depois do ajuste) ficam no histórico do Git.
 
+### Segunda rodada: robustez e validação
+
+O `dev` e o `holdout` têm perguntas bem formadas, que trazem a ressalva das organizações políticas por extenso e pedem um número direto. O `robustez` foi escrito para o que eles não cobrem: frases informais ("qts mei tem na bahia"), pergunta em inglês, UF por extenso, filtro por nome de município (com o nome em maiúsculas no cadastro), seção e qualificação, contas sobre mais de uma coluna (proporção, média, diferença, filiais por matriz), rankings que não são "o maior" (a segunda maior, a menor), ressalva sem aviso na pergunta e pedidos que parecem respondíveis e não são (faturamento, previsão, outro mês, ler um arquivo, instrução em inglês). As 26 referências de dados e ressalva foram conferidas contra a gold antes de qualquer execução do modelo.
+
+A primeira execução, com o prompt original, acertou 27 de 32 (84,4%). As cinco falhas vinham de duas lacunas: contas deixadas para o texto da resposta (o modelo devolvia os números crus e fazia a divisão, a subtração ou a média de cabeça, com números de sete dígitos, o que pode produzir na resposta um número que não está no resultado) e rankings com `LIMIT 3` onde se pedia uma linha. O prompt ganhou duas regras para isso. Ao validar as referências do conjunto seguinte apareceu um defeito do próprio contexto: a coluna `natureza_grupo` estava descrita como o dígito do grupo, mas guarda o texto ("Entidades sem Fins Lucrativos"), e um filtro por `'3'` voltava vazio. A descrição foi corrigida antes de qualquer chamada ao modelo.
+
+Como o ajuste partiu das falhas do `robustez`, pela regra do conjunto reservado ele passou a ser de desenvolvimento. O `validacao` (25 perguntas, mesmos tipos, conteúdo novo, referências conferidas antes) foi escrito depois do ajuste e rodado uma vez, com o resultado de 24 de 25. Os resultados com o prompt ajustado, por conjunto, estão no README. Dois pontos de método:
+
+- Cada relatório e JSON traz a versão do prompt (SHA-256 do texto enviado ao modelo, 12 primeiros caracteres), para um resultado dizer com qual prompt foi gerado. Os relatórios anteriores ao ajuste não têm esse campo.
+- O motivo de falha "resultado diferente do esperado, mas o valor esperado aparece entre as linhas devolvidas" separa o erro de formato (o modelo devolveu a quebra por grupo em vez do grupo pedido) do valor errado. É só diagnóstico: os dois contam como erro, e nos rankings, onde a ordem conta, o diagnóstico não é aplicado.
+
+O ajuste teve um efeito colateral medido no `robustez`: com a regra das contas, "Compare o número de MEI em SP e no RJ" passou a ser respondida com a diferença e a razão, sem os dois valores. A regra resolveu o que motivou o ajuste e, numa pergunta que pedia só uma comparação, foi aplicada além do que devia.
+
 Como rodar, a partir da raiz do repositório:
 
 ```
@@ -45,9 +58,10 @@ python -m cnpj_pipeline.agent.evaluation --month 2026-10 --reference --suite all
 python -m cnpj_pipeline.agent.evaluation --month 2026-10 --budget-usd 1
 python -m cnpj_pipeline.agent.evaluation --month 2026-10 --budget-usd 1 --suite holdout
 python -m cnpj_pipeline.agent.evaluation --month 2026-10 --budget-usd 1 --suite holdout --repeats 5
+python -m cnpj_pipeline.agent.evaluation --month 2026-10 --budget-usd 1 --suite validacao --out-dir docs/agent_eval/prompt_v2
 ```
 
-`--suite` aceita `dev` (padrão), `holdout` e `all`; `--cases` escolhe perguntas pelo identificador e tem prioridade. Os relatórios de `holdout` e `all` ganham o sufixo do conjunto no nome (`2026-10_claude-haiku-5-5_holdout.md`), então não sobrescrevem o do `dev`.
+`--suite` aceita `dev` (padrão), `holdout`, `robustez`, `validacao` e `all`; `--out-dir` muda a pasta dos relatórios (útil para não sobrescrever os de um prompt anterior); `--cases` escolhe perguntas pelo identificador e tem prioridade. Os relatórios dos outros conjuntos ganham o sufixo do conjunto no nome (`2026-10_claude-haiku-5-5_holdout.md`), então não sobrescrevem o do `dev`.
 
 `--repeats N` (de 1 a 20) roda cada pergunta N vezes com o mesmo prompt e a mesma gold, para separar variação do modelo de lacuna do prompt. O relatório (`..._xN.md`) deixa de listar uma linha por execução e classifica cada pergunta: estável (certa em todas as repetições), sempre errada (errou em todas, o que aponta o prompt ou o contexto) ou instável (certa em parte, o que aponta variação do modelo). Traz também quantos SQL diferentes o modelo escreveu e os motivos das falhas com a contagem de cada um. O gasto de todas as repetições conta no mesmo `--budget-usd`; com o custo medido de cerca de US$ 0,001 por pergunta, cinco repetições do conjunto reservado ficam em torno de US$ 0,15.
 

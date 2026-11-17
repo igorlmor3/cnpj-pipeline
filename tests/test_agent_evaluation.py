@@ -6,6 +6,7 @@ O ponto central e provar que a avaliacao reprova respostas erradas, nao so que a
 from __future__ import annotations
 
 import json
+import re
 from collections import Counter
 from dataclasses import replace
 from typing import Any
@@ -28,6 +29,7 @@ from cnpj_pipeline.agent.evaluation import (
     expected_rows,
     judge,
     main,
+    prompt_version,
     render_report,
     results_json,
     rows_contain,
@@ -42,6 +44,7 @@ from cnpj_pipeline.agent.evaluation_cases import (
     ROBUSTEZ_CASES,
     SEM_POLITICAS,
     SUITES,
+    VALIDACAO_CASES,
     EvalCase,
     by_id,
 )
@@ -173,7 +176,11 @@ def test_rows_contain(expected, got, result):
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.parametrize("cases", [CASES, HOLDOUT_CASES, ROBUSTEZ_CASES], ids=["dev", "holdout", "robustez"])
+@pytest.mark.parametrize(
+    "cases",
+    [CASES, HOLDOUT_CASES, ROBUSTEZ_CASES, VALIDACAO_CASES],
+    ids=["dev", "holdout", "robustez", "validacao"],
+)
 def test_each_case_set_is_well_formed(cases):
     assert len({c.id for c in cases}) == len(cases)
     assert {c.kind for c in cases} == {"data", "caveat", "refusal"}
@@ -194,11 +201,20 @@ def test_the_suites_do_not_share_ids_questions_or_references():
     dev_sql = {c.reference_sql for c in CASES if c.reference_sql}
     assert not [c.id for c in HOLDOUT_CASES if c.reference_sql in dev_sql]
     assert not [c.id for c in ROBUSTEZ_CASES if c.reference_sql in dev_sql | holdout_sql()]
+    earlier = dev_sql | holdout_sql() | {c.reference_sql for c in ROBUSTEZ_CASES if c.reference_sql}
+    assert not [c.id for c in VALIDACAO_CASES if c.reference_sql in earlier]
     assert all(c.id.startswith("ho_") for c in HOLDOUT_CASES)
     assert all(c.id.startswith("rb_") for c in ROBUSTEZ_CASES)
-    assert not any(c.id.startswith(("ho_", "rb_")) for c in CASES)
-    assert SUITES == {"dev": CASES, "holdout": HOLDOUT_CASES, "robustez": ROBUSTEZ_CASES, "all": ALL_CASES}
-    assert len(ALL_CASES) == len(CASES) + len(HOLDOUT_CASES) + len(ROBUSTEZ_CASES)
+    assert all(c.id.startswith("va_") for c in VALIDACAO_CASES)
+    assert not any(c.id.startswith(("ho_", "rb_", "va_")) for c in CASES)
+    assert SUITES == {
+        "dev": CASES,
+        "holdout": HOLDOUT_CASES,
+        "robustez": ROBUSTEZ_CASES,
+        "validacao": VALIDACAO_CASES,
+        "all": ALL_CASES,
+    }
+    assert len(ALL_CASES) == len(CASES) + len(HOLDOUT_CASES) + len(ROBUSTEZ_CASES) + len(VALIDACAO_CASES)
 
 
 def holdout_sql() -> set[str]:
@@ -221,6 +237,13 @@ def test_the_robustness_set_covers_what_the_other_two_do_not():
     # a ressalva das organizacoes politicas nao vem escrita em pelo menos metade das perguntas de dados
     data = [c for c in ROBUSTEZ_CASES if c.kind == "data"]
     assert sum(SEM_POLITICAS not in c.question for c in data) >= len(data) // 2
+
+
+def test_the_validation_set_has_the_same_kinds_as_the_robustness_set_with_new_content():
+    assert len(VALIDACAO_CASES) >= 24
+    assert {c.category for c in VALIDACAO_CASES} == {c.category for c in ROBUSTEZ_CASES} - {"comparacao"}
+    assert {c.kind for c in VALIDACAO_CASES} == {"data", "caveat", "refusal"}
+    assert not {c.question for c in VALIDACAO_CASES} & {c.question for c in ROBUSTEZ_CASES}
 
 
 def test_every_reference_runs_through_the_guard_on_the_real_gold(executor):
@@ -687,6 +710,9 @@ def test_the_cli_runs_the_dev_suite_by_default_and_names_the_others(gold_root, t
     payload = json.loads((out / f"{MONTH}_referencia_robustez.json").read_text(encoding="utf-8"))
     assert [c["id"] for c in payload["cases"]] == [c.id for c in ROBUSTEZ_CASES]
 
+    assert main(base + ["--suite", "validacao"]) == 0
+    assert f"{len(VALIDACAO_CASES)} de {len(VALIDACAO_CASES)} casos certos" in capsys.readouterr().out
+
     assert main(base + ["--suite", "all"]) == 0
     assert f"{len(ALL_CASES)} de {len(ALL_CASES)} casos certos" in capsys.readouterr().out
     assert (out / f"{MONTH}_referencia_all.md").exists()
@@ -744,3 +770,47 @@ def test_the_cli_exits_nonzero_if_the_reference_mode_has_a_failure(gold_root, tm
         ["--month", MONTH, "--reference", "--cases", "ruim", "--gold-dir", str(gold_root), "--out-dir", out]
     )
     assert code == 1
+
+
+# --------------------------------------------------------------------------- #
+# Versao do prompt nos relatorios
+# --------------------------------------------------------------------------- #
+
+
+def test_prompt_version_is_short_stable_and_changes_with_the_text():
+    first = prompt_version("regras v1")
+    assert first == prompt_version("regras v1") and len(first) == 12
+    assert first != prompt_version("regras v2")
+
+
+def test_reports_name_the_prompt_version_only_when_given():
+    with_sha = render_report(
+        [result()], month=MONTH, label="m", generated_on="2026-11-16", model="m", prompt_sha="abc123def456"
+    )
+    without = render_report([result()], month=MONTH, label="m", generated_on="2026-11-16", model="m")
+    assert "Versão do prompt: `abc123def456`" in with_sha and "Versão do prompt" not in without
+    payload = json.loads(
+        results_json(
+            [result()],
+            month=MONTH,
+            label="m",
+            generated_on="2026-11-16",
+            model="m",
+            prompt_sha="abc123def456",
+        )
+    )
+    assert payload["prompt_sha"] == "abc123def456"
+    assert (
+        json.loads(results_json([result()], month=MONTH, label="m", generated_on="2026-11-16", model="m"))[
+            "prompt_sha"
+        ]
+        is None
+    )
+
+
+def test_the_cli_writes_the_prompt_version_to_both_reports(gold_root, tmp_path):
+    out = tmp_path / "out"
+    assert main(["--month", MONTH, "--reference", "--gold-dir", str(gold_root), "--out-dir", str(out)]) == 0
+    sha = json.loads((out / f"{MONTH}_referencia.json").read_text(encoding="utf-8"))["prompt_sha"]
+    assert re.fullmatch(r"[0-9a-f]{12}", sha)
+    assert f"`{sha}`" in (out / f"{MONTH}_referencia.md").read_text(encoding="utf-8")

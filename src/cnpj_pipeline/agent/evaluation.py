@@ -13,6 +13,7 @@ e o SQL das consultas; nenhuma linha de resultado.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -389,8 +390,19 @@ def _stability_section(results: list[CaseResult]) -> list[str]:
     return out
 
 
+def prompt_version(system: str) -> str:
+    """Identificador curto do texto enviado ao modelo: cada resultado diz com qual prompt foi gerado."""
+    return hashlib.sha256(system.encode("utf-8")).hexdigest()[:12]
+
+
 def render_report(
-    results: list[CaseResult], *, month: str, label: str, generated_on: str, model: str | None
+    results: list[CaseResult],
+    *,
+    month: str,
+    label: str,
+    generated_on: str,
+    model: str | None,
+    prompt_sha: str | None = None,
 ) -> str:
     s = summarize(results)
     repeats = max(r.run for r in results)
@@ -406,6 +418,10 @@ def render_report(
         ),
         "O relatório traz contagens, métricas e SQL; nenhuma linha de resultado.",
     ]
+    if prompt_sha:
+        out += [
+            f"Versão do prompt: `{prompt_sha}` (SHA-256 do texto enviado ao modelo, 12 primeiros caracteres)."
+        ]
     if repeats > 1:
         out += [f"Cada caso rodou {repeats} vezes, com o mesmo prompt e a mesma gold."]
     out += [
@@ -482,13 +498,20 @@ def render_report(
 
 
 def results_json(
-    results: list[CaseResult], *, month: str, label: str, generated_on: str, model: str | None
+    results: list[CaseResult],
+    *,
+    month: str,
+    label: str,
+    generated_on: str,
+    model: str | None,
+    prompt_sha: str | None = None,
 ) -> str:
     payload: dict[str, Any] = {
         "month": month,
         "label": label,
         "model": model,
         "generated_on": generated_on,
+        "prompt_sha": prompt_sha,
         "summary": asdict(summarize(results)),
         "cases": [asdict(r) for r in results],
     }
@@ -523,8 +546,8 @@ def main(argv: list[str] | None = None) -> int:
         "--suite",
         choices=sorted(SUITES),
         default="dev",
-        help="conjunto de casos: dev (ajuste do prompt), holdout (reservado), robustez (frases informais, "
-        "contas derivadas e armadilhas) ou all",
+        help="conjunto de casos: dev (ajuste do prompt), holdout, robustez (frases informais, contas e "
+        "armadilhas), validacao (reservado, escrito depois do ajuste) ou all",
     )
     parser.add_argument("--cases", help="ids separados por virgula; tem prioridade sobre --suite")
     parser.add_argument(
@@ -571,16 +594,17 @@ def main(argv: list[str] | None = None) -> int:
         executor.close()
 
     generated_on = datetime.now(UTC).date().isoformat()
+    fields = {
+        "month": args.month,
+        "label": label,
+        "generated_on": generated_on,
+        "model": model,
+        "prompt_sha": prompt_version(system),
+    }
     args.out_dir.mkdir(parents=True, exist_ok=True)
     stem = f"{args.month}_{label}" + (f"_x{args.repeats}" if args.repeats > 1 else "")
-    (args.out_dir / f"{stem}.md").write_text(
-        render_report(results, month=args.month, label=label, generated_on=generated_on, model=model),
-        encoding="utf-8",
-    )
-    (args.out_dir / f"{stem}.json").write_text(
-        results_json(results, month=args.month, label=label, generated_on=generated_on, model=model),
-        encoding="utf-8",
-    )
+    (args.out_dir / f"{stem}.md").write_text(render_report(results, **fields), encoding="utf-8")
+    (args.out_dir / f"{stem}.json").write_text(results_json(results, **fields), encoding="utf-8")
     summary = summarize(results)
     if args.repeats > 1:
         verdicts = Counter(c.verdict for c in stability(results))
