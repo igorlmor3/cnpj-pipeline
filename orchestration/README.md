@@ -43,6 +43,16 @@ docker compose exec airflow-scheduler airflow dags trigger cnpj_monthly --conf '
 | `force` | `false` | Refaz bronze, silver e gold que já existem. A amostra sempre refaz. |
 | `publish` | `false` | No modo `full`, publica a gold no S3 e cria as tabelas no Athena. Exige credenciais da AWS (abaixo). |
 
+## Vários meses, sem o Airflow
+
+Para dados reais, o caminho mais rápido é o terminal: o mesmo fluxo da DAG, mês a mês, sem passar pelo disco virtual do Docker (que deixaria a leitura e a gravação de dezenas de GB muito mais lentas). Os meses rodam em sequência, cada um do download à exportação para o site, e a execução para na primeira falha.
+
+```bash
+python -m cnpj_pipeline.orchestration --months 2026-07 2026-08 2026-09
+```
+
+Ao final sai um resumo com a duração de cada etapa. Se uma etapa falhar, a mensagem de erro traz o comando exato para retomar a partir dela (`--from-stage gold`, por exemplo). Outras opções: `--force` refaz bronze, silver e gold que já existem; `--publish` envia a gold para a AWS ao final; `--mode sample` roda o mesmo fluxo com a amostra sintética.
+
 ## Decisões
 
 - **Qualidade como portão.** A tarefa `qualidade` roda as verificações completas sobre bronze, silver e gold. Se uma verificação bloqueante falhar, a tarefa falha e `exportar_site`, `publicar_s3` e `tabelas_athena` não executam: nada vai para o site nem para a nuvem com dado reprovado. A gold em si é construída antes, com as suas próprias verificações, e fica em `data/gold` para inspeção.

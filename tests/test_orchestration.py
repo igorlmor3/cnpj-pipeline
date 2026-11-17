@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import logging
 import sys
 from pathlib import Path
@@ -14,13 +15,19 @@ from cnpj_pipeline.orchestration import (
     MODE_FULL,
     MODE_SAMPLE,
     STAGES,
+    FlowFailed,
     OrchestrationError,
     RunConfig,
     build_argv,
     choose_source,
+    flow,
+    format_duration,
     layout,
+    main,
+    run_flow,
     run_stage,
     should_publish,
+    summary,
 )
 
 FULL = RunConfig(mode=MODE_FULL, month="2026-10")
@@ -246,3 +253,110 @@ def test_the_sample_flow_runs_end_to_end_stage_by_stage(tmp_path, monkeypatch):
     assert (lay.quality_report / f"{orchestration.SAMPLE_MONTH}.md").exists()
     assert (lay.site_out / orchestration.SAMPLE_MONTH / "overview.json").exists()
     assert not (tmp_path / "raw").exists()  # nada fora de data/sample
+
+
+# --------------------------------------------------------------------------- #
+# Varios meses, sem o Airflow
+# --------------------------------------------------------------------------- #
+
+
+class Recorder:
+    """Runner de mentira: anota (mes, etapa) e pode falhar em uma etapa de um mes."""
+
+    def __init__(self, fail_at: tuple[str, str] | None = None) -> None:
+        self.calls: list[tuple[str, str]] = []
+        self.fail_at = fail_at
+
+    def __call__(self, stage: str, params) -> None:
+        self.calls.append((params["month"], stage))
+        if self.fail_at == (params["month"], stage):
+            raise OrchestrationError(f"a etapa {stage} terminou com codigo 1")
+
+
+def test_the_flow_of_a_full_month_goes_from_the_download_to_the_site_export():
+    assert flow(FULL) == ["baixar_dados", "bronze", "silver", "gold", "qualidade", "exportar_site"]
+    assert flow(SAMPLE)[0] == "gerar_amostra"
+
+
+def test_the_cloud_stages_join_the_flow_only_when_publishing_in_full_mode():
+    assert flow(RunConfig(mode=MODE_FULL, month="2026-10", publish=True))[-2:] == list(CLOUD_STAGES)
+    assert not set(CLOUD_STAGES) & set(flow(RunConfig(mode=MODE_SAMPLE, month="2026-10", publish=True)))
+
+
+def test_each_month_runs_the_whole_flow_before_the_next_one_starts():
+    runner = Recorder()
+    results = run_flow(["2026-07", "2026-08"], runner=runner)
+    expected = [(m, s) for m in ("2026-07", "2026-08") for s in flow(FULL)]
+    assert runner.calls == expected
+    assert [(r.month, r.stage) for r in results] == expected
+
+
+def test_the_stage_durations_are_measured_with_the_clock():
+    ticks = itertools.count(0, 5)
+    results = run_flow(["2026-07"], runner=Recorder(), clock=lambda: float(next(ticks)))
+    assert {r.seconds for r in results} == {5.0}
+
+
+def test_a_failure_stops_everything_and_says_where_it_happened():
+    runner = Recorder(fail_at=("2026-08", "silver"))
+    with pytest.raises(FlowFailed) as info:
+        run_flow(["2026-07", "2026-08", "2026-09"], runner=runner)
+    assert (info.value.month, info.value.stage) == ("2026-08", "silver")
+    assert ("2026-09", "baixar_dados") not in runner.calls  # o mes seguinte nem comecou
+    assert [(r.month, r.stage) for r in info.value.completed][-1] == ("2026-08", "bronze")
+
+
+def test_resuming_starts_the_first_month_at_the_given_stage_and_the_others_from_the_start():
+    runner = Recorder()
+    run_flow(["2026-08", "2026-09"], from_stage="gold", runner=runner)
+    assert runner.calls[0] == ("2026-08", "gold")
+    assert ("2026-08", "bronze") not in runner.calls
+    assert ("2026-09", "baixar_dados") in runner.calls
+
+
+def test_bad_arguments_are_rejected_before_anything_runs():
+    runner = Recorder()
+    for months, extra, message in [
+        ([], {}, "pelo menos um mes"),
+        (["2026-07", "2026-07"], {}, "repetido"),
+        (["2026-07", "2026-13"], {}, "mes invalido"),
+        (["2026-07"], {"mode": "sample", "from_stage": "baixar_dados"}, "nao faz parte do fluxo"),
+        (["2026-07"], {"from_stage": "publicar_s3"}, "nao faz parte do fluxo"),
+    ]:
+        with pytest.raises(OrchestrationError, match=message):
+            run_flow(months, runner=runner, **extra)
+    assert runner.calls == []
+
+
+def test_durations_are_written_in_a_readable_way():
+    assert format_duration(8.24) == "8,2 s"
+    assert format_duration(185) == "3 min 05 s"
+    assert format_duration(3720) == "1 h 02 min"
+
+
+def test_the_summary_lists_every_stage_and_the_total_per_month():
+    results = run_flow(["2026-07", "2026-08"], runner=Recorder(), clock=itertools.count(0, 60).__next__)
+    text = summary(results)
+    assert "2026-07  gold" in text and "2026-08  exportar_site" in text
+    assert text.count("total") == 2
+
+
+def test_main_returns_zero_and_prints_the_summary(monkeypatch, capsys):
+    monkeypatch.setattr(orchestration, "run_stage", Recorder())
+    monkeypatch.setattr(orchestration, "run_flow", lambda *a, **k: run_flow(*a, runner=Recorder(), **k))
+    assert main(["--months", "2026-09"]) == 0
+    assert "2026-09  silver" in capsys.readouterr().out
+
+
+def test_main_tells_how_to_resume_after_a_failure(monkeypatch, capsys):
+    runner = Recorder(fail_at=("2026-08", "gold"))
+    monkeypatch.setattr(orchestration, "run_flow", lambda *a, **k: run_flow(*a, runner=runner, **k))
+    assert main(["--months", "2026-07", "2026-08", "2026-09"]) == 1
+    err = capsys.readouterr().err
+    assert "FALHOU: 2026-08, etapa gold" in err
+    assert "--months 2026-08 2026-09 --from-stage gold" in err
+
+
+def test_main_reports_invalid_arguments_with_exit_code_two(capsys):
+    assert main(["--months", "2026-99"]) == 2
+    assert "mes invalido" in capsys.readouterr().err

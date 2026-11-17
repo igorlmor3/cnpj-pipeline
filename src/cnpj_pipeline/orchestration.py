@@ -5,6 +5,11 @@ A DAG do Airflow (orchestration/dags/cnpj_monthly.py) e fina de proposito: cada 
 separado (o mesmo comando que se roda na mao, o que isola a memoria de cada etapa). Toda a logica
 de caminhos, modos e opcoes fica aqui, em Python puro, para ser testada sem o Airflow.
 
+O mesmo fluxo roda sem Airflow, direto no terminal, para um ou mais meses em sequencia (e e o
+caminho mais rapido para dados reais, sem passar pelo disco virtual do Docker):
+
+    python -m cnpj_pipeline.orchestration --mode full --months 2026-07 2026-08 2026-09
+
 Dois modos:
 - sample: dados sinteticos em data/sample, com os limites de tolerancia da demonstracao. Serve para
   ver a DAG funcionando em segundos e nunca toca em data/raw nem em docs/.
@@ -14,11 +19,13 @@ Dois modos:
 
 from __future__ import annotations
 
+import argparse
 import logging
 import re
 import subprocess
 import sys
-from collections.abc import Mapping
+import time
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -232,3 +239,146 @@ def run_stage(stage: str, params: Mapping[str, Any]) -> None:
             log.info("%s", line.rstrip())
     if process.returncode != 0:
         raise OrchestrationError(f"a etapa {stage} terminou com codigo {process.returncode}")
+
+
+class FlowFailed(OrchestrationError):
+    """Uma etapa falhou: diz em que mes e etapa e o que ja tinha terminado antes."""
+
+    def __init__(self, month: str, stage: str, cause: Exception, completed: list[StageResult]) -> None:
+        super().__init__(f"{month}, etapa {stage}: {cause}")
+        self.month = month
+        self.stage = stage
+        self.completed = completed
+
+
+@dataclass(frozen=True)
+class StageResult:
+    month: str
+    stage: str
+    seconds: float
+
+
+def flow(cfg: RunConfig) -> list[str]:
+    """Etapas de uma execucao completa de um mes, na ordem. A nuvem so entra com publish no modo full."""
+    stages = [SOURCE_STAGES[cfg.mode], "bronze", "silver", "gold", "qualidade", "exportar_site"]
+    if cfg.mode == MODE_FULL and cfg.publish:
+        stages.extend(CLOUD_STAGES)
+    return stages
+
+
+def run_flow(
+    months: Sequence[str],
+    *,
+    mode: str = MODE_FULL,
+    force: bool = False,
+    publish: bool = False,
+    from_stage: str | None = None,
+    runner: Callable[[str, Mapping[str, Any]], None] = run_stage,
+    clock: Callable[[], float] = time.monotonic,
+) -> list[StageResult]:
+    """Roda o fluxo de cada mes, um apos o outro. Para na primeira falha (os meses seguintes dependem
+    de a maquina ter espaco e de o mes anterior estar bom). `from_stage` retoma o primeiro mes a partir
+    de uma etapa; os demais meses rodam inteiros. Todos os parametros sao validados antes de comecar."""
+    if not months:
+        raise OrchestrationError("informe pelo menos um mes")
+    if len(set(months)) != len(months):
+        raise OrchestrationError("mes repetido na lista")
+    configs = [RunConfig(mode=mode, month=month, force=force, publish=publish) for month in months]
+    if from_stage is not None and from_stage not in flow(configs[0]):
+        raise OrchestrationError(
+            f"etapa {from_stage!r} nao faz parte do fluxo: {', '.join(flow(configs[0]))}"
+        )
+
+    results: list[StageResult] = []
+    for index, cfg in enumerate(configs):
+        stages = flow(cfg)
+        if index == 0 and from_stage is not None:
+            stages = stages[stages.index(from_stage) :]
+        params = {"mode": cfg.mode, "month": cfg.month, "force": cfg.force, "publish": cfg.publish}
+        for stage in stages:
+            started = clock()
+            try:
+                runner(stage, params)
+            except Exception as error:
+                raise FlowFailed(cfg.effective_month, stage, error, results) from error
+            result = StageResult(cfg.effective_month, stage, clock() - started)
+            results.append(result)
+            log.info(
+                "Etapa %s do mes %s concluida em %s",
+                stage,
+                cfg.effective_month,
+                format_duration(result.seconds),
+            )
+    return results
+
+
+def format_duration(seconds: float) -> str:
+    if seconds < 60:
+        return f"{seconds:.1f} s".replace(".", ",")
+    minutes, rest = divmod(int(round(seconds)), 60)
+    if minutes < 60:
+        return f"{minutes} min {rest:02d} s"
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours} h {minutes:02d} min"
+
+
+def summary(results: Sequence[StageResult]) -> str:
+    lines = ["Resumo (mes, etapa, duracao):"]
+    lines += [f"  {r.month}  {r.stage:<14} {format_duration(r.seconds)}" for r in results]
+    for month in dict.fromkeys(r.month for r in results):
+        total = sum(r.seconds for r in results if r.month == month)
+        lines.append(f"  {month}  total          {format_duration(total)}")
+    return "\n".join(lines)
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="python -m cnpj_pipeline.orchestration",
+        description="Roda o fluxo completo (dados brutos, bronze, silver, gold, qualidade, exportacao para o "
+        "site) para um ou mais meses, em sequencia, sem o Airflow.",
+    )
+    parser.add_argument(
+        "--months", nargs="+", required=True, metavar="AAAA-MM", help="Meses, na ordem de execucao"
+    )
+    parser.add_argument("--mode", choices=MODES, default=MODE_FULL, help="full (padrao) ou sample")
+    parser.add_argument("--force", action="store_true", help="Refaz bronze, silver e gold que ja existem")
+    parser.add_argument("--publish", action="store_true", help="No modo full, publica a gold na AWS ao final")
+    parser.add_argument(
+        "--from-stage",
+        choices=STAGES,
+        help="Retoma o primeiro mes a partir desta etapa (ex.: gold, depois de uma falha)",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = parse_args(argv)
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S", stream=sys.stdout
+    )
+    try:
+        results = run_flow(
+            args.months, mode=args.mode, force=args.force, publish=args.publish, from_stage=args.from_stage
+        )
+    except FlowFailed as failure:
+        if failure.completed:
+            print(summary(failure.completed))
+        print(f"FALHOU: {failure}", file=sys.stderr)
+        remaining = (
+            args.months[args.months.index(failure.month) :] if failure.month in args.months else args.months
+        )
+        print(
+            f"Para retomar: python -m cnpj_pipeline.orchestration --mode {args.mode} "
+            f"--months {' '.join(remaining)} --from-stage {failure.stage}",
+            file=sys.stderr,
+        )
+        return 1
+    except OrchestrationError as error:
+        print(f"ERRO: {error}", file=sys.stderr)
+        return 2
+    print(summary(results))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
