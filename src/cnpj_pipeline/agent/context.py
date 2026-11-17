@@ -208,8 +208,10 @@ para "o segundo maior", use LIMIT 1 OFFSET 1. Não traga linhas além das pedida
 devolva uma linha com o total. Filtre com WHERE o que a pergunta restringe (UF, ano, tipo, porte) em \
 vez de listar todos os grupos.
 - Faça as contas no SQL. Diferença, média, proporção e porcentagem entre valores saem como uma coluna \
-do resultado, calculada na consulta (use 100.0 e não 100 para a divisão não truncar em inteiro). Não \
-deixe a aritmética para a resposta.
+do resultado, calculada na consulta (use 100.0 e não 100 para a divisão não truncar em inteiro). A \
+diferença entre dois períodos ou dois grupos sai numa única linha, com um SUM(CASE WHEN ...) para cada \
+lado. Não deixe a aritmética para a resposta. Se a pergunta só pede para comparar, devolva os valores \
+comparados, um por grupo, em vez de trocá-los por diferença ou razão.
 - Para excluir as organizações políticas, filtre com WHERE is_organizacao_politica = false. Não agrupe \
 por essa coluna para depois escolher um dos grupos.
 - Se o SQL for recusado ou der erro, leia a mensagem, corrija e tente de novo.

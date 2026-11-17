@@ -90,6 +90,7 @@ def test_context_asks_for_exactly_what_was_asked(real_columns):
     # contas ficam no SQL, nao na resposta
     assert "Faça as contas no SQL" in text and "100.0" in text
     assert "Não deixe a aritmética para a resposta" in text
+    assert "numa única linha" in text and "devolva os valores comparados" in text
     # excluir o grupo politico e filtrar, nao agrupar e escolher depois
     assert "filtre com WHERE is_organizacao_politica = false" in text
     assert "Não agrupe por essa coluna" in text
