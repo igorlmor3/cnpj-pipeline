@@ -1,0 +1,11 @@
+# Acrescenta as credenciais da AWS (somente leitura) ao Airflow, para as tarefas publicar_s3 e
+# tabelas_athena. Use junto do compose principal, com publish=true e mode=full:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.aws.yml up -d
+#
+# As chaves nunca entram na imagem nem no repositorio: o perfil do AWS CLI (~/.aws) e montado so
+# no agendador, que e quem executa as tarefas, e o nome do bucket vem do .env desta pasta.
+services:
+  airflow-scheduler:
+    volumes:
+      - ${USERPROFILE:-${HOME}}/.aws:/home/airflow/.aws:ro

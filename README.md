@@ -91,7 +91,9 @@ As escolhas feitas para cada decisão, com as alternativas consideradas, estão 
 │   ├── api/               função da API pública do agente: limites, orçamento, interruptor e empacotamento
 │   ├── site_export.py     exportação de agregados da gold para JSON (dados do site)
 │   ├── sample.py          gerador de zips sintéticos com defeitos plantados
+│   ├── orchestration.py   comandos de cada etapa por modo (amostra ou mês real), usados pela DAG
 │   └── demo.py            amostra, bronze, profiling, silver e gold de ponta a ponta
+├── orchestration/         Airflow em Docker Compose e a DAG cnpj_monthly
 ├── infra/                 Terraform da AWS (bucket, Glue, Athena, IAM, orçamento e, opcional, a API do agente)
 ├── site/                  site em React e Tailwind (Vite): lê os JSON agregados e chama a API do agente
 ├── tests/
@@ -281,6 +283,20 @@ O nível 1 mantém o processamento local e leva o resultado para a nuvem. O pass
 
 O suporte à AWS é opcional: `python -m pip install -e ".[aws]"`. Os testes usam clientes simulados e não exigem conta nem rede.
 
+## Orquestração (Airflow)
+
+O fluxo completo roda como uma DAG do Apache Airflow 3, a `cnpj_monthly`: dados brutos (ou amostra sintética), bronze, silver, gold, qualidade, exportação para o site e, de forma opcional, publicação no S3 e tabelas no Athena. A tarefa de qualidade é um portão: se uma verificação bloqueante falhar, nada é exportado nem publicado. A DAG tem parâmetros (`mode`: `sample` ou `full`, `month`, `force`, `publish`), roda sem agenda e uma execução por vez. O modo `sample` percorre o fluxo inteiro em segundos, sem baixar nada e sem tocar nos dados reais.
+
+```bash
+cd orchestration
+docker compose up airflow-init
+docker compose up -d        # http://localhost:8080
+```
+
+![Grafo da DAG cnpj_monthly no Airflow, execução em modo amostra: tarefas concluídas em verde e as que dependem de download ou publicação em rosa (puladas)](docs/images/airflow_dag_graph.png)
+
+A lógica de montagem dos comandos fica em `src/cnpj_pipeline/orchestration.py` e é testada sem Airflow; a integridade da DAG é testada com o Airflow 3.4.0 instalado. Decisões, parâmetros e limites estão em [orchestration/README.md](orchestration/README.md).
+
 ## Qualidade de dados
 
 Cada problema encontrado nos dados é registrado em [docs/data_quality_rules.md](docs/data_quality_rules.md) com a decisão tomada (corrigir, anular ou rejeitar), a camada em que a regra é aplicada e o teste que a cobre. O catálogo é preenchido durante o profiling e não parte de suposições.
@@ -440,7 +456,7 @@ Limites desta medição: 24 a 32 perguntas por conjunto é uma amostra pequena (
 - [x] AWS nível 1, aplicado em conta real, gold do mês real publicada e consultada no Athena (tempo registrado)
 - [x] AWS nível 1, registrar o volume lido por consulta no Athena e o custo estimado nos primeiros dias
 - [ ] AWS nível 2: pipeline rodando em container no ECS Fargate com acesso por papel IAM
-- [ ] Orquestração do fluxo completo
+- [x] Orquestração do fluxo completo com Airflow (DAG com portão de qualidade, testada no Airflow 3.4.0 em modo amostra)
 - [x] Primeira análise e principais insights sobre o cadastro de empresas (docs/analysis/2026-10.md)
 - [x] Marcar o CNAE de organizações políticas na gold, para ler as aberturas com e sem ele
 - [x] Agente de IA, parte 1: guarda de SQL (só SELECT, só marts e dimensões, mês fixado pelo programa) e desenho em [docs/agent_design.md](docs/agent_design.md)
