@@ -1,6 +1,6 @@
 # Avaliação da recuperação: conjunto reservado, público all
 
-Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (397 trechos; versão do corpus `66627e788b87`). Sem modelo e sem custo.
+Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (407 trechos; versão do corpus `57e545317916`). Sem modelo e sem custo.
 
 ## Resumo
 
@@ -32,7 +32,7 @@ Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (397 tre
 
 - README.md, seção cnpj-pipeline > Resultados medidos > Agente de texto para SQL
 - README.md, seção cnpj-pipeline > Qualidade de dados
-- README.md, seção cnpj-pipeline > Camada bronze
+- README.md, seção cnpj-pipeline > Roadmap
 
 **r_linhas_fato** (fora dos 5 primeiros): Quantas linhas tem a tabela fato da gold?
 
@@ -44,7 +44,7 @@ Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (397 tre
 
 - infra/README.md, seção Infraestrutura na AWS (nível 1) > API pública do agente > Observabilidade da API
 - infra/README.md, seção Infraestrutura na AWS (nível 1)
-- docs/architecture.md, seção Arquitetura e decisões > Decisões de plataforma e de produto
+- docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Busca na documentação
 
 **r_comparacao_meses** (fora dos 5 primeiros): Como é feita a comparação entre dois meses do cadastro?
 

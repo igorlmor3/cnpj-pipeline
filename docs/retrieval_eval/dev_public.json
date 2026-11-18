@@ -2,8 +2,8 @@
   "suite": "dev",
   "audience": "public",
   "generated_on": "2026-11-18",
-  "corpus": "66627e788b87",
-  "chunks": 397,
+  "corpus": "57e545317916",
+  "chunks": 407,
   "summary": {
     "cases": 24,
     "answerable": 22,
@@ -11,7 +11,7 @@
       "d_recursos_terraform",
       "d_dag_sem_agenda"
     ],
-    "mrr": 0.6742424242424243,
+    "mrr": 0.6515151515151515,
     "leaked": 0,
     "by_category": {
       "decisao": {
@@ -44,19 +44,19 @@
       }
     },
     "hit_at": {
-      "1": 13,
+      "1": 12,
       "3": 16,
       "5": 18
     },
     "hit_rate": {
-      "1": 0.5909090909090909,
+      "1": 0.5454545454545454,
       "3": 0.7272727272727273,
       "5": 0.8181818181818182
     },
     "hit_ci": {
       "1": [
-        0.387348183298974,
-        0.7674418391364541
+        0.34659795182499575,
+        0.7307970593927182
       ],
       "3": [
         0.5184826582032107,
@@ -75,11 +75,11 @@
       "question": "Por que o projeto usa DuckDB em vez de Spark ou Polars?",
       "answerable": true,
       "relevant_chunks": 1,
-      "rank": 1,
+      "rank": 2,
       "top": [
+        "docs/architecture.md, seção Arquitetura e decisões > Decisões de plataforma e de produto",
         "docs/architecture.md, seção Arquitetura e decisões > Decisões em aberto",
-        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Busca na documentação",
-        "docs/architecture.md, seção Arquitetura e decisões > Decisões em aberto"
+        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Busca na documentação"
       ],
       "leaked": 0
     },
@@ -147,8 +147,8 @@
       "relevant_chunks": 1,
       "rank": 3,
       "top": [
-        "README.md, seção cnpj-pipeline > Roadmap",
         "site/README.md, seção Site",
+        "README.md, seção cnpj-pipeline > Roadmap",
         "docs/site_data.md, seção Dados do site > O que é seguro publicar, e por quê"
       ],
       "leaked": 0
@@ -372,8 +372,8 @@
       "rank": 1,
       "top": [
         "README.md, seção cnpj-pipeline > Evolução entre meses",
-        "docs/architecture.md, seção Arquitetura e decisões > Decisões em aberto",
-        "docs/analysis/evolucao_2026-07_a_2026-10.md, seção Evolução do cadastro de CNPJ entre julho e outubro de 2026 > 2. Os movimentos entre fotos"
+        "docs/analysis/evolucao_2026-07_a_2026-10.md, seção Evolução do cadastro de CNPJ entre julho e outubro de 2026 > 2. Os movimentos entre fotos",
+        "docs/architecture.md, seção Arquitetura e decisões > Decisões em aberto"
       ],
       "leaked": 0
     },

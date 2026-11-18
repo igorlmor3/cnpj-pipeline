@@ -2,8 +2,8 @@
   "suite": "reservado",
   "audience": "public",
   "generated_on": "2026-11-18",
-  "corpus": "66627e788b87",
-  "chunks": 397,
+  "corpus": "57e545317916",
+  "chunks": 407,
   "summary": {
     "cases": 24,
     "answerable": 20,
@@ -237,8 +237,8 @@
       "relevant_chunks": 0,
       "rank": null,
       "top": [
-        "README.md, seção cnpj-pipeline > Resultados medidos > Publicação da gold na AWS",
         "docs/architecture.md, seção Arquitetura e decisões > Decisões de plataforma e de produto",
+        "README.md, seção cnpj-pipeline > Resultados medidos > Publicação da gold na AWS",
         "README.md, seção cnpj-pipeline > Resultados medidos > Publicação da gold na AWS"
       ],
       "leaked": 0

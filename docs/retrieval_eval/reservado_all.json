@@ -2,8 +2,8 @@
   "suite": "reservado",
   "audience": "all",
   "generated_on": "2026-11-18",
-  "corpus": "66627e788b87",
-  "chunks": 397,
+  "corpus": "57e545317916",
+  "chunks": 407,
   "summary": {
     "cases": 24,
     "answerable": 24,
@@ -94,7 +94,7 @@
       "top": [
         "README.md, seção cnpj-pipeline > Resultados medidos > Agente de texto para SQL",
         "README.md, seção cnpj-pipeline > Qualidade de dados",
-        "README.md, seção cnpj-pipeline > Camada bronze"
+        "README.md, seção cnpj-pipeline > Roadmap"
       ],
       "leaked": 0
     },
@@ -206,7 +206,7 @@
       "top": [
         "infra/README.md, seção Infraestrutura na AWS (nível 1) > API pública do agente > Observabilidade da API",
         "infra/README.md, seção Infraestrutura na AWS (nível 1)",
-        "docs/architecture.md, seção Arquitetura e decisões > Decisões de plataforma e de produto"
+        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Busca na documentação"
       ],
       "leaked": 0
     },
@@ -233,8 +233,8 @@
       "rank": 1,
       "top": [
         "infra/README.md, seção Infraestrutura na AWS (nível 1) > O que é criado",
-        "README.md, seção cnpj-pipeline > Resultados medidos > Publicação da gold na AWS",
-        "docs/architecture.md, seção Arquitetura e decisões > Decisões de plataforma e de produto"
+        "docs/architecture.md, seção Arquitetura e decisões > Decisões de plataforma e de produto",
+        "README.md, seção cnpj-pipeline > Resultados medidos > Publicação da gold na AWS"
       ],
       "leaked": 0
     },

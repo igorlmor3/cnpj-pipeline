@@ -2,13 +2,13 @@
   "suite": "dev",
   "audience": "all",
   "generated_on": "2026-11-18",
-  "corpus": "66627e788b87",
-  "chunks": 397,
+  "corpus": "57e545317916",
+  "chunks": 407,
   "summary": {
     "cases": 24,
     "answerable": 24,
     "unanswerable_ids": [],
-    "mrr": 0.5951388888888889,
+    "mrr": 0.5743055555555555,
     "leaked": 0,
     "by_category": {
       "decisao": {
@@ -45,19 +45,19 @@
       }
     },
     "hit_at": {
-      "1": 12,
+      "1": 11,
       "3": 16,
       "5": 18
     },
     "hit_rate": {
-      "1": 0.5,
+      "1": 0.4583333333333333,
       "3": 0.6666666666666666,
       "5": 0.75
     },
     "hit_ci": {
       "1": [
-        0.3142742569328851,
-        0.6857257430671149
+        0.27891333613001446,
+        0.6492513477492627
       ],
       "3": [
         0.46706316684738447,
@@ -76,11 +76,11 @@
       "question": "Por que o projeto usa DuckDB em vez de Spark ou Polars?",
       "answerable": true,
       "relevant_chunks": 1,
-      "rank": 1,
+      "rank": 2,
       "top": [
+        "docs/architecture.md, seção Arquitetura e decisões > Decisões de plataforma e de produto",
         "docs/architecture.md, seção Arquitetura e decisões > Decisões em aberto",
-        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Busca na documentação",
-        "docs/architecture.md, seção Arquitetura e decisões > Decisões em aberto"
+        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Busca na documentação"
       ],
       "leaked": 0
     },
@@ -164,7 +164,7 @@
       "top": [
         "docs/architecture.md, seção Arquitetura e decisões > Decisões de plataforma e de produto",
         "infra/README.md, seção Infraestrutura na AWS (nível 1) > Publicar e consultar",
-        "README.md, seção cnpj-pipeline > Estrutura do repositório"
+        "docs/evolution/2026-10.md, seção Evolução do cadastro: de 2026-09 para 2026-10 > Defasagem dos CNPJs novos"
       ],
       "leaked": 0
     },

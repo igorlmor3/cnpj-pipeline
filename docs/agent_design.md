@@ -92,7 +92,7 @@ Perguntas sobre o projeto (por que DuckDB, o que a guarda recusa, quanto tempo l
 
 | Conjunto | Perguntas com fonte pública | Acerto no 1º | Nos 3 primeiros | Nos 5 primeiros | MRR@5 |
 |---|---|---|---|---|---|
-| dev | 22 de 24 | 13 (59,1%) | 16 (72,7%; IC 51,8% a 86,8%) | 18 (81,8%; IC 61,5% a 92,7%) | 0,674 |
+| dev | 22 de 24 | 12 (54,5%) | 16 (72,7%; IC 51,8% a 86,8%) | 18 (81,8%; IC 61,5% a 92,7%) | 0,652 |
 | reservado | 20 de 24 | 11 (55,0%) | 14 (70,0%; IC 48,1% a 85,5%) | 15 (75,0%; IC 53,1% a 88,8%) | 0,621 |
 
 Nenhum resultado de público não permitido nos dois conjuntos. O corpus inclui este próprio documento, então os números se mexem quando a documentação muda; cada relatório grava a versão do corpus em que foi gerado. Os relatórios completos, com cada pergunta errada e os trechos que a busca trouxe no lugar, estão em `docs/retrieval_eval/`. Com 20 a 22 perguntas os intervalos são largos: a diferença entre `dev` e `reservado` está dentro do ruído. Em `dev`, variar o tamanho do trecho, o peso do título, k1 e b e a divisão de listas em itens não trouxe ganho que passasse de uma pergunta, então ficou a configuração inicial, e a divisão de listas foi descartada. As falhas são principalmente de vocabulário: a pergunta usa uma palavra que o documento não usa (por exemplo, "Spark" para um texto que diz "PySpark"), que é o limite conhecido de uma busca lexical e o que uma busca por embeddings tende a cobrir.

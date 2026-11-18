@@ -181,6 +181,72 @@ Com `api_alarm_email` preenchido em `terraform.tfvars`, um tópico SNS envia os 
 
 `terraform.tfvars`, `*.tfstate`, a pasta `.terraform/`, qualquer chave de acesso ou arquivo `.env`. O `.gitignore` já cobre isso. O arquivo `.terraform.lock.hcl`, gerado pelo `terraform init`, deve ser versionado.
 
-## Próximo nível
+## Nível 2: o pipeline no ECS Fargate
 
-O nível 2 (pipeline rodando em container no ECS Fargate, com acesso por papel IAM e sem chaves) acrescenta recursos a este mesmo código. Está descrito em [../docs/architecture.md](../docs/architecture.md) e ainda não foi iniciado.
+Estado: o código da tarefa e do disparador tem testes com clientes simulados, e a imagem e o módulo Terraform (`modules/ecs/`) passaram na checagem de formatação e de sintaxe. O módulo ainda não foi aplicado em uma conta, e a tarefa ainda não rodou na AWS.
+
+O nível 2 roda o mesmo pipeline (download, bronze, silver, gold, qualidade, publicação e tabelas no Athena) em uma tarefa do ECS Fargate. No lugar de chaves de acesso, a tarefa usa as credenciais temporárias do papel IAM dela. As camadas ficam no disco de trabalho da tarefa e só a gold é publicada no S3, como no nível 1. A exportação para o site é pulada (`--skip-site`), porque a pasta do site some com o container.
+
+| Recurso | Para que serve |
+| --- | --- |
+| Repositório no ECR `cnpj-pipeline` | Imagens do pipeline. Só as 3 mais recentes ficam guardadas, e cada envio passa por varredura de vulnerabilidades. |
+| Cluster `cnpj-pipeline` | Agrupa a tarefa. Não tem custo enquanto nada roda. |
+| Definição da tarefa `cnpj-pipeline` | 4 vCPUs, 16 GiB de memória e 120 GiB de disco de trabalho (`ecs_vcpu`, `ecs_memory_mib` e `ecs_ephemeral_storage_gib`), com limite de 300 minutos (`ecs_task_timeout_minutes`). |
+| Papel de execução | Só puxa a imagem e escreve os logs. |
+| Papel da tarefa | A mesma política do usuário publicador: este bucket, este workgroup do Athena e este banco do Glue, sem acesso a mais nada. |
+| Grupo de logs `/ecs/cnpj-pipeline` | Logs da tarefa, com 14 dias de retenção. |
+| Rede | VPC padrão, sem NAT Gateway. A tarefa sai para a internet por um IP público, e o grupo de segurança não aceita nenhuma entrada. |
+
+O dimensionamento vem do que foi medido no mês real: o DuckDB trabalhou dentro do limite de 4 GB de memória (pico de 4.050 MiB), e um mês ocupa cerca de 47 GiB de disco (7,3 GiB de zips, 26,9 GiB de CSV, 5,2 GiB de bronze, 5,7 GiB de silver e 1,5 GiB de gold). Por isso o disco é de 120 GiB e cada tarefa processa um mês.
+
+### Como usar
+
+1. Em `terraform.tfvars`, acrescente `ecs_enabled = true` e aplique. O `plan` deve mostrar só criações:
+
+   ```powershell
+   cd infra
+   terraform plan
+   terraform apply
+   ```
+
+2. Construa a imagem e envie para o ECR (o `docker login` recebe a senha pela entrada padrão, sem mostrá-la):
+
+   ```powershell
+   $repo = terraform output -raw ecs_repository_url
+   cd ..
+   aws ecr get-login-password --profile cnpj-admin --region us-east-1 | docker login --username AWS --password-stdin $repo.Split("/")[0]
+   docker build -f Dockerfile.cloud -t "${repo}:latest" .
+   docker push "${repo}:latest"
+   ```
+
+3. Informe ao disparador onde está a tarefa (os valores saem do `terraform output`):
+
+   ```powershell
+   $env:CNPJ_ECS_CLUSTER = terraform -chdir=infra output -raw ecs_cluster
+   $env:CNPJ_ECS_TASK_DEFINITION = terraform -chdir=infra output -raw ecs_task_definition
+   $env:CNPJ_ECS_SUBNETS = (terraform -chdir=infra output -json ecs_subnets | ConvertFrom-Json) -join ","
+   $env:CNPJ_ECS_SECURITY_GROUP = terraform -chdir=infra output -raw ecs_security_group
+   ```
+
+4. Antes de gastar com um mês inteiro, teste se o servidor da Receita responde a partir da AWS. O teste baixa só os 4 primeiros bytes de um arquivo pequeno e confere se são de um zip, porque o firewall da Receita pode responder 200 com uma página HTML de recusa:
+
+   ```powershell
+   python -m cnpj_pipeline.cloud.run_task --profile cnpj-admin --probe --month 2026-10 --wait
+   ```
+
+5. Rode um mês e acompanhe os logs. O disparador usa o perfil `cnpj-admin`, porque o usuário publicador não tem permissão de ECS:
+
+   ```powershell
+   python -m cnpj_pipeline.cloud.run_task --profile cnpj-admin --month 2026-10 --wait
+   aws logs tail /ecs/cnpj-pipeline --follow --profile cnpj-admin
+   ```
+
+   Com `--wait`, o comando devolve o código de saída da tarefa (0 se tudo passou). `--force` refaz as camadas que já existem, e `--timeout-minutes` muda o limite desta execução.
+
+### Custo e limites
+
+- Preço de lista no us-east-1 (Linux x86, [página de preços do Fargate](https://aws.amazon.com/fargate/pricing/)): US$ 0,04048 por vCPU-hora, US$ 0,004445 por GB-hora e US$ 0,000111 por GB-hora de disco acima de 20 GiB, mais o IPv4 público (US$ 0,005 por hora). A tarefa de 4 vCPUs, 16 GiB e 120 GiB custa cerca de US$ 0,25 por hora, cobrados por segundo, e o limite de 300 minutos põe um teto de cerca de US$ 1,25 por execução.
+- O ECS não limita a duração de uma tarefa. O limite de tempo é aplicado pela própria tarefa (`CNPJ_TASK_TIMEOUT_MINUTES`): passado o prazo, ela encerra a execução com o código 124 e o Fargate para de cobrar.
+- Antes de começar, a tarefa confere o espaço livre no disco (`CNPJ_MIN_FREE_GIB`, padrão 60 GiB) e recusa a execução se não houver.
+- Um mês por tarefa: as camadas de um mês somam cerca de 47 GiB, e a tarefa não apaga um mês para processar o seguinte.
+- Para desmontar o nível 2, volte `ecs_enabled` para `false` e aplique. O repositório de imagens é esvaziado junto.
