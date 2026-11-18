@@ -1,0 +1,409 @@
+{
+  "suite": "dev",
+  "audience": "public",
+  "generated_on": "2026-11-18",
+  "corpus": "71396f241f48",
+  "chunks": 376,
+  "summary": {
+    "cases": 24,
+    "answerable": 22,
+    "unanswerable_ids": [
+      "d_recursos_terraform",
+      "d_dag_sem_agenda"
+    ],
+    "mrr": 0.6742424242424243,
+    "leaked": 0,
+    "by_category": {
+      "decisao": {
+        "cases": 3,
+        "hit_at_3": 3
+      },
+      "regra": {
+        "cases": 4,
+        "hit_at_3": 3
+      },
+      "definicao": {
+        "cases": 3,
+        "hit_at_3": 3
+      },
+      "limite": {
+        "cases": 4,
+        "hit_at_3": 3
+      },
+      "privacidade": {
+        "cases": 3,
+        "hit_at_3": 2
+      },
+      "numero": {
+        "cases": 3,
+        "hit_at_3": 1
+      },
+      "ressalva": {
+        "cases": 2,
+        "hit_at_3": 1
+      }
+    },
+    "hit_at": {
+      "1": 13,
+      "3": 16,
+      "5": 18
+    },
+    "hit_rate": {
+      "1": 0.5909090909090909,
+      "3": 0.7272727272727273,
+      "5": 0.8181818181818182
+    },
+    "hit_ci": {
+      "1": [
+        0.387348183298974,
+        0.7674418391364541
+      ],
+      "3": [
+        0.5184826582032107,
+        0.8684923978853596
+      ],
+      "5": [
+        0.6148339238492879,
+        0.9269311546747105
+      ]
+    }
+  },
+  "cases": [
+    {
+      "id": "d_duckdb",
+      "category": "decisao",
+      "question": "Por que o projeto usa DuckDB em vez de Spark ou Polars?",
+      "answerable": true,
+      "relevant_chunks": 1,
+      "rank": 1,
+      "top": [
+        "docs/architecture.md, seção Arquitetura e decisões > Decisões em aberto",
+        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Busca na documentação",
+        "docs/architecture.md, seção Arquitetura e decisões > Decisões em aberto"
+      ],
+      "leaked": 0
+    },
+    {
+      "id": "d_duplicado_silver",
+      "category": "regra",
+      "question": "Como a silver escolhe qual linha manter quando o CNPJ básico está duplicado?",
+      "answerable": true,
+      "relevant_chunks": 4,
+      "rank": 1,
+      "top": [
+        "docs/architecture.md, seção Arquitetura e decisões > Decisões em aberto",
+        "docs/data_quality_rules.md, seção Catálogo de regras de qualidade de dados > Decisões possíveis",
+        "docs/data_quality_rules.md, seção Catálogo de regras de qualidade de dados > Achados do mês real (2026-10)"
+      ],
+      "leaked": 0
+    },
+    {
+      "id": "d_cnpj_zero",
+      "category": "definicao",
+      "question": "O que significa o cnpj_basico 00000000?",
+      "answerable": true,
+      "relevant_chunks": 1,
+      "rank": 2,
+      "top": [
+        "README.md, seção cnpj-pipeline > Profiling",
+        "docs/data_quality_rules.md, seção Catálogo de regras de qualidade de dados > Achados do mês real (2026-10)",
+        "docs/data_quality_rules.md, seção Catálogo de regras de qualidade de dados > Premissas de leitura"
+      ],
+      "leaked": 0
+    },
+    {
+      "id": "d_resposta_sem_consulta",
+      "category": "limite",
+      "question": "O que o visitante vê quando o modelo responde sem consultar nada?",
+      "answerable": true,
+      "relevant_chunks": 1,
+      "rank": 1,
+      "top": [
+        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > O laço do agente e o gasto",
+        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Busca na documentação",
+        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Publicação: o que os recrutadores veem"
+      ],
+      "leaked": 0
+    },
+    {
+      "id": "d_gold_sem_contato",
+      "category": "privacidade",
+      "question": "A gold tem nomes, endereços ou telefones?",
+      "answerable": true,
+      "relevant_chunks": 1,
+      "rank": 4,
+      "top": [
+        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Decisões",
+        "README.md, seção cnpj-pipeline > Camada gold",
+        "docs/data_quality_rules.md, seção Catálogo de regras de qualidade de dados > Regras da camada silver"
+      ],
+      "leaked": 0
+    },
+    {
+      "id": "d_celulas_pequenas",
+      "category": "privacidade",
+      "question": "Por que o site não publica recortes com poucas ocorrências?",
+      "answerable": true,
+      "relevant_chunks": 1,
+      "rank": 3,
+      "top": [
+        "README.md, seção cnpj-pipeline > Roadmap",
+        "site/README.md, seção Site",
+        "docs/site_data.md, seção Dados do site > O que é seguro publicar, e por quê"
+      ],
+      "leaked": 0
+    },
+    {
+      "id": "d_particoes_athena",
+      "category": "decisao",
+      "question": "Como o Athena descobre os meses novos sem rodar crawler?",
+      "answerable": true,
+      "relevant_chunks": 2,
+      "rank": 1,
+      "top": [
+        "docs/architecture.md, seção Arquitetura e decisões > Decisões de plataforma e de produto",
+        "README.md, seção cnpj-pipeline > Estrutura do repositório",
+        "docs/evolution/2026-10.md, seção Evolução do cadastro: de 2026-09 para 2026-10 > Defasagem dos CNPJs novos"
+      ],
+      "leaked": 0
+    },
+    {
+      "id": "d_digito_verificador",
+      "category": "numero",
+      "question": "Quantos CNPJs tinham dígito verificador inválido no mês real?",
+      "answerable": true,
+      "relevant_chunks": 1,
+      "rank": 4,
+      "top": [
+        "README.md, seção cnpj-pipeline > Resultados medidos > Verificações de qualidade e máquina",
+        "docs/data_quality_rules.md, seção Catálogo de regras de qualidade de dados > Achados do mês real (2026-10)",
+        "docs/quality/2026-10.md, seção Qualidade de dados e tempos (2026-10) > Verificações informativas"
+      ],
+      "leaked": 0
+    },
+    {
+      "id": "d_exclusao_simples_zerada",
+      "category": "definicao",
+      "question": "O que significam as datas de exclusão do Simples zeradas?",
+      "answerable": true,
+      "relevant_chunks": 1,
+      "rank": 1,
+      "top": [
+        "docs/data_quality_rules.md, seção Catálogo de regras de qualidade de dados > Achados do mês real (2026-10)",
+        "docs/silver/2026-10.md, seção Camada silver: regras aplicadas (2026-10) > Simples",
+        "docs/quality/2026-10.md, seção Qualidade de dados e tempos (2026-10) > Verificações informativas"
+      ],
+      "leaked": 0
+    },
+    {
+      "id": "d_picos_eleicao",
+      "category": "ressalva",
+      "question": "Por que há picos de aberturas em anos de eleição?",
+      "answerable": true,
+      "relevant_chunks": 1,
+      "rank": 2,
+      "top": [
+        "docs/analysis/2026-10.md, seção Análise do cadastro de CNPJ (mês de referência 2026-10) > 4. Eleições distorcem a série de aberturas",
+        "docs/site_data.md, seção Dados do site > Ressalvas que viajam com os números",
+        "docs/analysis/2026-10.md, seção Análise do cadastro de CNPJ (mês de referência 2026-10) > 4. Eleições distorcem a série de aberturas"
+      ],
+      "leaked": 0
+    },
+    {
+      "id": "d_tempo_silver",
+      "category": "numero",
+      "question": "Quanto tempo levou a camada silver de Estabelecimentos?",
+      "answerable": true,
+      "relevant_chunks": 1,
+      "rank": null,
+      "top": [
+        "README.md, seção cnpj-pipeline > Resultados medidos > Camada gold",
+        "README.md, seção cnpj-pipeline > Resultados medidos",
+        "README.md, seção cnpj-pipeline > Camada gold"
+      ],
+      "leaked": 0
+    },
+    {
+      "id": "d_github_pages",
+      "category": "decisao",
+      "question": "Por que o site fica no GitHub Pages e não na AWS?",
+      "answerable": true,
+      "relevant_chunks": 1,
+      "rank": 1,
+      "top": [
+        "docs/architecture.md, seção Arquitetura e decisões > Decisões de plataforma e de produto",
+        "site/README.md, seção Site > Publicação",
+        "README.md, seção cnpj-pipeline > Estrutura do repositório"
+      ],
+      "leaked": 0
+    },
+    {
+      "id": "d_guarda_recusa",
+      "category": "limite",
+      "question": "O que a guarda de SQL recusa?",
+      "answerable": true,
+      "relevant_chunks": 1,
+      "rank": null,
+      "top": [
+        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > O laço do agente e o gasto",
+        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Busca na documentação",
+        "README.md, seção cnpj-pipeline > Resultados medidos > Agente de texto para SQL"
+      ],
+      "leaked": 0
+    },
+    {
+      "id": "d_teto_gasto",
+      "category": "limite",
+      "question": "Qual o teto de gasto mensal do agente com o modelo?",
+      "answerable": true,
+      "relevant_chunks": 2,
+      "rank": 1,
+      "top": [
+        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > O laço do agente e o gasto",
+        "docs/architecture.md, seção Arquitetura e decisões > Decisões de plataforma e de produto",
+        "README.md, seção cnpj-pipeline > Visão geral do projeto"
+      ],
+      "leaked": 0
+    },
+    {
+      "id": "d_idempotencia",
+      "category": "regra",
+      "question": "Como a idempotência das etapas é garantida?",
+      "answerable": true,
+      "relevant_chunks": 1,
+      "rank": 1,
+      "top": [
+        "docs/architecture.md, seção Arquitetura e decisões > Princípios",
+        "README.md, seção cnpj-pipeline > Resultados medidos > Publicação da gold na AWS",
+        "README.md, seção cnpj-pipeline > Profiling"
+      ],
+      "leaked": 0
+    },
+    {
+      "id": "d_bronze_rejeitadas",
+      "category": "regra",
+      "question": "O que acontece com linhas malformadas na camada bronze?",
+      "answerable": true,
+      "relevant_chunks": 3,
+      "rank": 1,
+      "top": [
+        "docs/architecture.md, seção Arquitetura e decisões > Camadas",
+        "README.md, seção cnpj-pipeline > Camada bronze",
+        "README.md, seção cnpj-pipeline > Camada bronze"
+      ],
+      "leaked": 0
+    },
+    {
+      "id": "d_agente_sem_fato",
+      "category": "privacidade",
+      "question": "Por que o agente não lê o fato por estabelecimento?",
+      "answerable": true,
+      "relevant_chunks": 1,
+      "rank": 1,
+      "top": [
+        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Decisões",
+        "docs/site_data.md, seção Dados do site > O que é seguro publicar, e por quê",
+        "README.md, seção cnpj-pipeline > Resultados medidos > Publicação da gold na AWS"
+      ],
+      "leaked": 0
+    },
+    {
+      "id": "d_encoding",
+      "category": "regra",
+      "question": "Qual o encoding dos arquivos da Receita e como é tratado?",
+      "answerable": true,
+      "relevant_chunks": 1,
+      "rank": null,
+      "top": [
+        "docs/architecture.md, seção Arquitetura e decisões > Camadas",
+        "README.md, seção cnpj-pipeline > Arquitetura planejada",
+        "docs/data_quality_rules.md, seção Catálogo de regras de qualidade de dados > Premissas de leitura"
+      ],
+      "leaked": 0
+    },
+    {
+      "id": "d_somar_meses",
+      "category": "limite",
+      "question": "Por que o agente recusa somar empresas ativas de meses diferentes?",
+      "answerable": true,
+      "relevant_chunks": 1,
+      "rank": 1,
+      "top": [
+        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Decisões",
+        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Decisões",
+        "README.md, seção cnpj-pipeline > Camada gold"
+      ],
+      "leaked": 0
+    },
+    {
+      "id": "d_recursos_terraform",
+      "category": "infra",
+      "question": "Que recursos o Terraform cria na AWS?",
+      "answerable": false,
+      "relevant_chunks": 0,
+      "rank": null,
+      "top": [
+        "README.md, seção cnpj-pipeline > Resultados medidos > Publicação da gold na AWS",
+        "docs/architecture.md, seção Arquitetura e decisões > Decisões de plataforma e de produto",
+        "README.md, seção cnpj-pipeline > Publicação na AWS (nível 1)"
+      ],
+      "leaked": 0
+    },
+    {
+      "id": "d_dag_sem_agenda",
+      "category": "infra",
+      "question": "Por que a DAG do Airflow não tem agenda?",
+      "answerable": false,
+      "relevant_chunks": 0,
+      "rank": null,
+      "top": [
+        "README.md, seção cnpj-pipeline > Orquestração (Airflow)",
+        "docs/architecture.md, seção Arquitetura e decisões > Decisões em aberto",
+        "README.md, seção cnpj-pipeline > Estrutura do repositório"
+      ],
+      "leaked": 0
+    },
+    {
+      "id": "d_mart_movimentos",
+      "category": "definicao",
+      "question": "O que é o mart de movimentos entre meses?",
+      "answerable": true,
+      "relevant_chunks": 2,
+      "rank": 1,
+      "top": [
+        "README.md, seção cnpj-pipeline > Evolução entre meses",
+        "docs/analysis/evolucao_2026-07_a_2026-10.md, seção Evolução do cadastro de CNPJ entre julho e outubro de 2026 > 2. Os movimentos entre fotos",
+        "docs/architecture.md, seção Arquitetura e decisões > Decisões em aberto"
+      ],
+      "leaked": 0
+    },
+    {
+      "id": "d_verificacoes_passaram",
+      "category": "numero",
+      "question": "Quantas verificações de qualidade passaram na execução completa?",
+      "answerable": true,
+      "relevant_chunks": 1,
+      "rank": 1,
+      "top": [
+        "docs/data_quality_rules.md, seção Catálogo de regras de qualidade de dados > Verificações automatizadas (`quality.py`)",
+        "docs/quality/2026-10.md, seção Qualidade de dados e tempos (2026-10)",
+        "docs/data_quality_rules.md, seção Catálogo de regras de qualidade de dados > Como usar"
+      ],
+      "leaked": 0
+    },
+    {
+      "id": "d_estabelecimento_nao_e_empresa",
+      "category": "ressalva",
+      "question": "Estabelecimento é a mesma coisa que empresa nos marts?",
+      "answerable": true,
+      "relevant_chunks": 1,
+      "rank": null,
+      "top": [
+        "README.md, seção cnpj-pipeline > Resultados medidos > Camada gold",
+        "README.md, seção cnpj-pipeline > Camada gold",
+        "README.md, seção cnpj-pipeline > Camada gold"
+      ],
+      "leaked": 0
+    }
+  ]
+}

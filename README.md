@@ -487,7 +487,8 @@ Limites desta medição: 24 a 32 perguntas por conjunto é uma amostra pequena (
 - [ ] Agente de IA, conjunto de avaliação maior (cerca de 100 perguntas), com uma parte congelada que nunca é usada para ajustar o prompt
 - [x] Agente de IA, verificação de fidelidade: todo número do texto da resposta precisa estar no resultado da consulta, na pergunta ou no SQL (`agent/faithfulness.py`, métrica à parte nos relatórios, testada)
 - [ ] Agente de IA, comparação de modelos: tabela de acerto, custo e latência no mesmo conjunto
-- [ ] Agente de IA, segunda ferramenta: busca nos documentos do repositório (BM25 ou embeddings pequenos), com citação da fonte, índice restrito a uma lista de arquivos permitidos e a recuperação avaliada separadamente da resposta
+- [x] Agente de IA, busca nos documentos do repositório (BM25 em Python puro), com índice restrito a uma lista de arquivos permitidos, filtro por público aplicado antes da pontuação e a recuperação avaliada separadamente da resposta, com intervalo de 95% (`agent/retrieval.py`, `agent/retrieval_eval.py`, relatórios em `docs/retrieval_eval/`)
+- [ ] Agente de IA, segunda ferramenta: `search_docs` ligada ao agente e à API, com a fonte citada na resposta
 - [ ] Agente de IA, ferramentas de metadados: listar tabelas, colunas e meses publicados
 - [ ] Agente de IA, resposta estruturada (texto, SQL, mês usado, premissas e checagem de fidelidade) e a seção "como chegou lá" no site
 - [ ] Agente de IA, observabilidade: consultas do CloudWatch Logs Insights definidas no Terraform, só com contagens agregadas e sem guardar as perguntas dos visitantes

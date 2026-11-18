@@ -1,6 +1,6 @@
 # Agente de perguntas sobre a gold (texto para SQL)
 
-Status: implementados e testados a guarda de SQL (`sql_guard.py`), o contexto semântico (`context.py`), os executores para DuckDB local e Athena (`executor.py`), o cliente do modelo (`llm.py`), o controle de gasto (`budget.py`), o laço do agente (`ask.py`) e a avaliação (`evaluation.py`, `evaluation_cases.py`), todos em `src/cnpj_pipeline/agent/`. A execução da avaliação com o modelo real, a API publicada e a interface estão planejadas e descritas aqui.
+Status: implementados e testados a guarda de SQL (`sql_guard.py`), o contexto semântico (`context.py`), os executores para DuckDB local e Athena (`executor.py`), o cliente do modelo (`llm.py`), o controle de gasto (`budget.py`), o laço do agente (`ask.py`), a avaliação (`evaluation.py`, `evaluation_cases.py`) e a busca na documentação (`retrieval.py`, `retrieval_eval.py`), todos em `src/cnpj_pipeline/agent/`. A avaliação com o modelo real foi executada, a API está publicada na AWS e a interface está no ar no GitHub Pages.
 
 ## Objetivo e limite
 
@@ -72,6 +72,25 @@ A verificação de fidelidade (`agent/faithfulness.py`) olha o texto que o visit
 
 O modo `--reference` usa as próprias consultas de referência no lugar do modelo: valida o conjunto e o programa sem custo, e é o teste que roda no CI. Sem ele, o modelo é chamado com a chave de `ANTHROPIC_API_KEY` e o gasto da execução fica limitado por `--budget-usd`. Cada execução grava em `docs/agent_eval/` um relatório em Markdown (acerto por categoria, primeira consulta sem erro, chamadas ao modelo, custo e latência por pergunta, e o SQL das falhas) e um JSON; nenhum dos dois traz linhas de resultado. Os testes provam que a avaliação reprova respostas erradas (consulta errada, recusa de tudo, ressalva ignorada, ordem trocada, orçamento esgotado), e não só que aprova as certas.
 
+## Busca na documentação
+
+Perguntas sobre o projeto (por que DuckDB, o que a guarda recusa, quanto tempo levou a silver) não se respondem com SQL. O agente ganha uma segunda ferramenta, `search_docs`, que busca na documentação do repositório e devolve trechos numerados, cada um com o arquivo e a seção de origem. A busca fica atrás da interface `Retriever` (`agent/retrieval.py`), e o agente só conhece a interface.
+
+**BM25 antes de embeddings.** O corpus é pequeno (cerca de 380 trechos), cheio de identificadores literais (`mart_simples_mei_uf`, `CNAE 9492800`) e de números, onde a busca lexical vai bem. BM25 não tem custo por consulta, não depende de serviço externo e é determinístico, o que deixa a avaliação reproduzível. A implementação é Python puro (k1 = 1,2; b = 0,75; termos do título com peso 2), com um normalizador de acentos, lista de palavras vazias e um corte leve de plural. Um índice vetorial (S3 Vectors, por exemplo) entra depois como outra implementação do mesmo `Retriever`, medido no mesmo conjunto de perguntas, com o custo e a latência ao lado.
+
+**Controle de acesso na recuperação.** O índice só inclui arquivos de uma lista de permissões (`DEFAULT_RULES`); o que não casa com nenhuma regra fica de fora, e cada arquivo tem um público, `public` ou `internal`. O filtro por público vale antes da pontuação, e as estatísticas do BM25 (frequência dos termos e tamanho médio) são calculadas só sobre os trechos visíveis ao público da consulta. Assim, o texto interno não aparece nos resultados nem altera a posição ou a pontuação do que o visitante vê, e isso é testado. O pacote da função da API leva um índice com os trechos públicos apenas. Os trechos voltam ao modelo como dados: o prompt manda ignorar pedidos que apareçam dentro deles.
+
+**Trechos.** O Markdown é cortado por título (blocos de código respeitados) e os parágrafos são agrupados até 1.400 caracteres. Uma tabela longa vira grupos de linhas de até 650 caracteres com o cabeçalho repetido, porque uma tabela inteira em um trecho diluía a linha que responde.
+
+**Avaliação da recuperação.** `retrieval_eval.py` mede a busca sozinha, sem modelo e sem custo, para separar o erro da busca do erro do modelo. Um trecho é relevante se contém toda a evidência escrita no caso (comparação sem diferença de caixa nem de acento), não se vem de um arquivo escolhido de antemão. As métricas são o acerto nos 1, 3 e 5 primeiros resultados e o MRR@5, com intervalo de 95% de Wilson, além da contagem de resultados de público não permitido, que precisa ser zero. São dois conjuntos de 24 perguntas: `dev`, usado para ajustar a busca, e `reservado`, rodado depois de fixar a configuração e não usado para ajustar nada. No público `public`, as perguntas cuja evidência está só em documentos internos saem da conta e aparecem listadas no relatório.
+
+| Conjunto | Perguntas com fonte pública | Acerto no 1º | Nos 3 primeiros | Nos 5 primeiros | MRR@5 |
+|---|---|---|---|---|---|
+| dev | 22 de 24 | 13 (59,1%) | 16 (72,7%; IC 51,8% a 86,8%) | 18 (81,8%; IC 61,5% a 92,7%) | 0,674 |
+| reservado | 20 de 24 | 11 (55,0%) | 14 (70,0%; IC 48,1% a 85,5%) | 15 (75,0%; IC 53,1% a 88,8%) | 0,621 |
+
+Nenhum resultado de público não permitido nos dois conjuntos. O corpus inclui este próprio documento, então os números se mexem quando a documentação muda; cada relatório grava a versão do corpus em que foi gerado. Os relatórios completos, com cada pergunta errada e os trechos que a busca trouxe no lugar, estão em `docs/retrieval_eval/`. Com 20 a 22 perguntas os intervalos são largos: a diferença entre `dev` e `reservado` está dentro do ruído. Em `dev`, variar o tamanho do trecho, o peso do título, k1 e b e a divisão de listas em itens não trouxe ganho que passasse de uma pergunta, então ficou a configuração inicial, e a divisão de listas foi descartada. As falhas são principalmente de vocabulário: a pergunta usa uma palavra que o documento não usa (por exemplo, "Spark" para um texto que diz "PySpark"), que é o limite conhecido de uma busca lexical e o que uma busca por embeddings tende a cobrir.
+
 ## O que a guarda barra hoje
 
 Mais de uma instrução; qualquer coisa que não seja SELECT (DDL, DML, SHOW, DESCRIBE, EXPLAIN, SET, USE, CALL); tabela fora da lista, incluindo o fato, camadas silver e bronze, `information_schema`, tabelas de sistema (`...$partitions`), outro banco e qualquer catálogo; funções de tabela, UNNEST e LATERAL; WITH RECURSIVE; junção sem condição (inclui vírgula, CROSS e NATURAL) e mais de 4 junções; SQL com mais de 4.000 caracteres; com vários meses, a soma de fotos de meses diferentes (ver o item 2a). O limite de linhas (200) é acrescentado ou reduzido. Os testes (`tests/test_sql_guard.py`) cobrem cada regra, incluindo tentativas de esconder uma tabela real atrás de uma CTE e a execução do SQL reescrito num DuckDB com dois meses, para provar que só o mês escolhido é lido.
@@ -102,7 +121,7 @@ Decidido: provedor Anthropic, teto de US$ 5 por mês. O agente ao vivo começa c
 2. Contexto semântico gerado das colunas reais da gold e de `gold_models.py`; um teste falha se aparecer coluna sem glossa (feito).
 3. Executor com duas pontas (DuckDB local e Athena), limite de linhas, tempo máximo com cancelamento e mensagens de erro sem caminhos, ARNs nem número de conta (feito).
 4. Cliente do modelo de linguagem, laço de correção (devolvendo a mensagem da guarda ao modelo), controle de gasto e cliente falso para testes (feito).
-5. Conjunto de avaliação e relatório de acerto (código e testes feitos; falta a execução com o modelo real, que gera os números do README).
+5. Conjunto de avaliação e relatório de acerto, executados com o modelo real (feito).
 6. Exportação dos agregados da gold para JSON (dados do site), só com contagens e o mês de referência.
 7. Função da API do agente (credencial própria por papel IAM, limites por visitante e interruptor).
 8. Site em React com a análise, o relatório de qualidade e o agente (com perguntas de exemplo pré-gravadas).
