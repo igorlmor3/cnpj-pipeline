@@ -57,14 +57,18 @@ function checkConfig(value: Partial<SiteConfig> | null): SiteConfig {
 /** Totais de um mes a partir do pipeline.json; null quando o arquivo falta ou nao tem o formato esperado. */
 function summarizeRun(month: string, value: Partial<Envelope<Partial<Pipeline>>> | null): MonthRun | null {
   const d = value?.dados;
-  if (!value || value.esquema !== 1 || value.mes_referencia !== month || !d?.bronze || !d.qualidade) return null;
-  const numbers = [d.bronze.linhas, d.bronze.linhas_rejeitadas, d.bronze.bytes_csv, d.qualidade.verificacoes, d.qualidade.verificacoes_bloqueantes];
+  if (!value || value.esquema !== 1 || value.mes_referencia !== month || !d?.bronze || !d.qualidade || !Array.isArray(d.silver?.tabelas)) return null;
+  const silver = d.silver.tabelas.reduce((sum, t) => sum + (typeof t.linhas_saida === "number" ? t.linhas_saida : Number.NaN), 0);
+  const fact = (d.gold?.modelos ?? []).find((m) => m.nome === "fato_estabelecimento")?.linhas;
+  const numbers = [silver, fact, d.bronze.linhas, d.bronze.linhas_rejeitadas, d.bronze.bytes_csv, d.qualidade.verificacoes, d.qualidade.verificacoes_bloqueantes];
   if (!numbers.every((n) => typeof n === "number" && Number.isFinite(n))) return null;
   return {
     month,
     linhas: d.bronze.linhas,
     linhas_rejeitadas: d.bronze.linhas_rejeitadas,
     bytes_csv: d.bronze.bytes_csv,
+    linhas_silver: silver,
+    linhas_fato: fact as number,
     verificacoes: d.qualidade.verificacoes,
     verificacoes_bloqueantes: d.qualidade.verificacoes_bloqueantes,
   };

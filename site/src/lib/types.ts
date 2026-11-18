@@ -252,6 +252,8 @@ export interface MonthRun {
   linhas: number;
   linhas_rejeitadas: number;
   bytes_csv: number;
+  linhas_silver: number;
+  linhas_fato: number;
   verificacoes: number;
   verificacoes_bloqueantes: number;
 }

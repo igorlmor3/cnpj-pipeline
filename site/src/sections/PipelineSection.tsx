@@ -1,5 +1,5 @@
 import { ChartCard, DataTable, Poster, Row } from "../components/ui";
-import { bytes, int, seconds } from "../lib/format";
+import { bytes, int, monthLabel, seconds } from "../lib/format";
 import type { SiteData } from "../lib/types";
 
 export function PipelineSection({ site }: { site: SiteData }) {
@@ -7,7 +7,30 @@ export function PipelineSection({ site }: { site: SiteData }) {
   const q = p.qualidade;
   const reconciled = p.gold.reconciliacoes.filter((r) => r.ok).length;
   return (
-    <Row id="pipeline" title="O pipeline em números" hint="Raw, bronze, silver e gold sobre o mês de referência">
+    <Row id="pipeline" title="O pipeline em números" hint="Raw, bronze, silver e gold. Os detalhes seguem o mês escolhido no topo">
+      {site.runs.length > 1 ? (
+        <ChartCard
+          title="Mês a mês"
+          subtitle={`${site.runs.length} meses processados, com as mesmas verificações em cada um`}
+          size="lg"
+          chart={
+            <TableOnly
+              label="Totais de cada mês processado"
+              head={["Mês", "CSV", "Linhas lidas", "Rejeitadas", "Estabelecimentos", "Verificações"]}
+              rows={site.runs.map((r) => [
+                monthLabel(r.month),
+                bytes(r.bytes_csv),
+                int(r.linhas),
+                int(r.linhas_rejeitadas),
+                int(r.linhas_fato),
+                `${int(r.verificacoes)} (${int(r.verificacoes_bloqueantes)} bloqueantes)`,
+              ])}
+              numeric={[1, 2, 3, 4, 5]}
+            />
+          }
+          footer="Estabelecimentos: linhas do fato, com ativos e baixados. As verificações bloqueantes interrompem a execução se falham."
+        />
+      ) : null}
       <Poster size="sm">
         <h3 className="poster__title">Qualidade</h3>
         <p className="poster__sub">Verificações executadas sobre o mês completo</p>

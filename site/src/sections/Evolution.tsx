@@ -152,7 +152,7 @@ export function Evolution({ site }: { site: SiteData }) {
           />
           <ChartCard
             title="Mudanças de situação cadastral"
-            subtitle={`As ${TOP_TRANSITIONS} transições mais comuns em ${monthLabel(m.mes)}`}
+            subtitle={`As ${facts.transitions.length} transições mais comuns em ${monthLabel(m.mes)}`}
             size="lg"
             chart={
               <BarList

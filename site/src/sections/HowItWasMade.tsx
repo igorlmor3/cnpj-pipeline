@@ -25,6 +25,8 @@ export function buildSteps(site: SiteData): Step[] {
   const totalRows = runs.reduce((sum, r) => sum + r.linhas, 0);
   const totalRejected = runs.reduce((sum, r) => sum + r.linhas_rejeitadas, 0);
   const totalCsv = runs.reduce((sum, r) => sum + r.bytes_csv, 0);
+  const totalSilver = runs.reduce((sum, r) => sum + r.linhas_silver, 0);
+  const span = `${runs.length} meses, de ${monthLabel(runs[0]?.month ?? first)} a ${monthLabel(runs[runs.length - 1]?.month ?? last)}`;
   const evolution = site.evolution;
   const comparisons = evolution?.dados.movimentos.length ?? 0;
   const newTotal = evolution?.dados.movimentos.reduce((sum, m) => sum + m.novos, 0) ?? 0;
@@ -57,8 +59,10 @@ export function buildSteps(site: SiteData): Step[] {
         `A Receita Federal publica o cadastro todo mês em arquivos .zip de CSV: Empresas, Estabelecimentos e Sócios, divididos em várias partes, mais as tabelas de domínio (CNAE, municípios, naturezas e outras). O pipeline já processou ${months.length} meses, de ${monthLabel(first)} a ${monthLabel(last)}.`,
         "O download retoma de onde parou, tenta de novo com espera crescente quando o servidor derruba a conexão e grava um manifesto com o tamanho e o SHA-256 de cada arquivo. Um arquivo que não começa como zip é recusado: em um dos meses o firewall da Receita devolveu páginas de recusa no lugar de dois arquivos, e hoje isso é detectado e repetido.",
       ],
-      metric: bytes(p.bronze.bytes_csv),
-      caption: `de CSV em ${p.bronze.tabelas.length} tabelas, em ${monthLabel(site.month)}${several ? `. ${runs.length} meses somam ${bytes(totalCsv)}` : ""}`,
+      metric: several ? bytes(totalCsv) : bytes(p.bronze.bytes_csv),
+      caption: several
+        ? `de CSV em ${span}. ${bytes(p.bronze.bytes_csv)} em ${monthLabel(site.month)}, em ${p.bronze.tabelas.length} tabelas`
+        : `de CSV em ${p.bronze.tabelas.length} tabelas`,
     },
     {
       title: "Bronze",
@@ -66,8 +70,10 @@ export function buildSteps(site: SiteData): Step[] {
         "O CSV (latin-1, separador ponto e vírgula, sem cabeçalho) vira Parquet em UTF-8, em streaming, com tudo ainda como texto.",
         "Linhas quebradas não somem em silêncio: vão para uma pasta de rejeitados, com o número da linha e o motivo. Se a fração passar do limite, o arquivo falha.",
       ],
-      metric: compact(p.bronze.linhas),
-      caption: `linhas lidas em ${monthLabel(site.month)}, ${int(p.bronze.linhas_rejeitadas)} rejeitadas${several ? `. ${runs.length} meses somam ${compact(totalRows)} linhas e ${int(totalRejected)} rejeitadas` : ""}`,
+      metric: compact(several ? totalRows : p.bronze.linhas),
+      caption: several
+        ? `linhas lidas em ${span}, ${int(totalRejected)} rejeitadas. ${compact(p.bronze.linhas)} em ${monthLabel(site.month)}`
+        : `linhas lidas, ${int(p.bronze.linhas_rejeitadas)} rejeitadas`,
     },
     {
       title: "Silver",
@@ -75,8 +81,10 @@ export function buildSteps(site: SiteData): Step[] {
         "Datas, decimais e indicadores ganham tipo. Datas inexistentes e valores que significam não informado viram nulo. Chaves inválidas e duplicadas vão para uma quarentena, com o motivo.",
         "Entre duplicadas, fica a linha mais preenchida, com desempate pelo hash do conteúdo: a mesma entrada dá a mesma saída, em qualquer ordem.",
       ],
-      metric: compact(silverOut),
-      caption: `linhas na saída, ${int(silverDuplicates)} duplicada removida`,
+      metric: compact(several ? totalSilver : silverOut),
+      caption: several
+        ? `linhas na saída em ${span}. ${compact(silverOut)} em ${monthLabel(site.month)}, ${int(silverDuplicates)} duplicada removida`
+        : `linhas na saída, ${int(silverDuplicates)} duplicada removida`,
     },
     {
       title: "Gold",

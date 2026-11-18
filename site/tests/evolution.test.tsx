@@ -44,7 +44,7 @@ describe("carregamento de meses", () => {
   it("resume os totais de cada mes e ignora um pipeline.json de outro mes", async () => {
     const site = await loadSite("/", publicFetch());
     expect(site.runs.map((r) => r.month)).toEqual(site.months);
-    expect(site.runs.every((r) => r.linhas > 0 && r.linhas_rejeitadas === 0)).toBe(true);
+    expect(site.runs.every((r) => r.linhas > 0 && r.linhas_rejeitadas === 0 && r.linhas_fato > 0)).toBe(true);
     const wrong = { ...readPublic<object>("data/2026-08/pipeline.json"), mes_referencia: "2026-07" };
     const partial = await loadSite("/", publicFetch({ "data/2026-08/pipeline.json": wrong }));
     expect(partial.runs.map((r) => r.month)).toEqual(["2026-07", "2026-09", "2026-10"]);
@@ -129,7 +129,19 @@ describe("pagina de evolucao", () => {
     const section = heading.closest("section") as HTMLElement;
     expect(within(section).getByText(/Variação líquida de ativos desde set\/2026/)).toBeInTheDocument();
     expect(within(section).getByRole("heading", { name: "Mudanças de situação cadastral" })).toBeInTheDocument();
+    expect(within(section).getByText("As 6 transições mais comuns em out/2026")).toBeInTheDocument();
     expect(within(section).getAllByText("+117,5 mil").length).toBeGreaterThanOrEqual(2); // indicador e barra do mes
+  });
+
+  it("mostra os totais de cada mes processado na secao do pipeline", async () => {
+    install();
+    render(<App />);
+    const card = (await screen.findByRole("heading", { name: "Mês a mês" })).closest("article") as HTMLElement;
+    const rows = within(card).getAllByRole("row");
+    expect(rows).toHaveLength(5);
+    expect(within(rows[1] as HTMLElement).getByText("jul/2026")).toBeInTheDocument();
+    expect(within(rows[4] as HTMLElement).getByText("out/2026")).toBeInTheDocument();
+    expect(within(rows[4] as HTMLElement).getByText("73 (51 bloqueantes)")).toBeInTheDocument();
   });
 
   it("troca de mes pelo seletor do topo, recarrega os dados e guarda o mes no endereco", async () => {
