@@ -20,6 +20,11 @@ export function buildSteps(site: SiteData): Step[] {
   const months = site.months;
   const first = months[0] ?? site.month;
   const last = months[months.length - 1] ?? site.month;
+  const runs = site.runs;
+  const several = runs.length > 1;
+  const totalRows = runs.reduce((sum, r) => sum + r.linhas, 0);
+  const totalRejected = runs.reduce((sum, r) => sum + r.linhas_rejeitadas, 0);
+  const totalCsv = runs.reduce((sum, r) => sum + r.bytes_csv, 0);
   const evolution = site.evolution;
   const comparisons = evolution?.dados.movimentos.length ?? 0;
   const newTotal = evolution?.dados.movimentos.reduce((sum, m) => sum + m.novos, 0) ?? 0;
@@ -53,7 +58,7 @@ export function buildSteps(site: SiteData): Step[] {
         "O download retoma de onde parou, tenta de novo com espera crescente quando o servidor derruba a conexão e grava um manifesto com o tamanho e o SHA-256 de cada arquivo. Um arquivo que não começa como zip é recusado: em um dos meses o firewall da Receita devolveu páginas de recusa no lugar de dois arquivos, e hoje isso é detectado e repetido.",
       ],
       metric: bytes(p.bronze.bytes_csv),
-      caption: `de CSV em ${p.bronze.tabelas.length} tabelas, em ${monthLabel(site.month)}`,
+      caption: `de CSV em ${p.bronze.tabelas.length} tabelas, em ${monthLabel(site.month)}${several ? `. ${runs.length} meses somam ${bytes(totalCsv)}` : ""}`,
     },
     {
       title: "Bronze",
@@ -62,7 +67,7 @@ export function buildSteps(site: SiteData): Step[] {
         "Linhas quebradas não somem em silêncio: vão para uma pasta de rejeitados, com o número da linha e o motivo. Se a fração passar do limite, o arquivo falha.",
       ],
       metric: compact(p.bronze.linhas),
-      caption: `linhas lidas, ${int(p.bronze.linhas_rejeitadas)} rejeitadas`,
+      caption: `linhas lidas em ${monthLabel(site.month)}, ${int(p.bronze.linhas_rejeitadas)} rejeitadas${several ? `. ${runs.length} meses somam ${compact(totalRows)} linhas e ${int(totalRejected)} rejeitadas` : ""}`,
     },
     {
       title: "Silver",
@@ -76,8 +81,9 @@ export function buildSteps(site: SiteData): Step[] {
     {
       title: "Gold",
       text: [
-        `${models.length} modelos em SQL do DuckDB: ${dims} dimensões, ${facts} fato com uma linha por estabelecimento e ${marts} marts agregados.`,
+        `${models.length} modelos por mês em SQL do DuckDB: ${dims} dimensões, ${facts} fato com uma linha por estabelecimento e ${marts} marts agregados.`,
         "O fato não tem razão social, endereço, telefone, e-mail nem nomes de sócios. É a única base de onde saem o site e o agente.",
+        ...(evolution ? ["Entre meses, mais um mart, o mart_movimentos, compara duas fotos do cadastro CNPJ a CNPJ e alimenta a análise de evolução."] : []),
       ],
       metric: `${models.length} modelos`,
       caption: `${p.gold.reconciliacoes.filter((r) => r.ok).length} de ${p.gold.reconciliacoes.length} verificações da gold passam`,
@@ -89,7 +95,7 @@ export function buildSteps(site: SiteData): Step[] {
         "As bloqueantes derrubam o comando e indicam que a gold não deve ser publicada.",
       ],
       metric: int(p.qualidade.verificacoes),
-      caption: `verificações, ${int(p.qualidade.verificacoes_bloqueantes)} bloqueantes`,
+      caption: `verificações em ${monthLabel(site.month)}, ${int(p.qualidade.verificacoes_bloqueantes)} bloqueantes${several ? `. Todas passaram nos ${runs.length} meses` : ""}`,
     },
     orchestration,
     ...evolutionStep,

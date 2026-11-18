@@ -246,6 +246,16 @@ export interface Evolucao {
   };
 }
 
+/** Totais de um mes processado, lidos do pipeline.json de cada mes publicado. */
+export interface MonthRun {
+  month: string;
+  linhas: number;
+  linhas_rejeitadas: number;
+  bytes_csv: number;
+  verificacoes: number;
+  verificacoes_bloqueantes: number;
+}
+
 export interface SiteData {
   month: string;
   /** Meses publicados, do mais antigo ao mais recente. */
@@ -269,5 +279,7 @@ export interface SiteData {
   pipeline: Envelope<Pipeline>;
   examples: AgentExamples | null;
   evolution: Evolucao | null;
+  /** Um item por mes publicado cujo pipeline.json carregou, do mais antigo ao mais recente. */
+  runs: MonthRun[];
   config: SiteConfig;
 }

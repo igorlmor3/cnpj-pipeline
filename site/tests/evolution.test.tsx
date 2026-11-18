@@ -41,6 +41,17 @@ describe("carregamento de meses", () => {
     expect((await loadSite("/", publicFetch({ "data/evolucao.json": broken }))).evolution).toBeNull();
   });
 
+  it("resume os totais de cada mes e ignora um pipeline.json de outro mes", async () => {
+    const site = await loadSite("/", publicFetch());
+    expect(site.runs.map((r) => r.month)).toEqual(site.months);
+    expect(site.runs.every((r) => r.linhas > 0 && r.linhas_rejeitadas === 0)).toBe(true);
+    const wrong = { ...readPublic<object>("data/2026-08/pipeline.json"), mes_referencia: "2026-07" };
+    const partial = await loadSite("/", publicFetch({ "data/2026-08/pipeline.json": wrong }));
+    expect(partial.runs.map((r) => r.month)).toEqual(["2026-07", "2026-09", "2026-10"]);
+    const missing = await loadSite("/", publicFetch({ "data/2026-07/pipeline.json": null }));
+    expect(missing.runs.map((r) => r.month)).toEqual(["2026-08", "2026-09", "2026-10"]);
+  });
+
   it("junta as ressalvas da serie", async () => {
     const codes = collectCaveats(await loadSite("/", publicFetch())).map((c) => c.code);
     expect(codes).toContain("fotos_mensais");

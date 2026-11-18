@@ -14,11 +14,14 @@ describe("Como foi feito", () => {
     const byTitle = Object.fromEntries(steps.map((s) => [s.title, s]));
     expect(byTitle.Bronze?.metric).toBe("223,6 mi");
     expect(byTitle.Bronze?.caption).toContain("0 rejeitadas");
+    expect(byTitle.Bronze?.caption).toContain("4 meses somam 885,0 mi linhas e 0 rejeitadas");
     expect(byTitle.Silver?.caption).toContain("1 duplicada removida");
-    expect(byTitle.Gold?.text[0]).toContain("13 modelos em SQL do DuckDB: 7 dimensões, 1 fato");
+    expect(byTitle.Gold?.text[0]).toContain("13 modelos por mês em SQL do DuckDB: 7 dimensões, 1 fato");
+    expect(byTitle.Gold?.text.join(" ")).toContain("mart_movimentos");
     expect(byTitle.Gold?.text[0]).toContain("5 marts agregados");
     expect(byTitle.Qualidade?.metric).toBe("73");
-    expect(byTitle.Download?.caption).toBe("de CSV em 10 tabelas, em out/2026");
+    expect(byTitle.Download?.caption).toBe("de CSV em 10 tabelas, em out/2026. 4 meses somam 106,4 GiB");
+    expect(byTitle.Qualidade?.caption).toContain("Todas passaram nos 4 meses");
     expect(byTitle.Download?.text[0]).toContain("processou 4 meses, de jul/2026 a out/2026");
     expect(byTitle.Orquestração?.metric).toBe("Airflow");
     expect(byTitle.Evolução?.metric).toBe("1,5 mi");

@@ -1,4 +1,4 @@
-import type { AgentExamples, Envelope, Evolucao, SiteConfig, SiteData } from "./types";
+import type { AgentExamples, Envelope, Evolucao, MonthRun, Pipeline, SiteConfig, SiteData } from "./types";
 
 type Fetcher = typeof fetch;
 
@@ -54,6 +54,22 @@ function checkConfig(value: Partial<SiteConfig> | null): SiteConfig {
   return { apiUrl, repoUrl };
 }
 
+/** Totais de um mes a partir do pipeline.json; null quando o arquivo falta ou nao tem o formato esperado. */
+function summarizeRun(month: string, value: Partial<Envelope<Partial<Pipeline>>> | null): MonthRun | null {
+  const d = value?.dados;
+  if (!value || value.esquema !== 1 || value.mes_referencia !== month || !d?.bronze || !d.qualidade) return null;
+  const numbers = [d.bronze.linhas, d.bronze.linhas_rejeitadas, d.bronze.bytes_csv, d.qualidade.verificacoes, d.qualidade.verificacoes_bloqueantes];
+  if (!numbers.every((n) => typeof n === "number" && Number.isFinite(n))) return null;
+  return {
+    month,
+    linhas: d.bronze.linhas,
+    linhas_rejeitadas: d.bronze.linhas_rejeitadas,
+    bytes_csv: d.bronze.bytes_csv,
+    verificacoes: d.qualidade.verificacoes,
+    verificacoes_bloqueantes: d.qualidade.verificacoes_bloqueantes,
+  };
+}
+
 const MONTH = /^\d{4}-\d{2}$/;
 
 /** Aceita a serie de evolucao so quando o formato e o esquema batem; qualquer outra coisa vira null. */
@@ -79,11 +95,13 @@ export async function loadSite(base: string, fetcher: Fetcher = fetch, requested
   const dir = `${root}data/${month}/`;
 
   const keys = Object.keys(FILES) as (keyof typeof FILES)[];
-  const [monthIndex, config, examples, evolution, ...loaded] = await Promise.all([
+  const otherMonths = months.filter((m) => m !== month);
+  const [monthIndex, config, examples, evolution, otherPipelines, ...loaded] = await Promise.all([
     getJson<{ fonte: string; mes_referencia: string }>(fetcher, `${dir}index.json`),
     getOptional<Partial<SiteConfig>>(fetcher, `${root}config.json`),
     getOptional<AgentExamples>(fetcher, `${dir}agent_examples.json`),
     getOptional<Partial<Evolucao>>(fetcher, `${root}data/evolucao.json`),
+    Promise.all(otherMonths.map((m) => getOptional<Partial<Envelope<Partial<Pipeline>>>>(fetcher, `${root}data/${m}/pipeline.json`))),
     ...keys.map((key) => getJson<Envelope<unknown>>(fetcher, `${dir}${FILES[key]}`)),
   ]);
 
@@ -99,13 +117,21 @@ export async function loadSite(base: string, fetcher: Fetcher = fetch, requested
       ? examples
       : null;
 
+  const runs = [
+    ...otherMonths.map((m, i) => summarizeRun(m, otherPipelines[i] ?? null)),
+    summarizeRun(month, result.pipeline as Envelope<Pipeline>),
+  ]
+    .filter((run): run is MonthRun => run !== null)
+    .sort((a, b) => a.month.localeCompare(b.month));
+
   return {
     month,
     months,
     source: monthIndex.fonte,
-    ...(result as unknown as Omit<SiteData, "month" | "months" | "source" | "examples" | "evolution" | "config">),
+    ...(result as unknown as Omit<SiteData, "month" | "months" | "source" | "examples" | "evolution" | "runs" | "config">),
     examples: validExamples,
     evolution: checkEvolution(evolution),
+    runs,
     config: checkConfig(config),
   };
 }
