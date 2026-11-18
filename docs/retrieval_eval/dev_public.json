@@ -2,7 +2,7 @@
   "suite": "dev",
   "audience": "public",
   "generated_on": "2026-11-18",
-  "corpus": "ae001e6dfc6b",
+  "corpus": "2d505e4e2acc",
   "chunks": 394,
   "summary": {
     "cases": 24,
@@ -372,8 +372,8 @@
       "rank": 1,
       "top": [
         "README.md, seção cnpj-pipeline > Evolução entre meses",
-        "docs/analysis/evolucao_2026-07_a_2026-10.md, seção Evolução do cadastro de CNPJ entre julho e outubro de 2026 > 2. Os movimentos entre fotos",
-        "docs/architecture.md, seção Arquitetura e decisões > Decisões em aberto"
+        "docs/architecture.md, seção Arquitetura e decisões > Decisões em aberto",
+        "docs/analysis/evolucao_2026-07_a_2026-10.md, seção Evolução do cadastro de CNPJ entre julho e outubro de 2026 > 2. Os movimentos entre fotos"
       ],
       "leaked": 0
     },

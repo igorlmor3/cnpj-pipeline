@@ -2,7 +2,7 @@
   "suite": "reservado",
   "audience": "public",
   "generated_on": "2026-11-18",
-  "corpus": "ae001e6dfc6b",
+  "corpus": "2d505e4e2acc",
   "chunks": 394,
   "summary": {
     "cases": 24,
@@ -379,7 +379,7 @@
       "top": [
         "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Avaliação como portão do CI",
         "docs/analysis/evolucao_2026-07_a_2026-10.md, seção Evolução do cadastro de CNPJ entre julho e outubro de 2026 > Ressalvas",
-        "README.md, seção cnpj-pipeline > Camada silver"
+        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > O laço do agente e o gasto"
       ],
       "leaked": 0
     },

@@ -2,7 +2,7 @@
   "suite": "dev",
   "audience": "all",
   "generated_on": "2026-11-18",
-  "corpus": "ae001e6dfc6b",
+  "corpus": "2d505e4e2acc",
   "chunks": 394,
   "summary": {
     "cases": 24,
@@ -164,7 +164,7 @@
       "top": [
         "docs/architecture.md, seção Arquitetura e decisões > Decisões de plataforma e de produto",
         "infra/README.md, seção Infraestrutura na AWS (nível 1) > Publicar e consultar",
-        "docs/evolution/2026-10.md, seção Evolução do cadastro: de 2026-09 para 2026-10 > Defasagem dos CNPJs novos"
+        "README.md, seção cnpj-pipeline > Estrutura do repositório"
       ],
       "leaked": 0
     },
