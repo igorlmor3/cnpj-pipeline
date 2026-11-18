@@ -1,13 +1,15 @@
 /**
- * Leitor minimo de markdown para o texto do agente: paragrafos, tabelas com barras e blocos de codigo.
+ * Leitor minimo de markdown para o texto do agente: paragrafos, listas, tabelas com barras e blocos de codigo.
  * Devolve uma estrutura de dados, nunca HTML: quem renderiza escreve texto, nao markup, e por isso
  * nada que venha da API pode virar elemento da pagina.
  */
 export type Block =
   | { type: "paragraph"; text: string }
   | { type: "table"; head: string[]; rows: string[][] }
+  | { type: "list"; ordered: boolean; start: number; items: string[] }
   | { type: "code"; text: string };
 
+const ITEM = /^\s*(?:([-*])|(\d{1,3})[.)])\s+(\S.*)$/;
 const isRow = (line: string): boolean => line.includes("|") && line.trim().length > 1;
 const isSeparator = (line: string): boolean => /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(line);
 
@@ -55,6 +57,21 @@ export function parseMarkdown(source: string): Block[] {
       }
       i -= 1;
       blocks.push({ type: "table", head, rows });
+      continue;
+    }
+    const item = ITEM.exec(line);
+    if (item) {
+      flush();
+      const ordered = item[2] !== undefined;
+      const items: string[] = [];
+      let current: RegExpExecArray | null = item;
+      while (current && (current[2] !== undefined) === ordered) {
+        items.push((current[3] ?? "").trim());
+        i += 1;
+        current = ITEM.exec(lines[i] ?? "");
+      }
+      i -= 1;
+      blocks.push({ type: "list", ordered, start: ordered ? Number(item[2]) : 1, items });
       continue;
     }
     if (line.trim() === "") {

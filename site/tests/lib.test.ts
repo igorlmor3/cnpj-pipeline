@@ -86,6 +86,26 @@ describe("leitor de markdown", () => {
     ]);
     expect(inlineParts("sem marcas")).toEqual([{ text: "sem marcas", bold: false }]);
   });
+  it("le listas numeradas e com marcadores, separadas do paragrafo", () => {
+    const blocks = parseMarkdown(["As 5 UFs:", "", "1. SP: 8", "2. MG: 7", "", "Motivos:", "- lê CSVs;", "- grava **Parquet**."].join("\n"));
+    expect(blocks).toEqual([
+      { type: "paragraph", text: "As 5 UFs:" },
+      { type: "list", ordered: true, start: 1, items: ["SP: 8", "MG: 7"] },
+      { type: "paragraph", text: "Motivos:" },
+      { type: "list", ordered: false, start: 1, items: ["lê CSVs;", "grava **Parquet**."] },
+    ]);
+  });
+  it("lista colada ao paragrafo, sem linha em branco, tambem vira lista", () => {
+    expect(parseMarkdown("Total:\n- a\n- b")).toEqual([
+      { type: "paragraph", text: "Total:" },
+      { type: "list", ordered: false, start: 1, items: ["a", "b"] },
+    ]);
+  });
+  it("numero no meio da frase nao vira lista", () => {
+    expect(parseMarkdown("Em 2026-10 havia 5 UFs.\nSP lidera.")).toEqual([
+      { type: "paragraph", text: "Em 2026-10 havia 5 UFs. SP lidera." },
+    ]);
+  });
   it("fecha um bloco de codigo sem fim", () => {
     expect(parseMarkdown("```\nSELECT 1")).toEqual([{ type: "code", text: "SELECT 1" }]);
   });

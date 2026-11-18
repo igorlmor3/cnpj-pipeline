@@ -12,7 +12,7 @@ function Inline({ text }: { text: string }) {
   );
 }
 
-/** Texto do agente: paragrafos, tabelas e codigo, sempre como texto (nunca como HTML). */
+/** Texto do agente: paragrafos, listas, tabelas e codigo, sempre como texto (nunca como HTML). */
 export function AnswerText({ text }: { text: string }) {
   const blocks = parseMarkdown(text);
   return (
@@ -23,6 +23,20 @@ export function AnswerText({ text }: { text: string }) {
             <p key={`p-${i}`}>
               <Inline text={block.text} />
             </p>
+          );
+        }
+        if (block.type === "list") {
+          const items = block.items.map((item, j) => (
+            <li key={`l-${i}-${j}`}>
+              <Inline text={item} />
+            </li>
+          ));
+          return block.ordered ? (
+            <ol key={`o-${i}`} start={block.start}>
+              {items}
+            </ol>
+          ) : (
+            <ul key={`u-${i}`}>{items}</ul>
           );
         }
         if (block.type === "code") {

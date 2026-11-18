@@ -598,6 +598,22 @@ section[id] {
   line-height: 1.55;
   color: var(--color-ink2);
 }
+.answer ul,
+.answer ol {
+  margin: 0 0 0.7rem;
+  padding-left: 1.4rem;
+  line-height: 1.55;
+  color: var(--color-ink2);
+}
+.answer ul {
+  list-style: disc;
+}
+.answer ol {
+  list-style: decimal;
+}
+.answer li {
+  margin: 0 0 0.25rem;
+}
 .answer pre,
 .sql {
   overflow-x: auto;
