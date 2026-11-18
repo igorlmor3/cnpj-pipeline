@@ -99,3 +99,31 @@ def test_the_anthropic_client_reads_the_key_from_the_environment_and_never_takes
     assert client._client.api_key == "sk-ant-teste-nao-real"
     with pytest.raises(TypeError):
         AnthropicClient(api_key="x")  # type: ignore[call-arg]
+
+
+def test_the_search_docs_tool_is_offered_only_when_asked_and_its_calls_are_mapped():
+    from cnpj_pipeline.agent.llm import SEARCH_DOCS_TOOL, tools_for
+
+    assert tools_for(docs=False) == [RUN_SQL_TOOL] and tools_for(docs=True) == [
+        RUN_SQL_TOOL,
+        SEARCH_DOCS_TOOL,
+    ]
+    assert "run_sql" in SEARCH_DOCS_TOOL["description"] and SEARCH_DOCS_TOOL["input_schema"]["required"] == [
+        "query"
+    ]
+
+    message = _message(
+        anthropic.types.ToolUseBlock(type="tool_use", id="a", name="search_docs", input={"query": "DuckDB"}),
+        anthropic.types.ToolUseBlock(type="tool_use", id="b", name="search_docs", input={"query": 7}),
+        anthropic.types.ToolUseBlock(type="tool_use", id="c", name="run_sql", input={"sql": "SELECT 1"}),
+        stop_reason="tool_use",
+    )
+    sdk = FakeSDK(message)
+    result = AnthropicClient(sdk_client=sdk, tools=tools_for(docs=True)).step("s", [], max_tokens=10)
+
+    assert sdk.requests[0]["tools"] == [RUN_SQL_TOOL, SEARCH_DOCS_TOOL]
+    assert result.tool_calls == [
+        ToolCall(id="a", sql="", name="search_docs", query="DuckDB"),
+        ToolCall(id="b", sql="", name="search_docs", query=""),
+        ToolCall(id="c", sql="SELECT 1"),
+    ]

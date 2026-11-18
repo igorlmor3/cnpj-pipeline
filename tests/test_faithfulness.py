@@ -123,3 +123,25 @@ def test_check_answer_ignores_failed_queries():
     bad = QueryRecord(sql="SELECT 2", ok=False, error="recusado", rows=[[99]])
     assert check_answer("?", Answer("answered", "São 99.", [good, bad])).faithful is False
     assert check_answer("?", Answer("answered", "São 10.", [good, bad])).faithful is True
+
+
+def test_numbers_from_the_documentation_the_model_saw_are_supported():
+    text = "A camada silver de Estabelecimentos levou 77 segundos."
+    seen = ["fonte: README.md\nSilver de Estabelecimentos: 77 s"]
+
+    assert check_text(text, question="quanto tempo?", rows=[], docs=seen).faithful
+    unsupported = check_text(text, question="quanto tempo?", rows=[], docs=["fonte: README.md\nSilver: 12 s"])
+    assert not unsupported.faithful and unsupported.unsupported == ["77"]
+    assert not check_text(text, question="quanto tempo?", rows=[]).faithful
+
+
+def test_check_answer_uses_the_documentation_text_shown_to_the_model():
+    from cnpj_pipeline.agent.ask import DocSearch
+
+    answer = Answer(
+        "answered",
+        "Foram 77 segundos.",
+        docs=[DocSearch(query="silver", sources=["README.md"], shown="[1] fonte: README.md\nSilver: 77 s")],
+    )
+    assert check_answer("quanto tempo?", answer).faithful
+    assert not check_answer("quanto tempo?", Answer("answered", "Foram 77 segundos.")).faithful

@@ -29,6 +29,7 @@ from cnpj_pipeline.agent.ask import Answer, ask, build_system_prompt
 from cnpj_pipeline.agent.budget import Budget, SpendLedger
 from cnpj_pipeline.agent.executor import AthenaExecutor, Executor
 from cnpj_pipeline.agent.llm import LLMClient
+from cnpj_pipeline.agent.retrieval import PUBLIC, Retriever
 from cnpj_pipeline.api.columns import load_columns
 from cnpj_pipeline.api.config import ApiConfig
 from cnpj_pipeline.api.limits import Limiter, visitor_key
@@ -89,6 +90,7 @@ class Api:
         system: str,
         llm_factory: Callable[[], LLMClient],
         set_api_key: Callable[[str], None],
+        retriever: Retriever | None = None,
         clock: Callable[[], float] = time.time,
         monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
@@ -99,6 +101,7 @@ class Api:
         self.system = system
         self.llm_factory = llm_factory
         self.set_api_key = set_api_key
+        self.retriever = retriever
         self.clock = clock
         self.switch = KillSwitch(params, config.param_enabled, monotonic)
         self.limiter = Limiter(
@@ -230,6 +233,8 @@ class Api:
             executor=self.executor,
             budget=budget,
             deadline_s=self.config.deadline_s,
+            retriever=self.retriever,
+            audiences=frozenset({PUBLIC}),  # o visitante so ve a documentacao publica
         )
         code = HTTP_BY_STATUS.get(answer.status, 500)
         self._log(answer.status, code, visitor, answer, started)
@@ -250,6 +255,9 @@ class Api:
             body["columns"] = last_ok.columns
             body["rows"] = last_ok.rows[:MAX_ROWS_RETURNED]
             body["truncated"] = last_ok.may_be_truncated or len(last_ok.rows) > MAX_ROWS_RETURNED
+        sources = list(dict.fromkeys(s for d in answer.docs for s in d.sources))
+        if answer.status == "answered" and sources:
+            body["sources"] = sources
         return body
 
     def _log(
@@ -263,6 +271,7 @@ class Api:
             "ms": round((time.monotonic() - started) * 1000),
             "llm_calls": answer.llm_calls if answer else 0,
             "queries": len(answer.queries) if answer else 0,
+            "doc_searches": len(answer.docs) if answer else 0,
             "cost_usd": round(answer.cost_usd, 6) if answer else 0.0,
             **extra,
         }
@@ -279,11 +288,15 @@ _app: Api | None = None
 def build_default(env: Mapping[str, str] | None = None) -> Api:
     import boto3  # fornecido pelo ambiente da funcao
 
-    from cnpj_pipeline.agent.llm import AnthropicClient
+    from cnpj_pipeline.agent.llm import AnthropicClient, tools_for
+    from cnpj_pipeline.agent.retrieval import load_index, public_only
 
     config = ApiConfig.from_env(env if env is not None else os.environ)
     columns = load_columns(config.columns_file, config.month)
-    system = build_system_prompt(columns, month=config.month, months=config.available_months)
+    retriever = public_only(load_index(config.docs_index_file)) if config.docs_index_file.is_file() else None
+    system = build_system_prompt(
+        columns, month=config.month, months=config.available_months, docs=retriever is not None
+    )
     dynamo = boto3.client("dynamodb")
     executor = AthenaExecutor(
         boto3.client("athena"),
@@ -305,9 +318,13 @@ def build_default(env: Mapping[str, str] | None = None) -> Api:
         executor=executor,
         system=system,
         llm_factory=lambda: AnthropicClient(
-            model=config.model, timeout_s=config.llm_timeout_s, max_retries=1
+            model=config.model,
+            timeout_s=config.llm_timeout_s,
+            max_retries=1,
+            tools=tools_for(docs=retriever is not None),
         ),
         set_api_key=set_api_key,
+        retriever=retriever,
     )
 
 

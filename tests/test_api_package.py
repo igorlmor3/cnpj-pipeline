@@ -260,3 +260,77 @@ def test_the_aws_provider_is_new_enough_for_public_function_urls():
         text = path.read_text(encoding="utf-8")
         assert 'version = "~> 6.28"' in text, path
     assert "invoked_via_function_url = true" in (MODULE / "main.tf").read_text(encoding="utf-8")
+
+
+def write_repo_docs(root: Path) -> None:
+    (root / "README.md").parent.mkdir(parents=True, exist_ok=True)
+    (root / "README.md").write_text(
+        "# Projeto\n\n## Motor\n\nDuckDB lê CSV maior que a memória.\n", encoding="utf-8"
+    )
+    (root / "infra").mkdir(exist_ok=True)
+    (root / "infra" / "README.md").write_text(
+        "# Infra\n\n## Chaves\n\nSegredo interno do publicador.\n", encoding="utf-8"
+    )
+
+
+def test_the_docs_index_in_the_zip_has_public_chunks_only(gold_root, tmp_path):
+    from cnpj_pipeline.agent.retrieval import PUBLIC, load_index
+
+    repo = tmp_path / "repo"
+    write_repo_docs(repo)
+    out = tmp_path / "api.zip"
+    package.build(MONTH, gold_root, out, install=fake_install, docs_root=repo)
+    with zipfile.ZipFile(out) as zf:
+        raw = zf.read("cnpj_pipeline/api/docs_index.json").decode("utf-8")
+        zf.extract("cnpj_pipeline/api/docs_index.json", tmp_path / "x")
+
+    assert "Segredo interno" not in raw and "infra/README.md" not in raw
+    loaded = load_index(tmp_path / "x" / "cnpj_pipeline" / "api" / "docs_index.json")
+    assert {c.audience for c in loaded.chunks} == {PUBLIC} and loaded.chunks
+    assert loaded.search("DuckDB memória", audiences={PUBLIC})[0].chunk.path == "README.md"
+
+
+def test_the_zip_has_no_docs_index_without_a_docs_root(gold_root, tmp_path):
+    out = tmp_path / "api.zip"
+    package.build(MONTH, gold_root, out, install=fake_install)
+    assert "cnpj_pipeline/api/docs_index.json" not in names(out)
+
+
+def test_a_docs_root_without_public_documents_is_an_error(gold_root, tmp_path):
+    empty = tmp_path / "vazio"
+    empty.mkdir()
+    with pytest.raises(RuntimeError, match="nenhum documento publico"):
+        package.build(MONTH, gold_root, tmp_path / "a.zip", install=fake_install, docs_root=empty)
+
+
+def test_the_docs_index_is_deterministic_and_a_stale_one_in_the_tree_is_dropped(gold_root, tmp_path):
+    repo = tmp_path / "repo"
+    write_repo_docs(repo)
+    first = package.build(MONTH, gold_root, tmp_path / "a.zip", install=fake_install, docs_root=repo)
+    second = package.build(MONTH, gold_root, tmp_path / "b.zip", install=fake_install, docs_root=repo)
+    assert first == second
+
+    fake_pkg = tmp_path / "src" / "cnpj_pipeline"
+    (fake_pkg / "api").mkdir(parents=True)
+    (fake_pkg / "api" / "docs_index.json").write_text("{}", encoding="utf-8")
+    stage = tmp_path / "stage"
+    package.stage(stage, install=fake_install, package_dir=fake_pkg)
+    assert not (stage / "cnpj_pipeline" / "api" / "docs_index.json").exists()
+
+
+def test_the_cli_includes_the_docs_by_default_and_can_skip_them(gold_root, tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    write_repo_docs(repo)
+    seen: list[Path | None] = []
+
+    def fake_build(month, gold_dir, out, *, docs_root=None, **_):
+        seen.append(docs_root)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(b"zip")
+        return "0" * 64
+
+    monkeypatch.setattr(package, "build", fake_build)
+    common = ["--month", MONTH, "--gold-dir", str(gold_root), "--out", str(tmp_path / "o" / "api.zip")]
+    assert package.main([*common, "--docs-root", str(repo)]) == 0
+    assert package.main([*common, "--no-docs"]) == 0
+    assert seen == [repo, None]

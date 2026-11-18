@@ -154,10 +154,11 @@ def check_text(
     question: str,
     rows: Iterable[Iterable[Iterable[Any]]],
     sqls: Iterable[str] = (),
+    docs: Iterable[str] = (),
 ) -> Faithfulness:
     """`rows` traz o resultado de cada consulta bem-sucedida (lista de linhas); `sqls`, os SQL
-    executados. Cada numero do texto precisa estar nas linhas, na pergunta, no SQL ou ser a
-    contagem de linhas de um resultado."""
+    executados; `docs`, os trechos de documentacao que o modelo viu. Cada numero do texto precisa
+    estar nas linhas, na pergunta, no SQL, nos trechos ou ser a contagem de linhas de um resultado."""
     available: set[Decimal] = set()
     for result in rows:
         listed = [list(r) for r in result]
@@ -165,7 +166,7 @@ def check_text(
         for row in listed:
             for cell in row:
                 available.update(_cell_numbers(cell))
-    for source in (question, *sqls):
+    for source in (question, *sqls, *docs):
         available.update(abs(v) for m in extract_numbers(source) for v in m.values)
         # um ano ou mes dentro de uma data ISO tambem e o recorte da consulta
         for iso in re.findall(r"\b(\d{4})-(\d{2})\b", source):
@@ -184,4 +185,5 @@ def check_answer(question: str, answer: Answer) -> Faithfulness:
         question=question,
         rows=[q.rows[:MAX_TOOL_ROWS] for q in ok],
         sqls=[q.sql for q in ok],
+        docs=[d.shown for d in answer.docs],
     )

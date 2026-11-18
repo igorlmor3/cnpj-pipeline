@@ -942,6 +942,38 @@ def test_main_runs_the_multi_month_suite_in_reference_mode(multi_gold, tmp_path,
     assert f"{len(MESES_CASES)} de {len(MESES_CASES)} casos certos" in capsys.readouterr().out
 
 
+def test_main_with_docs_runs_the_reference_with_the_second_tool_and_labels_the_report(
+    multi_gold, tmp_path, capsys
+):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "README.md").write_text("# Projeto\n\n## Motor\n\nDuckDB lê CSV.\n", encoding="utf-8")
+    out = tmp_path / "out"
+    code = main(
+        [
+            "--month", MONTH, "--months", ",".join(MONTHS), "--gold-dir", str(multi_gold),
+            "--out-dir", str(out), "--reference", "--suite", "meses", "--docs",
+            "--docs-root", str(repo),
+        ]
+    )  # fmt: skip
+
+    assert code == 0 and f"{len(MESES_CASES)} de {len(MESES_CASES)} casos certos" in capsys.readouterr().out
+    assert any(p.name.endswith("_docs.md") for p in out.iterdir())
+
+
+def test_main_with_docs_fails_when_there_is_no_public_documentation(multi_gold, tmp_path, capsys):
+    empty = tmp_path / "vazio"
+    empty.mkdir()
+    with pytest.raises(SystemExit):
+        main(
+            [
+                "--month", MONTH, "--gold-dir", str(multi_gold), "--out-dir", str(tmp_path / "o"),
+                "--reference", "--docs", "--docs-root", str(empty),
+            ]
+        )  # fmt: skip
+    assert "nenhum documento publico" in capsys.readouterr().err
+
+
 def test_the_report_shows_the_interval_cost_per_correct_answer_and_percentiles():
     results = [result("a"), result("b", passed=False, reason="resultado diferente do esperado")]
     text = render_report(results, month=MONTH, label="x", generated_on="2026-11-18", model="x")

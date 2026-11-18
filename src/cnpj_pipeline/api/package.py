@@ -20,6 +20,7 @@ import zipfile
 from collections.abc import Callable
 from pathlib import Path
 
+from cnpj_pipeline.agent.retrieval import build_index, public_only, save_index
 from cnpj_pipeline.api.columns import write_columns
 
 LAMBDA_REQUIREMENTS = ("anthropic>=0.40", "sqlglot>=25.0")
@@ -30,6 +31,7 @@ MAX_ZIP_BYTES = 45 * 1024 * 1024
 FIXED_TIME = (1980, 1, 1, 0, 0, 0)
 SKIP_SUFFIXES = {".pyc", ".pyo"}
 COLUMNS_NAME = "agent_columns.json"
+DOCS_INDEX_NAME = "docs_index.json"
 
 PACKAGE_DIR = Path(__file__).resolve().parents[1]  # .../cnpj_pipeline
 
@@ -75,6 +77,7 @@ def stage(stage_dir: Path, *, install: Installer, package_dir: Path = PACKAGE_DI
         raise RuntimeError("as dependencias nao podem trazer um pacote cnpj_pipeline")
     shutil.copytree(package_dir, destination, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     (destination / "api" / COLUMNS_NAME).unlink(missing_ok=True)  # coluna de outro mes nunca vai junto
+    (destination / "api" / DOCS_INDEX_NAME).unlink(missing_ok=True)  # indice velho nunca vai junto
 
 
 def write_zip(stage_dir: Path, out: Path) -> str:
@@ -99,11 +102,32 @@ def write_zip(stage_dir: Path, out: Path) -> str:
     return hashlib.sha256(out.read_bytes()).hexdigest()
 
 
-def build(month: str, gold_dir: Path, out: Path, *, install: Installer = install_dependencies) -> str:
+def write_docs_index(docs_root: Path, target: Path) -> int:
+    """Indexa a documentacao do repositorio e grava so os trechos publicos. Devolve quantos."""
+    index, sources = build_index(docs_root)
+    public = public_only(index)
+    if not public.chunks:
+        raise RuntimeError(f"nenhum documento publico encontrado em {docs_root}")
+    kept = {c.path for c in public.chunks}
+    save_index(public, target, [s for s in sources if s.path in kept])
+    return len(public.chunks)
+
+
+def build(
+    month: str,
+    gold_dir: Path,
+    out: Path,
+    *,
+    install: Installer = install_dependencies,
+    docs_root: Path | None = None,
+) -> str:
+    """Gera o zip. Com `docs_root`, inclui o indice de busca da documentacao publica."""
     with tempfile.TemporaryDirectory(prefix="cnpj-api-") as tmp:
         stage_dir = Path(tmp)
         stage(stage_dir, install=install)
         write_columns(gold_dir, month, stage_dir / "cnpj_pipeline" / "api" / COLUMNS_NAME)
+        if docs_root is not None:
+            write_docs_index(docs_root, stage_dir / "cnpj_pipeline" / "api" / DOCS_INDEX_NAME)
         return write_zip(stage_dir, out)
 
 
@@ -114,10 +138,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--gold-dir", type=Path, default=Path("data") / "gold", help="Pasta da gold local")
     parser.add_argument("--out", type=Path, default=Path("infra") / "build" / "api.zip", help="Zip de saida")
+    parser.add_argument(
+        "--docs-root", type=Path, default=Path("."), help="Raiz do repositorio, de onde sai a documentacao"
+    )
+    parser.add_argument(
+        "--no-docs", action="store_true", help="Nao inclui a busca na documentacao (o agente so usa SQL)"
+    )
     args = parser.parse_args(argv)
 
     try:
-        digest = build(args.month, args.gold_dir, args.out)
+        digest = build(
+            args.month, args.gold_dir, args.out, docs_root=None if args.no_docs else args.docs_root
+        )
     except (OSError, RuntimeError, subprocess.CalledProcessError, ValueError) as exc:
         print(f"Falha ao gerar o pacote: {exc}", file=sys.stderr)
         return 1

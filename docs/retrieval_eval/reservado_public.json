@@ -2,8 +2,8 @@
   "suite": "reservado",
   "audience": "public",
   "generated_on": "2026-11-18",
-  "corpus": "71396f241f48",
-  "chunks": 376,
+  "corpus": "938f836fb3fb",
+  "chunks": 377,
   "summary": {
     "cases": 24,
     "answerable": 20,
@@ -209,8 +209,8 @@
       "relevant_chunks": 1,
       "rank": 4,
       "top": [
-        "docs/architecture.md, seção Arquitetura e decisões > Decisões de plataforma e de produto",
         "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Busca na documentação",
+        "docs/architecture.md, seção Arquitetura e decisões > Decisões de plataforma e de produto",
         "docs/analysis/2026-10.md, seção Análise do cadastro de CNPJ (mês de referência 2026-10) > 6. Sobrevivência por ano de abertura"
       ],
       "leaked": 0

@@ -8,11 +8,13 @@ da resposta.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 DEFAULT_MODEL = "claude-haiku-5-5"
 TOOL_NAME = "run_sql"
+SEARCH_DOCS_NAME = "search_docs"
 
 RUN_SQL_TOOL: dict[str, Any] = {
     "name": TOOL_NAME,
@@ -27,6 +29,28 @@ RUN_SQL_TOOL: dict[str, Any] = {
     },
 }
 
+SEARCH_DOCS_TOOL: dict[str, Any] = {
+    "name": SEARCH_DOCS_NAME,
+    "description": (
+        "Busca trechos da documentação pública do projeto (arquitetura, decisões, regras de qualidade "
+        "de dados, método e avaliação do agente) e devolve os mais relevantes, cada um com a fonte. "
+        "Use para perguntas sobre como o projeto foi feito, por que uma decisão foi tomada ou o que "
+        "uma regra significa. Não use para números do cadastro de CNPJ: esses vêm de run_sql."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "O que procurar, em poucas palavras-chave."}
+        },
+        "required": ["query"],
+    },
+}
+
+
+def tools_for(*, docs: bool) -> list[dict[str, Any]]:
+    """As ferramentas oferecidas ao modelo: run_sql e, se houver busca na documentacao, search_docs."""
+    return [RUN_SQL_TOOL, SEARCH_DOCS_TOOL] if docs else [RUN_SQL_TOOL]
+
 
 class LLMError(RuntimeError):
     """Falha ao falar com o modelo. A mensagem e segura para exibir."""
@@ -35,7 +59,9 @@ class LLMError(RuntimeError):
 @dataclass(frozen=True)
 class ToolCall:
     id: str
-    sql: str
+    sql: str  # o SQL pedido, quando a ferramenta e run_sql
+    name: str = TOOL_NAME
+    query: str = ""  # o texto da busca, quando a ferramenta e search_docs
 
 
 @dataclass(frozen=True)
@@ -65,11 +91,13 @@ class AnthropicClient:
         timeout_s: float = 60.0,
         max_retries: int = 2,
         sdk_client: Any = None,
+        tools: Sequence[dict[str, Any]] | None = None,
     ) -> None:
         import anthropic  # so aqui: quem usa outro cliente (ou os testes) nao precisa do SDK
 
         self._errors = anthropic
         self.model = model
+        self._tools = list(tools) if tools is not None else [RUN_SQL_TOOL]
         # A chave vem de ANTHROPIC_API_KEY, lida pelo proprio SDK.
         self._client = sdk_client or anthropic.Anthropic(timeout=timeout_s, max_retries=max_retries)
 
@@ -80,7 +108,7 @@ class AnthropicClient:
                 model=self.model,
                 max_tokens=max_tokens,
                 system=system,
-                tools=[RUN_SQL_TOOL],
+                tools=self._tools,
                 messages=messages,
             )
         except sdk.AuthenticationError as exc:
@@ -108,8 +136,19 @@ def _to_turn(response: Any) -> LLMTurn:
             content.append({"type": "text", "text": block.text})
         elif block.type == "tool_use":
             raw = block.input if isinstance(block.input, dict) else {}
-            sql = raw.get("sql")
-            calls.append(ToolCall(id=block.id, sql=sql if isinstance(sql, str) else ""))
+            if block.name == SEARCH_DOCS_NAME:
+                query = raw.get("query")
+                calls.append(
+                    ToolCall(
+                        id=block.id,
+                        sql="",
+                        name=SEARCH_DOCS_NAME,
+                        query=query if isinstance(query, str) else "",
+                    )
+                )
+            else:
+                sql = raw.get("sql")
+                calls.append(ToolCall(id=block.id, sql=sql if isinstance(sql, str) else ""))
             content.append({"type": "tool_use", "id": block.id, "name": block.name, "input": raw})
     return LLMTurn(
         text="\n".join(t for t in texts if t).strip(),

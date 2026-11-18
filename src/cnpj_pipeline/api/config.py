@@ -18,6 +18,7 @@ PREFIX = "CNPJ_API_"
 MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 ORIGIN_RE = re.compile(r"https://[A-Za-z0-9.-]+(:\d+)?|http://localhost(:\d+)?")
 DEFAULT_COLUMNS_FILE = Path(__file__).with_name("agent_columns.json")
+DEFAULT_DOCS_INDEX_FILE = Path(__file__).with_name("docs_index.json")
 
 # Limites padrao. O gasto mensal da aplicacao fica abaixo do limite do workspace no provedor (US$ 5),
 # que e a barreira que vale; este e a segunda.
@@ -51,6 +52,7 @@ class ApiConfig:
     llm_timeout_s: float = DEFAULT_LLM_TIMEOUT_S
     model: str = DEFAULT_MODEL
     columns_file: Path = DEFAULT_COLUMNS_FILE
+    docs_index_file: Path = DEFAULT_DOCS_INDEX_FILE
     months: tuple[str, ...] = ()
 
     @property
@@ -129,5 +131,6 @@ class ApiConfig:
             deadline_s=float(number("DEADLINE_S", DEFAULT_DEADLINE_S, float)),
             model=env.get(PREFIX + "MODEL") or DEFAULT_MODEL,
             columns_file=Path(env.get(PREFIX + "COLUMNS_FILE") or DEFAULT_COLUMNS_FILE),
+            docs_index_file=Path(env.get(PREFIX + "DOCS_INDEX_FILE") or DEFAULT_DOCS_INDEX_FILE),
             months=tuple(sorted(m.strip() for m in env.get(PREFIX + "MONTHS", "").split(",") if m.strip())),
         )

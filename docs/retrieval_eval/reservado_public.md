@@ -1,6 +1,6 @@
 # Avaliação da recuperação: conjunto reservado, público public
 
-Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (376 trechos; versão do corpus `71396f241f48`). Sem modelo e sem custo.
+Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (377 trechos; versão do corpus `938f836fb3fb`). Sem modelo e sem custo.
 
 ## Resumo
 
@@ -42,8 +42,8 @@ Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (376 tre
 
 **r_tempo_consulta** (posição 4): Quanto tempo uma consulta pode levar antes de ser cancelada?
 
-- docs/architecture.md, seção Arquitetura e decisões > Decisões de plataforma e de produto
 - docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Busca na documentação
+- docs/architecture.md, seção Arquitetura e decisões > Decisões de plataforma e de produto
 - docs/analysis/2026-10.md, seção Análise do cadastro de CNPJ (mês de referência 2026-10) > 6. Sobrevivência por ano de abertura
 
 **r_comparacao_meses** (fora dos 5 primeiros): Como é feita a comparação entre dois meses do cadastro?

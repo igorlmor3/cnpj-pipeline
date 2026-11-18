@@ -27,7 +27,7 @@ from cnpj_pipeline.agent.ask import Answer, QueryRecord, build_system_prompt
 from cnpj_pipeline.agent.budget import InMemoryLedger
 from cnpj_pipeline.agent.context import TABLES
 from cnpj_pipeline.agent.executor import DuckDBExecutor
-from cnpj_pipeline.agent.llm import LLMError
+from cnpj_pipeline.agent.llm import RUN_SQL_TOOL, LLMError
 from cnpj_pipeline.api import handler
 from cnpj_pipeline.api.columns import ColumnsError, load_columns, write_columns
 from cnpj_pipeline.api.config import ApiConfig, ConfigError
@@ -122,7 +122,10 @@ def make_params(**overrides: str | None) -> InMemoryParams:
 class Rig:
     """Uma API montada com modelo falso, gold real em DuckDB e tudo em memoria."""
 
-    def __init__(self, executor, system, *, script=None, config=None, params=None, counters=None, clock=None):
+    def __init__(
+        self, executor, system, *, script=None, config=None, params=None, counters=None, clock=None,
+        retriever=None,
+    ):  # fmt: skip
         self.llm = FakeLLM(
             *(script if script is not None else [turn("", GOOD_SQL), turn("Resposta pronta.")])
         )
@@ -142,6 +145,7 @@ class Rig:
             system=system,
             llm_factory=lambda: self.llm,
             set_api_key=self.keys.append,
+            retriever=retriever,
             clock=self.clock,
             monotonic=self.mono,
         )
@@ -894,7 +898,7 @@ def test_build_default_wires_the_aws_pieces_without_calling_aws(gold_root, tmp_p
     assert os.environ["ANTHROPIC_API_KEY"] == "valor"
     monkeypatch.delenv("ANTHROPIC_API_KEY")
     api.llm_factory()
-    assert created == {"model": "modelo-x", "timeout_s": 20.0, "max_retries": 1}
+    assert created == {"model": "modelo-x", "timeout_s": 20.0, "max_retries": 1, "tools": [RUN_SQL_TOOL]}
 
 
 def test_the_handler_module_needs_neither_duckdb_nor_the_sdks_nor_boto3_to_import():
@@ -914,3 +918,86 @@ def test_the_handler_module_needs_neither_duckdb_nor_the_sdks_nor_boto3_to_impor
         check=False,
     )
     assert result.returncode == 0 and "ok" in result.stdout, result.stderr
+
+
+# --------------------------------------------------------------------------- #
+# Busca na documentacao (search_docs)
+# --------------------------------------------------------------------------- #
+
+from test_agent_ask import doc_index, docs_turn  # noqa: E402
+
+from cnpj_pipeline.agent.retrieval import INTERNAL, PUBLIC, save_index  # noqa: E402
+
+
+def test_a_documentation_answer_carries_its_sources_and_no_query_result(executor, system, caplog):
+    rig = Rig(
+        executor, system, script=[docs_turn("DuckDB CSV memória"), turn("Porque lê CSV.")],
+        retriever=doc_index(),
+    )  # fmt: skip
+    with caplog.at_level(logging.INFO, logger="cnpj_pipeline.api"):
+        body = body_of(rig.ask("Por que DuckDB?"))
+
+    assert body["status"] == "answered" and body["sources"] == ["docs/architecture.md, seção Motor"]
+    assert not ({"sql", "columns", "rows"} & set(body))
+    assert '"doc_searches": 1' in caplog.text and "Por que DuckDB" not in caplog.text
+
+
+def test_a_sql_answer_has_no_sources_field(executor, system):
+    body = body_of(Rig(executor, system, retriever=doc_index()).ask())
+    assert body["status"] == "answered" and "sources" not in body
+
+
+def test_the_visitor_never_gets_internal_documentation_through_the_api(executor, system):
+    rig = Rig(
+        executor, system, script=[docs_turn("chaves do publicador Terraform"), turn("Não cobre.")],
+        retriever=doc_index(),
+    )  # fmt: skip
+    body = body_of(rig.ask("onde ficam as chaves?"))
+
+    assert body["status"] == "out_of_scope" and "sources" not in body
+    sent = rig.llm.calls[1]["messages"][-1]["content"][0]["content"]
+    assert "infra/README.md" not in sent and "Terraform" not in sent
+
+
+def _wire_build_default(monkeypatch, gold_root, tmp_path, **env):
+    columns = write_columns(gold_root, MONTH, tmp_path / "agent_columns.json")
+    monkeypatch.setitem(sys.modules, "boto3", SimpleNamespace(client=lambda name: SimpleNamespace(name=name)))
+    created: dict[str, Any] = {}
+
+    class FakeAnthropic:
+        def __init__(self, **kwargs):
+            created.update(kwargs)
+
+    monkeypatch.setattr("cnpj_pipeline.agent.llm.AnthropicClient", FakeAnthropic)
+    api = handler.build_default({**ENV, "CNPJ_API_COLUMNS_FILE": str(columns), **env})
+    api.llm_factory()
+    return api, created
+
+
+def test_build_default_offers_search_docs_when_the_index_is_packaged(gold_root, tmp_path, monkeypatch):
+    index_file = tmp_path / "docs_index.json"
+    save_index(doc_index(), index_file)  # de proposito com um trecho interno dentro
+    api, created = _wire_build_default(
+        monkeypatch, gold_root, tmp_path, CNPJ_API_DOCS_INDEX_FILE=str(index_file)
+    )
+
+    assert api.retriever is not None and "search_docs" in api.system
+    assert {t["name"] for t in created["tools"]} == {"run_sql", "search_docs"}
+    assert {c.audience for c in api.retriever.chunks} == {PUBLIC}  # o interno foi descartado ao carregar
+    assert api.retriever.search("chaves do publicador Terraform", audiences={INTERNAL}) == []
+
+
+def test_build_default_without_an_index_keeps_the_sql_only_agent(gold_root, tmp_path, monkeypatch):
+    api, created = _wire_build_default(
+        monkeypatch, gold_root, tmp_path, CNPJ_API_DOCS_INDEX_FILE=str(tmp_path / "nao_existe.json")
+    )
+
+    assert api.retriever is None and "search_docs" not in api.system
+    assert [t["name"] for t in created["tools"]] == ["run_sql"]
+
+
+def test_config_reads_the_docs_index_path_from_the_environment():
+    assert ApiConfig.from_env({**ENV, "CNPJ_API_DOCS_INDEX_FILE": "/x/i.json"}).docs_index_file == Path(
+        "/x/i.json"
+    )
+    assert ApiConfig.from_env(ENV).docs_index_file.name == "docs_index.json"

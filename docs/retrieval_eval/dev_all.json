@@ -2,8 +2,8 @@
   "suite": "dev",
   "audience": "all",
   "generated_on": "2026-11-18",
-  "corpus": "71396f241f48",
-  "chunks": 376,
+  "corpus": "938f836fb3fb",
+  "chunks": 377,
   "summary": {
     "cases": 24,
     "answerable": 24,
@@ -388,7 +388,7 @@
       "top": [
         "docs/data_quality_rules.md, seção Catálogo de regras de qualidade de dados > Verificações automatizadas (`quality.py`)",
         "docs/quality/2026-10.md, seção Qualidade de dados e tempos (2026-10)",
-        "README.md, seção cnpj-pipeline > Resultados medidos > Verificações de qualidade e máquina"
+        "docs/data_quality_rules.md, seção Catálogo de regras de qualidade de dados > Como usar"
       ],
       "leaked": 0
     },

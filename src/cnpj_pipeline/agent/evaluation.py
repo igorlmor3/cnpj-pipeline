@@ -36,7 +36,8 @@ from cnpj_pipeline.agent.eval_stats import bootstrap_interval, wilson_interval
 from cnpj_pipeline.agent.evaluation_cases import ALL_CASES, MESES_CASES, SUITES, EvalCase, by_id
 from cnpj_pipeline.agent.executor import DuckDBExecutor, Executor, run_query
 from cnpj_pipeline.agent.faithfulness import check_answer
-from cnpj_pipeline.agent.llm import DEFAULT_MODEL, LLMClient, LLMTurn, ToolCall
+from cnpj_pipeline.agent.llm import DEFAULT_MODEL, LLMClient, LLMTurn, ToolCall, tools_for
+from cnpj_pipeline.agent.retrieval import Retriever, build_index, public_only
 from cnpj_pipeline.cloud.athena import gold_columns
 
 MAX_PROJECTION_COLUMNS = 8
@@ -189,11 +190,13 @@ def run_case(
     budget: Budget | None,
     clock: Callable[[], float] = time.monotonic,
     run: int = 1,
+    retriever: Retriever | None = None,
 ) -> CaseResult:
     started = clock()
     answer = ask(
-        case.question, month=month, months=months, system=system, llm=llm, executor=executor, budget=budget
-    )
+        case.question, month=month, months=months, system=system, llm=llm, executor=executor,
+        budget=budget, retriever=retriever,
+    )  # fmt: skip
     elapsed = clock() - started
     reason = judge(case, answer, expected)
     ok = [q for q in answer.queries if q.ok]
@@ -233,6 +236,7 @@ def evaluate(
     budget: Budget | None = None,
     clock: Callable[[], float] = time.monotonic,
     repeats: int = 1,
+    retriever: Retriever | None = None,
 ) -> list[CaseResult]:
     """Roda cada caso `repeats` vezes. Os resultados saem na ordem dos casos, com as repeticoes de um
     caso em sequencia; o gasto de todas elas conta no mesmo orcamento."""
@@ -242,7 +246,7 @@ def evaluate(
     return [
         run_case(
             c, expected.get(c.id), month=month, months=months, system=system, llm=llm, executor=executor,
-            budget=budget, clock=clock, run=n,
+            budget=budget, clock=clock, run=n, retriever=retriever,
         )
         for c in cases
         for n in range(1, repeats + 1)
@@ -686,6 +690,13 @@ def main(argv: list[str] | None = None) -> int:
         "reservado2 (reservado atual), meses (varios meses, exige "
         "--months) ou all",
     )
+    parser.add_argument(
+        "--docs",
+        action="store_true",
+        help="oferece tambem a busca na documentacao publica (search_docs); serve para medir se a "
+        "segunda ferramenta muda o acerto das perguntas de SQL",
+    )
+    parser.add_argument("--docs-root", type=Path, default=Path("."), help="raiz do repositorio (com --docs)")
     parser.add_argument("--cases", help="ids separados por virgula; tem prioridade sobre --suite")
     parser.add_argument(
         "--repeats",
@@ -716,7 +727,7 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         from cnpj_pipeline.agent.llm import AnthropicClient
 
-        llm = AnthropicClient(model=args.model)
+        llm = AnthropicClient(model=args.model, tools=tools_for(docs=args.docs))
         budget = Budget(
             limit_usd=args.budget_usd, period=args.month, pricing=Pricing(args.price_in, args.price_out)
         )
@@ -724,13 +735,19 @@ def main(argv: list[str] | None = None) -> int:
     if args.suite != "dev" and not args.cases:
         label = f"{label}_{args.suite}"
 
+    retriever: Retriever | None = None
+    if args.docs:
+        retriever = public_only(build_index(args.docs_root)[0])
+        if not retriever.chunks:
+            parser.error("--docs: nenhum documento publico encontrado em --docs-root")
+        label = f"{label}_docs"
     columns = gold_columns(args.gold_dir, args.month, list(TABLES))
-    system = build_system_prompt(columns, month=args.month, months=months)
+    system = build_system_prompt(columns, month=args.month, months=months, docs=args.docs)
     executor = DuckDBExecutor(args.gold_dir)
     try:
         results = evaluate(
             cases, month=args.month, months=months, system=system, llm=llm, executor=executor,
-            budget=budget, repeats=args.repeats,
+            budget=budget, repeats=args.repeats, retriever=retriever,
         )  # fmt: skip
     finally:
         executor.close()
