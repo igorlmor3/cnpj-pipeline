@@ -5,6 +5,7 @@ import type { SiteData } from "../lib/types";
 export function PipelineSection({ site }: { site: SiteData }) {
   const p = site.pipeline.dados;
   const q = p.qualidade;
+  const label = monthLabel(site.month);
   const reconciled = p.gold.reconciliacoes.filter((r) => r.ok).length;
   return (
     <Row id="pipeline" title="O pipeline em números" hint="Raw, bronze, silver e gold. Os detalhes seguem o mês escolhido no topo">
@@ -32,7 +33,7 @@ export function PipelineSection({ site }: { site: SiteData }) {
         />
       ) : null}
       <Poster size="sm">
-        <h3 className="poster__title">Qualidade</h3>
+        <h3 className="poster__title">Qualidade · {label}</h3>
         <p className="poster__sub">Verificações executadas sobre o mês completo</p>
         <div className="kpi__value" style={{ marginTop: "0.8rem" }}>
           {int(q.verificacoes)}
@@ -44,7 +45,7 @@ export function PipelineSection({ site }: { site: SiteData }) {
         </div>
       </Poster>
       <Poster size="sm">
-        <h3 className="poster__title">Verificações da gold</h3>
+        <h3 className="poster__title">Verificações da gold · {label}</h3>
         <p className="poster__sub">Chaves únicas e somas conferidas entre as camadas</p>
         <div className="kpi__value" style={{ marginTop: "0.8rem" }}>
           {reconciled}/{p.gold.reconciliacoes.length}
@@ -53,7 +54,7 @@ export function PipelineSection({ site }: { site: SiteData }) {
         <div className="kpi__note">{int(p.bronze.linhas_rejeitadas)} linhas rejeitadas na bronze.</div>
       </Poster>
       <ChartCard
-        title="Bronze"
+        title={`Bronze · ${label}`}
         subtitle="Tabelas lidas do CSV original e gravadas em Parquet"
         size="lg"
         chart={
@@ -66,7 +67,7 @@ export function PipelineSection({ site }: { site: SiteData }) {
         }
       />
       <ChartCard
-        title="Silver"
+        title={`Silver · ${label}`}
         subtitle="Tipagem, chaves e remoção de duplicadas"
         size="lg"
         chart={
@@ -85,7 +86,7 @@ export function PipelineSection({ site }: { site: SiteData }) {
         }
       />
       <ChartCard
-        title="Gold"
+        title={`Gold · ${label}`}
         subtitle="Modelos analíticos prontos para consulta"
         size="lg"
         chart={
@@ -98,7 +99,7 @@ export function PipelineSection({ site }: { site: SiteData }) {
         }
       />
       <ChartCard
-        title="Verificações da gold"
+        title={`Verificações da gold · ${label}`}
         subtitle="Unicidade das chaves e somas dos marts contra o fato e a silver"
         size="lg"
         chart={

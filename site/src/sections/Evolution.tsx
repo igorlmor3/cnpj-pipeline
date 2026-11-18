@@ -87,7 +87,7 @@ export function Evolution({ site }: { site: SiteData }) {
     <Row
       id="evolucao"
       title="Evolução entre meses"
-      hint="Fotos mensais completas do cadastro, comparadas CNPJ a CNPJ. Só contagens, nenhum CNPJ é publicado."
+      hint="Fotos mensais completas, comparadas CNPJ a CNPJ, até o mês escolhido no topo. Só contagens, nenhum CNPJ é publicado."
     >
       {facts.stock ? (
         <Kpi

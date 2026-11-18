@@ -1,6 +1,6 @@
 import { type BarItem, BarList } from "../components/charts";
 import { ChartCard, Row } from "../components/ui";
-import { compact, int, textOrDash, titleCase } from "../lib/format";
+import { compact, int, monthLabel, textOrDash, titleCase } from "../lib/format";
 import type { SiteData } from "../lib/types";
 
 export function Cities({ site }: { site: SiteData }) {
@@ -14,7 +14,7 @@ export function Cities({ site }: { site: SiteData }) {
     detail: `${name(row.uf, row.municipio_nome)}: ${int(row.estabelecimentos_ativos)} estabelecimentos`,
   }));
   return (
-    <Row id="municipios" title="Municípios" hint="Os 50 com mais estabelecimentos ativos">
+    <Row id="municipios" title="Municípios" hint={`Os 50 com mais estabelecimentos ativos em ${monthLabel(site.month)}`}>
       <ChartCard
         title="Os 12 maiores"
         subtitle="Estabelecimentos ativos"

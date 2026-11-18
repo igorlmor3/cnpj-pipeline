@@ -1,6 +1,6 @@
 import { type BarItem, BarList, COLORS } from "../components/charts";
 import { ChartCard, Row } from "../components/ui";
-import { compact, int, pct } from "../lib/format";
+import { compact, int, monthLabel, pct } from "../lib/format";
 import type { SiteData } from "../lib/types";
 
 export function Partners({ site }: { site: SiteData }) {
@@ -32,7 +32,7 @@ export function Partners({ site }: { site: SiteData }) {
       detail: `${item.label}: ${int(item.socios)} vínculos`,
     }));
   return (
-    <Row id="socios" title="Sócios" hint="Apenas contagens agregadas: nenhum nome é publicado">
+    <Row id="socios" title="Sócios" hint={`Apenas contagens agregadas em ${monthLabel(site.month)}: nenhum nome é publicado`}>
       <ChartCard
         title="Tipo de sócio"
         subtitle="Parcela dos vínculos"

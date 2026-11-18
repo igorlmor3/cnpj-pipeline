@@ -166,7 +166,7 @@ export default function App() {
           {state.notice}
         </div>
       ) : null}
-      <Hero site={site} />
+      <Hero site={site} busy={state.switching} onMonth={selectMonth} />
       <main>
         <Numbers site={site} />
         <SimplesMei site={site} />

@@ -1,6 +1,6 @@
 import { type BarItem, BarList, COLORS } from "../components/charts";
 import { ChartCard, DataTable, Poster, Row } from "../components/ui";
-import { brl, compact, int, pct, textOrDash } from "../lib/format";
+import { brl, compact, int, monthLabel, pct, textOrDash } from "../lib/format";
 import type { SiteData } from "../lib/types";
 
 export function Profile({ site }: { site: SiteData }) {
@@ -45,7 +45,7 @@ export function Profile({ site }: { site: SiteData }) {
   };
   const groups = site.natureza.grupos.filter((g) => g.grupo);
   return (
-    <Row id="perfil" title="Perfil das empresas" hint="Porte, natureza jurídica e setor">
+    <Row id="perfil" title="Perfil das empresas" hint={`Porte, natureza jurídica e setor em ${monthLabel(site.month)}`}>
       <ChartCard
         title="Empresas ativas por porte"
         subtitle="Parcela do total"

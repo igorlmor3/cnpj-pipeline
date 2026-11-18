@@ -1,6 +1,7 @@
 import { compact, monthLabel, pct } from "../lib/format";
 import type { SiteData } from "../lib/types";
 import { Icon } from "../components/ui";
+import { spanLabel } from "../lib/series";
 
 /** Silhueta decorativa da serie anual de aberturas, desenhada ao fundo do destaque. */
 function Backdrop({ values }: { values: number[] }) {
@@ -17,20 +18,36 @@ function Backdrop({ values }: { values: number[] }) {
   );
 }
 
-export function Hero({ site }: { site: SiteData }) {
+export function Hero({ site, busy = false, onMonth }: { site: SiteData; busy?: boolean; onMonth?: (month: string) => void }) {
   const o = site.overview.dados;
   const series = site.aberturasAno.dados.map((row) => row.abertos_demais);
   return (
     <header className="hero" id="inicio">
       <Backdrop values={series} />
       <div className="hero__body">
-        <span className="tag">Dados abertos do CNPJ · {monthLabel(site.month)}</span>
+        <span className="tag">Dados abertos do CNPJ · {spanLabel(site)}</span>
         <h1>O cadastro de empresas do Brasil, camada por camada</h1>
         <p>
           Um pipeline de ponta a ponta sobre os dados abertos da Receita Federal: {compact(o.estabelecimentos_no_cadastro, true)}{" "}
           de estabelecimentos viram tabelas confiáveis, verificadas e consultáveis por SQL, inclusive em linguagem natural.
+          {site.months.length > 1
+            ? ` ${site.months.length} meses já foram processados, e a evolução do cadastro de um mês para o outro está na página.`
+            : ""}
         </p>
+        {site.months.length > 1 && onMonth ? (
+          <div className="seg" role="group" aria-label="Mês exibido na página" style={{ marginTop: "1rem" }}>
+            {site.months.map((month) => (
+              <button key={month} type="button" aria-pressed={month === site.month} disabled={busy} onClick={() => onMonth(month)}>
+                {monthLabel(month)}
+              </button>
+            ))}
+          </div>
+        ) : null}
         <div className="hero__stats">
+          <div>
+            <strong>{monthLabel(site.month)}</strong>
+            <span>mês exibido</span>
+          </div>
           <div>
             <strong>{compact(o.todas.empresas_ativas, true)}</strong>
             <span>empresas ativas</span>

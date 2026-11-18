@@ -25,6 +25,12 @@ export function signedCompact(n: number): string {
   return `${n > 0 ? "+" : n < 0 ? "-" : ""}${compact(Math.abs(n))}`;
 }
 
+/** Diferenca em pontos percentuais com sinal: 0.04 -> "+0,04 p.p.". */
+export function signedPp(n: number): string {
+  const text = Math.abs(n).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `${n > 0 ? "+" : n < 0 ? "-" : ""}${text} p.p.`;
+}
+
 export function brl(n: number): string {
   return `R$ ${nf.format(Math.round(n))}`;
 }

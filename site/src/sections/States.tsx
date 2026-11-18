@@ -1,6 +1,7 @@
 import { type BarItem, BarList, COLORS } from "../components/charts";
 import { ChartCard, DataTable, Row } from "../components/ui";
-import { compact, int, pct, ufLabel } from "../lib/format";
+import { compact, int, monthLabel, pct, signedCompact, ufLabel } from "../lib/format";
+import { previousMonth } from "../lib/series";
 import type { SiteData, UfRow } from "../lib/types";
 
 function TopNumber({ rank }: { rank: number }) {
@@ -32,6 +33,10 @@ export function topUfs(rows: UfRow[], size = 10): UfRow[] {
 
 export function States({ site }: { site: SiteData }) {
   const rows = site.uf.dados;
+  const prev = previousMonth(site);
+  const before = new Map(
+    (site.evolution?.dados.serie_uf ?? []).filter((row) => row.mes === prev).map((row) => [ufLabel(row.uf), row.empresas_ativas]),
+  );
   const ranked = topUfs(rows);
   const bySimples = [...rows].sort((a, b) => b.pct_simples - a.pct_simples);
   const byMei = [...rows].sort((a, b) => b.pct_mei - a.pct_mei);
@@ -58,7 +63,11 @@ export function States({ site }: { site: SiteData }) {
   };
   return (
     <>
-      <Row id="ufs" title="Top 10 estados em empresas ativas" hint="Ordem por empresas ativas">
+      <Row
+        id="ufs"
+        title="Top 10 estados em empresas ativas"
+        hint={`Ordem por empresas ativas em ${monthLabel(site.month)}${prev ? `; a variação é desde ${monthLabel(prev)}` : ""}`}
+      >
         {ranked.map((row, i) => (
           <div className="top10" key={ufLabel(row.uf)}>
             <TopNumber rank={i + 1} />
@@ -66,6 +75,9 @@ export function States({ site }: { site: SiteData }) {
               <div className="top10__uf">{ufLabel(row.uf)}</div>
               <div className="top10__name">{row.uf_nome ?? ""}</div>
               <div className="top10__val">{compact(row.empresas_ativas, true)}</div>
+              {before.has(ufLabel(row.uf)) ? (
+                <div className="top10__name">{signedCompact(row.empresas_ativas - (before.get(ufLabel(row.uf)) ?? 0))} empresas</div>
+              ) : null}
             </div>
           </div>
         ))}

@@ -193,6 +193,14 @@ export interface EvolucaoSerie {
   pct_mei: number;
 }
 
+export interface EvolucaoSerieUf {
+  mes: string;
+  uf: string | null;
+  uf_nome: string | null;
+  estabelecimentos_ativos: number;
+  empresas_ativas: number;
+}
+
 export interface EvolucaoMovimento {
   mes: string;
   mes_anterior: string;
@@ -239,6 +247,7 @@ export interface Evolucao {
   celulas_suprimidas?: number;
   dados: {
     serie: EvolucaoSerie[];
+    serie_uf?: EvolucaoSerieUf[];
     movimentos: EvolucaoMovimento[];
     transicoes: EvolucaoTransicao[];
     defasagem: EvolucaoDefasagem[];
@@ -262,6 +271,8 @@ export interface SiteData {
   month: string;
   /** Meses publicados, do mais antigo ao mais recente. */
   months: string[];
+  /** Mes que o agente consulta e em que as respostas gravadas foram feitas: o mais recente, nao o escolhido. */
+  agentMonth: string;
   source: string;
   overview: Envelope<Overview>;
   uf: Envelope<UfRow[]>;

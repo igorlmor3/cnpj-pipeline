@@ -1,4 +1,5 @@
-import { int, pct } from "../lib/format";
+import { int, monthLabel, pct } from "../lib/format";
+import { stockAt } from "../lib/series";
 import type { SiteData } from "../lib/types";
 
 export interface SimplesFacts {
@@ -24,6 +25,9 @@ export function simplesFacts(site: SiteData): SimplesFacts {
 
 export function SimplesMei({ site }: { site: SiteData }) {
   const f = simplesFacts(site);
+  const first = site.months[0] ?? site.month;
+  const base = first !== site.month ? stockAt(site, first) : null;
+  const history = (value: number | undefined) => (base && value !== undefined ? ` Em ${monthLabel(first)} eram ${pct(value)}.` : "");
   return (
     <section id="simples-mei" className="explain" aria-labelledby="simples-mei-title">
       <div className="row__head">
@@ -45,7 +49,9 @@ export function SimplesMei({ site }: { site: SiteData }) {
           </p>
           <div className="explain__stat">
             <strong>{pct(f.pctSimples)}</strong>
-            <span>das empresas ativas são optantes ({int(f.optantesSimples)} empresas)</span>
+            <span>
+              das empresas ativas são optantes ({int(f.optantesSimples)} empresas).{history(base?.pct_simples)}
+            </span>
           </div>
         </article>
         <article className="explain__card">
@@ -61,7 +67,9 @@ export function SimplesMei({ site }: { site: SiteData }) {
           </p>
           <div className="explain__stat">
             <strong>{pct(f.pctMei)}</strong>
-            <span>das empresas ativas são MEI ({int(f.optantesMei)} empresas)</span>
+            <span>
+              das empresas ativas são MEI ({int(f.optantesMei)} empresas).{history(base?.pct_mei)}
+            </span>
           </div>
         </article>
         <article className="explain__card">

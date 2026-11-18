@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { AnswerView } from "../components/Answer";
 import { Icon, Poster, Row } from "../components/ui";
 import { type AskOutcome, MAX_QUESTION_CHARS, askAgent } from "../lib/api";
+import { monthLabel } from "../lib/format";
 import type { AgentExample, SiteData } from "../lib/types";
 
 function Modal({ example, onClose }: { example: AgentExample; onClose: () => void }) {
@@ -117,7 +118,7 @@ export function Agent({ site }: { site: SiteData }) {
   return (
     <>
       {examples.length > 0 ? (
-        <Row id="agente" title="Pergunte ao agente" hint="Respostas gravadas com o modelo real, sem custo de uso">
+        <Row id="agente" title="Pergunte ao agente" hint={`Respostas gravadas com o modelo real, sem custo de uso, sobre ${monthLabel(site.agentMonth)}`}>
           {examples.map((example) => (
             <button
               type="button"
@@ -144,6 +145,13 @@ export function Agent({ site }: { site: SiteData }) {
           </div>
         </section>
       )}
+      {site.month !== site.agentMonth ? (
+        <div className="agent" style={{ marginBottom: "1rem" }}>
+          <p className="notice">
+            O agente consulta sempre o mês mais recente, {monthLabel(site.agentMonth)}, e não o mês exibido na página ({monthLabel(site.month)}).
+          </p>
+        </div>
+      ) : null}
       {examples.length > 0 ? (
         <div className="agent" style={{ marginBottom: "1.5rem" }}>
           <p className="notice">

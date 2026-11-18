@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { type BarItem, BarList, COLORS, LineChart } from "../components/charts";
 import { ChartCard, Row, YearSelect } from "../components/ui";
-import { compact, int, ufLabel } from "../lib/format";
+import { compact, int, monthLabel, ufLabel } from "../lib/format";
 import type { SiteData } from "../lib/types";
 
 export function monthTicks(labels: string[], everyYears = 2): number[] {
@@ -61,7 +61,7 @@ export function Openings({ site }: { site: SiteData }) {
   const recentLabels = recent.map((row) => row.ano_mes);
 
   return (
-    <Row id="aberturas" title="Aberturas de estabelecimentos" hint="Início de atividade dos estabelecimentos que seguem no cadastro">
+    <Row id="aberturas" title="Aberturas de estabelecimentos" hint={`Início de atividade dos estabelecimentos que constam no cadastro de ${monthLabel(site.month)}`}>
       <ChartCard
         title="Aberturas por ano"
         subtitle="Organizações políticas separadas: elas concentram picos em anos de eleição municipal"

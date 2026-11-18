@@ -103,7 +103,7 @@ export async function loadSite(base: string, fetcher: Fetcher = fetch, requested
   const [monthIndex, config, examples, evolution, otherPipelines, ...loaded] = await Promise.all([
     getJson<{ fonte: string; mes_referencia: string }>(fetcher, `${dir}index.json`),
     getOptional<Partial<SiteConfig>>(fetcher, `${root}config.json`),
-    getOptional<AgentExamples>(fetcher, `${dir}agent_examples.json`),
+    getOptional<AgentExamples>(fetcher, `${root}data/${index.ultimo}/agent_examples.json`),
     getOptional<Partial<Evolucao>>(fetcher, `${root}data/evolucao.json`),
     Promise.all(otherMonths.map((m) => getOptional<Partial<Envelope<Partial<Pipeline>>>>(fetcher, `${root}data/${m}/pipeline.json`))),
     ...keys.map((key) => getJson<Envelope<unknown>>(fetcher, `${dir}${FILES[key]}`)),
@@ -117,7 +117,7 @@ export async function loadSite(base: string, fetcher: Fetcher = fetch, requested
   });
 
   const validExamples =
-    examples && examples.esquema === 1 && examples.mes_referencia === month && Array.isArray(examples.exemplos)
+    examples && examples.esquema === 1 && examples.mes_referencia === index.ultimo && Array.isArray(examples.exemplos)
       ? examples
       : null;
 
@@ -131,8 +131,9 @@ export async function loadSite(base: string, fetcher: Fetcher = fetch, requested
   return {
     month,
     months,
+    agentMonth: index.ultimo,
     source: monthIndex.fonte,
-    ...(result as unknown as Omit<SiteData, "month" | "months" | "source" | "examples" | "evolution" | "runs" | "config">),
+    ...(result as unknown as Omit<SiteData, "month" | "months" | "agentMonth" | "source" | "examples" | "evolution" | "runs" | "config">),
     examples: validExamples,
     evolution: checkEvolution(evolution),
     runs,
