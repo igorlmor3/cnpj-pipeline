@@ -23,6 +23,7 @@ agent = [
 ]
 dev = [
     "pytest>=8.0",
+    "hypothesis>=6.100",
     "ruff>=0.5",
     "sqlglot>=25.0",
     "anthropic>=0.40",

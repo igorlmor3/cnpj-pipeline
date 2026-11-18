@@ -2,13 +2,13 @@
   "suite": "reservado",
   "audience": "all",
   "generated_on": "2026-11-18",
-  "corpus": "f36d278b7390",
-  "chunks": 379,
+  "corpus": "b35300422327",
+  "chunks": 386,
   "summary": {
     "cases": 24,
     "answerable": 24,
     "unanswerable_ids": [],
-    "mrr": 0.5638888888888889,
+    "mrr": 0.5604166666666667,
     "leaked": 0,
     "by_category": {
       "decisao": {
@@ -41,17 +41,17 @@
       },
       "infra": {
         "cases": 6,
-        "hit_at_3": 6
+        "hit_at_3": 5
       }
     },
     "hit_at": {
       "1": 10,
-      "3": 18,
+      "3": 17,
       "5": 19
     },
     "hit_rate": {
       "1": 0.4166666666666667,
-      "3": 0.75,
+      "3": 0.7083333333333334,
       "5": 0.7916666666666666
     },
     "hit_ci": {
@@ -60,8 +60,8 @@
         0.6116533427566112
       ],
       "3": [
-        0.5510055583116656,
-        0.8800063384126703
+        0.5083230617667995,
+        0.8508535188368138
       ],
       "5": [
         0.5952954657887158,
@@ -246,8 +246,8 @@
       "relevant_chunks": 1,
       "rank": 3,
       "top": [
-        "orchestration/README.md, seção Orquestração com Airflow",
         "docs/quality/2026-10.md, seção Qualidade de dados e tempos (2026-10)",
+        "orchestration/README.md, seção Orquestração com Airflow",
         "orchestration/README.md, seção Orquestração com Airflow > Decisões"
       ],
       "leaked": 0
@@ -258,11 +258,11 @@
       "question": "Qual o limite de dados lidos por consulta no workgroup do Athena?",
       "answerable": true,
       "relevant_chunks": 1,
-      "rank": 3,
+      "rank": 4,
       "top": [
         "infra/README.md, seção Infraestrutura na AWS (nível 1) > Custos e cuidados",
         "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Decisões",
-        "infra/README.md, seção Infraestrutura na AWS (nível 1) > O que é criado"
+        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Testes de propriedade e suíte de injeção de prompt"
       ],
       "leaked": 0
     },

@@ -2,8 +2,8 @@
   "suite": "reservado",
   "audience": "public",
   "generated_on": "2026-11-18",
-  "corpus": "f36d278b7390",
-  "chunks": 379,
+  "corpus": "b35300422327",
+  "chunks": 386,
   "summary": {
     "cases": 24,
     "answerable": 20,
@@ -98,8 +98,8 @@
       "rank": null,
       "top": [
         "README.md, seção cnpj-pipeline > Resultados medidos > Agente de texto para SQL",
-        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > O que a guarda barra hoje",
-        "site/README.md, seção Site > Dados e configuração"
+        "site/README.md, seção Site > Dados e configuração",
+        "README.md, seção cnpj-pipeline > Qualidade de dados"
       ],
       "leaked": 0
     },
@@ -209,8 +209,8 @@
       "relevant_chunks": 1,
       "rank": 4,
       "top": [
-        "docs/architecture.md, seção Arquitetura e decisões > Decisões de plataforma e de produto",
         "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Busca na documentação",
+        "docs/architecture.md, seção Arquitetura e decisões > Decisões de plataforma e de produto",
         "docs/analysis/2026-10.md, seção Análise do cadastro de CNPJ (mês de referência 2026-10) > 6. Sobrevivência por ano de abertura"
       ],
       "leaked": 0
@@ -266,8 +266,8 @@
       "rank": null,
       "top": [
         "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Decisões",
-        "README.md, seção cnpj-pipeline > Publicação na AWS (nível 1)",
-        "docs/architecture.md, seção Arquitetura e decisões > Decisões de plataforma e de produto"
+        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Testes de propriedade e suíte de injeção de prompt",
+        "README.md, seção cnpj-pipeline > Publicação na AWS (nível 1)"
       ],
       "leaked": 0
     },
@@ -364,8 +364,8 @@
       "rank": 1,
       "top": [
         "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > O laço do agente e o gasto",
-        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Publicação: o que os recrutadores veem",
-        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Decisões"
+        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Decisões",
+        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Publicação: o que os recrutadores veem"
       ],
       "leaked": 0
     },

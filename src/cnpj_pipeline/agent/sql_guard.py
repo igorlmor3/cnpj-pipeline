@@ -14,7 +14,10 @@ Regras (qualquer violacao levanta SqlRejected, com uma mensagem que o agente pod
   contas de uma foto unica. Com varios meses e uma consulta que cita reference_month, os marts podem
   ser lidos em todos os meses da lista, e uma verificacao barra somar fotos de meses diferentes (o
   mesmo cadastro contado mais de uma vez); as dimensoes ficam sempre no mes padrao;
-- juncoes precisam de condicao (sem produto cartesiano) e ha um maximo de juncoes por consulta;
+- juncoes precisam de condicao que compare colunas (sem produto cartesiano, nem disfarcado de
+  `ON 1 = 1`) e ha um maximo de juncoes por consulta;
+- so funcoes da lista permitida (agregados, janelas e poucas funcoes escalares): o que gera dados em
+  massa (repeat, generate_series), le o ambiente (current_setting, getenv) ou nao e conhecido nao passa;
 - o resultado tem limite de linhas, acrescentado ou reduzido para o maximo.
 
 A resolucao de nomes usa o escopo do analisador (nao uma busca textual), para que uma CTE com o
@@ -58,6 +61,27 @@ DIMENSIONS = (
 )
 ALLOWED_TABLES = frozenset(MARTS + DIMENSIONS)
 
+# Funcoes permitidas, pelo nome que o sqlglot da a cada uma (node.key). Quem nao esta aqui e recusado,
+# inclusive funcoes que o sqlglot nao conhece (getenv, current_setting, read_text...).
+ALLOWED_FUNCTIONS = frozenset(
+    {
+        # agregados
+        "sum", "count", "avg", "min", "max", "stddev", "variance", "approxdistinct", "argmin", "argmax",
+        # escalares
+        "round", "ceil", "floor", "abs", "sign", "pow", "sqrt", "ln", "coalesce", "nullif", "greatest",
+        "least", "cast", "trycast", "if", "case", "lower", "upper", "substring", "length", "trim",
+        "concat", "replace", "datetrunc", "year", "month", "extract", "exists", "and", "or",
+        # janelas
+        "rownumber", "rank", "denserank", "lag", "lead", "firstvalue", "lastvalue", "ntile", "percentrank",
+    }
+)  # fmt: skip
+FUNCTIONS_HELP = (
+    "SUM, COUNT, AVG, MIN, MAX, STDDEV, VARIANCE, APPROX_DISTINCT, MIN_BY, MAX_BY, ROUND, CEIL, FLOOR, ABS, "
+    "SIGN, POWER, SQRT, LN, COALESCE, NULLIF, GREATEST, LEAST, CAST, TRY_CAST, IF, CASE, LOWER, UPPER, "
+    "SUBSTR, LENGTH, TRIM, CONCAT, REPLACE, DATE_TRUNC, YEAR, MONTH, EXTRACT, EXISTS e as de janela "
+    "ROW_NUMBER, RANK, DENSE_RANK, LAG, LEAD, FIRST_VALUE, LAST_VALUE, NTILE, PERCENT_RANK"
+)
+
 
 # O sqlglot avisa no log quando cai para "Command"; a guarda ja rejeita esses casos com mensagem propria.
 logging.getLogger("sqlglot").setLevel(logging.ERROR)
@@ -98,11 +122,20 @@ def _parse(sql: str) -> exp.Expression:
     return statement
 
 
+def _function_key(node: exp.Func) -> str:
+    return node.name.lower() if isinstance(node, exp.Anonymous) else node.key
+
+
 def _check_structure(statement: exp.Expression) -> None:
     joins = 0
     for node in statement.walk():
+        if isinstance(node, exp.Func) and _function_key(node) not in ALLOWED_FUNCTIONS:
+            shown = node.name if isinstance(node, exp.Anonymous) else node.sql_name()
+            raise SqlRejected(f"Funcao {shown} nao permitida. Funcoes permitidas: {FUNCTIONS_HELP}.")
         if isinstance(node, (exp.Command, exp.Into, exp.Lock, exp.Pragma)):
             raise SqlRejected("So consultas SELECT sao permitidas.")
+        if isinstance(node, exp.Select) and not node.expressions:
+            raise SqlRejected("O SELECT precisa listar ao menos uma coluna ou expressao.")
         if isinstance(node, (exp.Unnest, exp.Lateral)):
             # a gold nao tem colunas de lista; UNNEST so serviria para gerar linhas em massa
             raise SqlRejected("UNNEST e LATERAL nao sao permitidos.")
@@ -113,6 +146,12 @@ def _check_structure(statement: exp.Expression) -> None:
             if not (node.args.get("on") or node.args.get("using")):
                 raise SqlRejected(
                     "Toda juncao precisa de condicao ON ou USING; produto cartesiano nao e permitido."
+                )
+            on = node.args.get("on")
+            if on is not None and not any(True for _ in on.find_all(exp.Column)):
+                raise SqlRejected(
+                    "A condicao ON precisa comparar colunas das tabelas; condicao constante "
+                    "(como ON 1 = 1) e um produto cartesiano disfarcado."
                 )
     if joins > MAX_JOINS:
         raise SqlRejected(f"Juncoes demais ({joins}); o maximo e {MAX_JOINS}.")
@@ -275,6 +314,22 @@ def guard(
         raise ValueError("o mes padrao precisa estar na lista de meses")
     allowed = frozenset(t.lower() for t in allowed_tables)
 
+    try:
+        return _guard(sql, month, available, allowed, max_rows, database, write)
+    except RecursionError as exc:
+        # parenteses ou operadores aninhados demais estouram a recursao do analisador
+        raise SqlRejected("SQL aninhado demais; simplifique a consulta.") from exc
+
+
+def _guard(
+    sql: str,
+    month: str,
+    available: tuple[str, ...],
+    allowed: frozenset[str],
+    max_rows: int,
+    database: str,
+    write: str,
+) -> GuardResult:
     statement = _parse(sql)
     _check_structure(statement)
     real, _ = _classify_tables(statement)

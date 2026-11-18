@@ -1,6 +1,6 @@
 # Avaliação da recuperação: conjunto dev, público all
 
-Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (379 trechos; versão do corpus `f36d278b7390`). Sem modelo e sem custo.
+Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (386 trechos; versão do corpus `b35300422327`). Sem modelo e sem custo.
 
 ## Resumo
 
@@ -54,9 +54,9 @@ Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (379 tre
 
 **d_guarda_recusa** (fora dos 5 primeiros): O que a guarda de SQL recusa?
 
+- docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > O que a guarda barra hoje
+- docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Testes de propriedade e suíte de injeção de prompt
 - docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > O laço do agente e o gasto
-- README.md, seção cnpj-pipeline > Resultados medidos > Agente de texto para SQL
-- docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Busca na documentação
 
 **d_encoding** (fora dos 5 primeiros): Qual o encoding dos arquivos da Receita e como é tratado?
 

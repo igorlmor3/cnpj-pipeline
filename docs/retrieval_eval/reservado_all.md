@@ -1,6 +1,6 @@
 # Avaliação da recuperação: conjunto reservado, público all
 
-Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (379 trechos; versão do corpus `f36d278b7390`). Sem modelo e sem custo.
+Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (386 trechos; versão do corpus `b35300422327`). Sem modelo e sem custo.
 
 ## Resumo
 
@@ -8,9 +8,9 @@ Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (379 tre
 |---|---|
 | Perguntas com fonte neste público | 24 de 24 |
 | Acerto nos 1 primeiros | 10 de 24 (41,7%; intervalo de 95%: 24,5% a 61,2%) |
-| Acerto nos 3 primeiros | 18 de 24 (75,0%; intervalo de 95%: 55,1% a 88,0%) |
+| Acerto nos 3 primeiros | 17 de 24 (70,8%; intervalo de 95%: 50,8% a 85,1%) |
 | Acerto nos 5 primeiros | 19 de 24 (79,2%; intervalo de 95%: 59,5% a 90,8%) |
-| MRR@5 | 0,564 |
+| MRR@5 | 0,560 |
 | Resultados de público não permitido | 0 |
 
 ## Por categoria (acerto nos 3 primeiros)
@@ -19,7 +19,7 @@ Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (379 tre
 |---|---|---|
 | decisao | 3 | 4 |
 | definicao | 1 | 3 |
-| infra | 6 | 6 |
+| infra | 5 | 6 |
 | limite | 2 | 4 |
 | numero | 0 | 1 |
 | privacidade | 2 | 2 |
@@ -51,6 +51,12 @@ Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (379 tre
 - docs/analysis/evolucao_2026-07_a_2026-10.md, seção Evolução do cadastro de CNPJ entre julho e outubro de 2026
 - docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Avaliação
 - docs/analysis/evolucao_2026-07_a_2026-10.md, seção Evolução do cadastro de CNPJ entre julho e outubro de 2026 > 3. As saídas variam mais do que as entradas
+
+**r_limite_athena** (posição 4): Qual o limite de dados lidos por consulta no workgroup do Athena?
+
+- infra/README.md, seção Infraestrutura na AWS (nível 1) > Custos e cuidados
+- docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Decisões
+- docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Testes de propriedade e suíte de injeção de prompt
 
 **r_cnae_9492800** (fora dos 5 primeiros): O que é o CNAE 9492800?
 

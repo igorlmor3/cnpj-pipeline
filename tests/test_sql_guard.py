@@ -379,3 +379,177 @@ def test_the_list_of_months_is_validated():
 def test_the_model_cannot_reach_months_outside_the_list():
     result = run_many(f"SELECT reference_month FROM {MART} WHERE reference_month = '2020-01'")
     assert "2020-01" in result.sql and IN_ALL in result.sql  # o filtro dele vem depois do da guarda
+
+
+# --------------------------------------------------------------------------- #
+# Funcoes permitidas, juncoes constantes e aninhamento
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    "expression",
+    [
+        "SUM(n)",
+        "COUNT(*)",
+        "COUNT(DISTINCT uf)",
+        "AVG(n)",
+        "ROUND(100.0 * SUM(n) / NULLIF(COUNT(*), 0), 2)",
+        "COALESCE(MAX(n), 0)",
+        "CAST(SUM(n) AS DOUBLE)",
+        "TRY_CAST(uf AS INTEGER)",
+        "CASE WHEN n > 1 THEN 'a' ELSE 'b' END",
+        "IF(n > 1, 1, 0)",
+        "LOWER(uf)",
+        "SUBSTR(uf, 1, 1)",
+        "CONCAT(uf, '-', codigo)",
+        "GREATEST(n, 1)",
+        "SUM(n) FILTER (WHERE n > 1)",
+        "RANK() OVER (ORDER BY SUM(n) DESC)",
+        "ROW_NUMBER() OVER (PARTITION BY uf ORDER BY n)",
+        "LAG(n) OVER (ORDER BY n)",
+        "SUM(n) OVER (PARTITION BY uf)",
+        "EXTRACT(YEAR FROM CAST('2026-01-01' AS DATE))",
+        "n BETWEEN 1 AND 2",
+        "uf LIKE 'S%' AND n > 0 OR NOT n > 5",
+    ],
+)
+def test_the_functions_a_data_question_needs_are_allowed(expression):
+    run(f"SELECT {expression} FROM {MART}" + (" GROUP BY uf, n, codigo" if "OVER" in expression else ""))
+
+
+@pytest.mark.parametrize(
+    "expression",
+    [
+        "repeat('x', 1000000000)",
+        "lpad('x', 1000000000, 'y')",
+        "generate_series(1, 100000000)",
+        "range(100000000)",
+        "array_fill(1, 100000000)",
+        "getenv('HOME')",
+        "current_setting('s3_secret_access_key')",
+        "current_query()",
+        "version()",
+        "random()",
+        "read_text('/etc/passwd')",
+        "regexp_extract(uf, '(a+)+$')",
+        "ARRAY[1, 2]",
+        "SUM(getenv('X'))",
+        "CASE WHEN n > 1 THEN getenv('X') END",
+    ],
+)
+def test_functions_outside_the_list_are_rejected_wherever_they_appear(expression):
+    with pytest.raises(SqlRejected, match="nao permitida"):
+        run(f"SELECT {expression} FROM {MART}")
+
+
+def test_a_rejected_function_is_named_and_the_allowed_ones_are_listed():
+    with pytest.raises(SqlRejected) as info:
+        run(f"SELECT getenv('X') FROM {MART}")
+    message = str(info.value)
+    assert "GETENV" in message.upper() and "SUM" in message and "ROW_NUMBER" in message
+
+
+def test_every_function_in_the_help_text_is_allowed_by_the_guard():
+    """O texto de ajuda e a lista de verdade nao podem se afastar: o que a mensagem oferece tem que passar."""
+    import sqlglot
+    from sqlglot import exp
+
+    samples = {
+        "SUM": "SUM(n)",
+        "COUNT": "COUNT(n)",
+        "AVG": "AVG(n)",
+        "MIN": "MIN(n)",
+        "MAX": "MAX(n)",
+        "STDDEV": "STDDEV(n)",
+        "VARIANCE": "VARIANCE(n)",
+        "APPROX_DISTINCT": "APPROX_DISTINCT(n)",
+        "MIN_BY": "MIN_BY(uf, n)",
+        "MAX_BY": "MAX_BY(uf, n)",
+        "ROUND": "ROUND(n, 1)",
+        "CEIL": "CEIL(n)",
+        "FLOOR": "FLOOR(n)",
+        "ABS": "ABS(n)",
+        "SIGN": "SIGN(n)",
+        "POWER": "POWER(n, 2)",
+        "SQRT": "SQRT(n)",
+        "LN": "LN(n)",
+        "COALESCE": "COALESCE(n, 0)",
+        "NULLIF": "NULLIF(n, 0)",
+        "GREATEST": "GREATEST(n, 1)",
+        "LEAST": "LEAST(n, 1)",
+        "CAST": "CAST(n AS DOUBLE)",
+        "TRY_CAST": "TRY_CAST(n AS INTEGER)",
+        "IF": "IF(n > 1, 1, 0)",
+        "CASE": "CASE WHEN n > 1 THEN 1 END",
+        "LOWER": "LOWER(uf)",
+        "UPPER": "UPPER(uf)",
+        "SUBSTR": "SUBSTR(uf, 1, 1)",
+        "LENGTH": "LENGTH(uf)",
+        "TRIM": "TRIM(uf)",
+        "CONCAT": "CONCAT(uf, 'a')",
+        "REPLACE": "REPLACE(uf, 'a', 'b')",
+        "DATE_TRUNC": "DATE_TRUNC('month', CAST(uf AS DATE))",
+        "YEAR": "YEAR(CAST(uf AS DATE))",
+        "MONTH": "MONTH(CAST(uf AS DATE))",
+        "EXTRACT": "EXTRACT(YEAR FROM CAST(uf AS DATE))",
+        "EXISTS": "EXISTS (SELECT 1)",
+        "ROW_NUMBER": "ROW_NUMBER() OVER (ORDER BY n)",
+        "RANK": "RANK() OVER (ORDER BY n)",
+        "DENSE_RANK": "DENSE_RANK() OVER (ORDER BY n)",
+        "LAG": "LAG(n) OVER (ORDER BY n)",
+        "LEAD": "LEAD(n) OVER (ORDER BY n)",
+        "FIRST_VALUE": "FIRST_VALUE(n) OVER (ORDER BY n)",
+        "LAST_VALUE": "LAST_VALUE(n) OVER (ORDER BY n)",
+        "NTILE": "NTILE(4) OVER (ORDER BY n)",
+        "PERCENT_RANK": "PERCENT_RANK() OVER (ORDER BY n)",
+    }
+    help_names = set(
+        sql_guard.FUNCTIONS_HELP.replace(" e as de janela", ",").replace(" ", "").rstrip(".").split(",")
+    )
+    assert help_names == set(samples)
+    for name, text in samples.items():
+        tree = sqlglot.parse_one(f"SELECT {text} FROM t", read="trino")
+        keys = {sql_guard._function_key(f) for f in tree.find_all(exp.Func)}
+        assert keys <= sql_guard.ALLOWED_FUNCTIONS, (name, keys - sql_guard.ALLOWED_FUNCTIONS)
+
+
+@pytest.mark.parametrize(
+    "condition",
+    ["1 = 1", "TRUE", "'a' = 'a'", "2 > 1", "NOT FALSE", "1 = 1 AND 2 = 2"],
+)
+def test_a_join_condition_that_names_no_column_is_a_disguised_cartesian_product(condition):
+    with pytest.raises(SqlRejected, match="ON precisa comparar colunas"):
+        run(f"SELECT 1 FROM {MART} a JOIN {MART} b ON {condition}")
+
+
+@pytest.mark.parametrize(
+    "join",
+    [
+        "JOIN gold_dim_cnae d ON a.uf = d.codigo",
+        "LEFT JOIN gold_dim_cnae d ON a.uf = d.codigo AND d.codigo IS NOT NULL",
+        "JOIN gold_dim_cnae d USING (codigo)",
+    ],
+)
+def test_joins_that_compare_columns_still_pass(join):
+    run(f"SELECT a.uf FROM {MART} a {join}")
+
+
+@pytest.mark.parametrize("depth", [200, 1500, 3000])
+def test_extreme_nesting_is_a_rejection_with_a_message_not_a_crash(depth):
+    sql = "(" * depth + "SELECT 1" + ")" * depth
+    try:
+        guard(sql, month=MONTH)
+    except SqlRejected as exc:
+        assert str(exc).strip()  # recusado com mensagem (aninhado demais ou maior que o limite)
+
+
+def test_deep_but_valid_nesting_beyond_the_recursion_limit_is_rejected_cleanly():
+    sql = "SELECT " + "NOT " * 950 + "TRUE"  # cabe nos 4000 caracteres e estoura a recursao do analisador
+    with pytest.raises(SqlRejected, match="aninhado demais"):
+        guard(sql, month=MONTH)
+
+
+@pytest.mark.parametrize("sql", ["SELECT", "select", "SELECT-- tudo depois e comentario", "SELECT /* x */"])
+def test_a_select_without_columns_is_rejected_instead_of_rewritten_into_invalid_sql(sql):
+    with pytest.raises(SqlRejected, match="ao menos uma coluna"):
+        run(sql)

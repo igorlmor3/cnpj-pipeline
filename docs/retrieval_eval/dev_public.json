@@ -2,8 +2,8 @@
   "suite": "dev",
   "audience": "public",
   "generated_on": "2026-11-18",
-  "corpus": "f36d278b7390",
-  "chunks": 379,
+  "corpus": "b35300422327",
+  "chunks": 386,
   "summary": {
     "cases": 24,
     "answerable": 22,
@@ -245,9 +245,9 @@
       "relevant_chunks": 1,
       "rank": null,
       "top": [
-        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > O laço do agente e o gasto",
-        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Busca na documentação",
-        "README.md, seção cnpj-pipeline > Resultados medidos > Agente de texto para SQL"
+        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > O que a guarda barra hoje",
+        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Testes de propriedade e suíte de injeção de prompt",
+        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Testes de propriedade e suíte de injeção de prompt"
       ],
       "leaked": 0
     },
