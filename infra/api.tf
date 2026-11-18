@@ -18,4 +18,6 @@ module "api" {
   allowed_origins       = var.api_allowed_origins
   reserved_concurrency  = var.api_reserved_concurrency
   monthly_budget_usd    = var.api_monthly_budget_usd
+  alarm_email           = var.api_alarm_email
+  daily_cost_alarm_usd  = var.api_daily_cost_alarm_usd
 }

@@ -25,3 +25,8 @@ output "api_param_prefix" {
   description = "Prefixo dos parametros da API no Parameter Store."
   value       = one(module.api[*].param_prefix)
 }
+
+output "api_dashboard" {
+  description = "Nome do painel do CloudWatch da API (nulo se api_enabled for false)."
+  value       = one(module.api[*].dashboard_name)
+}

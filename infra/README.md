@@ -96,7 +96,8 @@ A API deixa o site fazer perguntas livres ao agente de texto para SQL sem expor 
 | Parâmetro `/cnpj-pipeline/api/salt` (SecureString) | Sal do identificador anônimo do visitante: o IP nunca é gravado, só um HMAC dele. |
 | Parâmetro `/cnpj-pipeline/api/anthropic-api-key` (SecureString) | Chave do provedor. É gravada pela CLI, fora do Terraform, para nunca entrar no arquivo de estado. |
 | Papel IAM da função | Menor privilégio: lê só a gold (a silver, que tem nomes de sócios, fica fora), grava só os resultados do Athena, usa só esta tabela e só estes parâmetros. |
-| Grupo de logs (14 dias) | Registros em JSON sem pergunta, SQL, chave nem IP. |
+| Grupo de logs (14 dias) | Uma linha de JSON por pergunta, sem pergunta, SQL, chave nem IP (ver [Observabilidade](#observabilidade-da-api)). |
+| Consultas salvas, métricas, alarmes e painel do CloudWatch | Mostram uso, latência, gasto e fidelidade dos números a partir do registro, só com dados agregados. |
 
 Limites padrão: 3 perguntas por minuto e 15 por dia por visitante, 150 por dia no total e US$ 4 por mês de gasto com o modelo (o limite do workspace no provedor, US$ 5, é a barreira final). O prazo de uma pergunta é de 40 segundos, e a função tem 90 segundos de tempo máximo.
 
@@ -147,6 +148,21 @@ Limites padrão: 3 perguntas por minuto e 15 por dia por visitante, 150 por dia 
    ```
 
 Para desligar a API na hora, mude o mesmo parâmetro para `false` (o valor é relido em até 30 segundos). O Terraform não volta o valor do interruptor. Depois de atualizar o código, gere o pacote de novo e rode `terraform apply`: a função só é atualizada se o conteúdo mudou, porque o zip é determinístico.
+
+### Observabilidade da API
+
+A função escreve uma linha de JSON por pergunta na saída padrão (e não pelo `logging`, porque o formato de texto da Lambda poria um prefixo antes da linha, e só JSON puro é descoberto pelo Logs Insights e aceito pelos filtros de métrica). A linha tem o status, o código HTTP, o identificador anônimo do visitante (8 caracteres do HMAC), o tempo em milissegundos, as chamadas ao modelo, o número de consultas SQL e de buscas na documentação, os tokens, o custo em dólares, os bytes lidos no Athena e, nas respostas, quantos números do texto foram conferidos e quantos não têm apoio nos resultados. Pergunta, SQL, resposta, chave e IP nunca entram nela.
+
+O arquivo `modules/api/observability.tf` cria, a partir dessa linha:
+
+| Recurso | O que mostra |
+| --- | --- |
+| 7 consultas salvas (CloudWatch, Logs Insights, Consultas salvas, prefixo `cnpj-pipeline/api/`) | Perguntas por dia e status; latência (p50, p95 e p99); custo e tokens por dia; fidelidade dos números; uso das ferramentas (SQL, busca na documentação, chamadas ao modelo, bytes lidos); recusas por status; limites por motivo. |
+| 5 métricas (`CnpjPipeline/Api`) | `Asks`, `Errors`, `BudgetHits`, `CostUsd` e `AnswersWithUnsupportedNumbers`. |
+| 3 alarmes | Gasto do dia acima de `api_daily_cost_alarm_usd` (padrão US$ 1); três ou mais erros do modelo ou internos em uma hora; teto de gasto do mês atingido. |
+| Painel `cnpj-pipeline-api` | Perguntas, erros e teto atingido por dia, gasto por dia, respostas com número sem apoio, latência e perguntas por status. O nome sai de `terraform output api_dashboard`. |
+
+Com `api_alarm_email` preenchido em `terraform.tfvars`, um tópico SNS envia os alarmes por e-mail (a AWS manda um pedido de confirmação que precisa ser aceito uma vez). Sem ele, os alarmes existem e aparecem só no console. As 5 métricas, os 3 alarmes e o painel cabem no que o nível gratuito do CloudWatch cobre (10 métricas personalizadas, 10 alarmes e 3 painéis); as consultas do Logs Insights são cobradas por dado lido, e o grupo de logs tem poucos megabytes. Um teste confere que cada campo usado nas consultas e nos filtros existe na linha de registro e que nenhum campo sensível é usado.
 
 ### Limites conhecidos
 

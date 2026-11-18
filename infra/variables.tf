@@ -89,3 +89,15 @@ variable "api_monthly_budget_usd" {
   type        = number
   default     = 4
 }
+
+variable "api_alarm_email" {
+  description = "E-mail que recebe os alarmes da API (erros, gasto do dia e teto do mes atingido). Vazio: so aparecem no console."
+  type        = string
+  default     = ""
+}
+
+variable "api_daily_cost_alarm_usd" {
+  description = "Gasto do agente em um dia (US$) acima do qual o alarme dispara."
+  type        = number
+  default     = 1
+}

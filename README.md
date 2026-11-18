@@ -492,6 +492,7 @@ Limites desta medição: 24 a 32 perguntas por conjunto é uma amostra pequena (
 - [x] Agente de IA, ferramentas de metadados avaliadas e descartadas: o prompt já traz tabelas, colunas e meses, e uma ferramenta de listagem repetiria isso a cada pergunta (decisão em [docs/agent_design.md](docs/agent_design.md))
 - [x] Agente de IA, trajeto estruturado da resposta (consultas, buscas na documentação, uso do modelo, custo e checagem de fidelidade), na API e nos exemplos gravados (`agent/trace.py`, testado)
 - [ ] Site: seção "como chegou lá" a partir do trajeto
+- [x] Observabilidade da API: uma linha de JSON por pergunta (sem pergunta, SQL nem IP), 7 consultas salvas do Logs Insights, métricas, alarmes e painel do CloudWatch em Terraform, com teste que confere os campos usados contra o registro (código e testes; veja [infra/README.md](infra/README.md#observabilidade-da-api))
 - [ ] Agente de IA, observabilidade: consultas do CloudWatch Logs Insights definidas no Terraform, só com contagens agregadas e sem guardar as perguntas dos visitantes
 - [ ] Agente de IA, testes mais duros da guarda: testes de propriedades com Hypothesis e uma suíte de injeção de prompt
 - [ ] Agente de IA, avaliação como portão do CI: modo de referência (sem custo) no GitHub Actions e arquivo de resultados de base para comparar

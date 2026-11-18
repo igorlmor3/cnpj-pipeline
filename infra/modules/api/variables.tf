@@ -101,3 +101,15 @@ variable "monthly_budget_usd" {
   type        = number
   default     = 4
 }
+
+variable "alarm_email" {
+  description = "E-mail que recebe os alarmes (erros, gasto do dia e teto do mes atingido). Vazio: os alarmes existem, mas so aparecem no console. A AWS envia um pedido de confirmacao que precisa ser aceito uma vez."
+  type        = string
+  default     = ""
+}
+
+variable "daily_cost_alarm_usd" {
+  description = "Gasto com o modelo em um dia (US$) acima do qual o alarme dispara. O teto do mes continua sendo aplicado pela funcao."
+  type        = number
+  default     = 1
+}

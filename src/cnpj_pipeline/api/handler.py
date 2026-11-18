@@ -80,6 +80,14 @@ def _json_default(value: Any) -> Any:
     return str(value)
 
 
+def emit_event(record: Mapping[str, Any]) -> None:
+    """Escreve o registro de uma pergunta como uma linha de JSON na saida padrao. A saida padrao
+    (e nao o modulo logging) porque a funcao, no formato de texto, poe um prefixo (nivel, data e
+    identificador) antes de cada linha do logging, e so uma linha de JSON puro e descoberta pelo
+    Logs Insights e aceita pelos filtros de metrica."""
+    print(json.dumps(record, ensure_ascii=False), flush=True)
+
+
 class Api:
     def __init__(
         self,
@@ -239,12 +247,13 @@ class Api:
             audiences=frozenset({PUBLIC}),  # o visitante so ve a documentacao publica
         )
         code = HTTP_BY_STATUS.get(answer.status, 500)
-        self._log(answer.status, code, visitor, answer, started)
-        return self._response(code, self._body(answer, body["question"]))
+        trace = build_trace(body["question"], answer) if answer.status in TRACE_STATUSES else None
+        self._log(answer.status, code, visitor, answer, started, trace=trace)
+        return self._response(code, self._body(answer, trace))
 
     # -- saida -------------------------------------------------------------------------------
 
-    def _body(self, answer: Answer, question: str = "") -> dict[str, Any]:
+    def _body(self, answer: Answer, trace: dict[str, Any] | None = None) -> dict[str, Any]:
         body: dict[str, Any] = {
             "status": answer.status,
             "message": answer.text,
@@ -260,13 +269,21 @@ class Api:
         sources = list(dict.fromkeys(s for d in answer.docs for s in d.sources))
         if answer.status == "answered" and sources:
             body["sources"] = sources
-        if answer.status in TRACE_STATUSES:
-            body["trace"] = build_trace(question, answer)
+        if trace is not None:
+            body["trace"] = trace
         return body
 
     def _log(
-        self, status: str, code: int, visitor: str, answer: Answer | None, started: float, **extra: Any
+        self,
+        status: str,
+        code: int,
+        visitor: str,
+        answer: Answer | None,
+        started: float,
+        trace: dict[str, Any] | None = None,
+        **extra: Any,
     ) -> None:
+        fidelity = (trace or {}).get("fidelity") or {}
         record = {
             "event": "ask",
             "status": status,
@@ -277,9 +294,15 @@ class Api:
             "queries": len(answer.queries) if answer else 0,
             "doc_searches": len(answer.docs) if answer else 0,
             "cost_usd": round(answer.cost_usd, 6) if answer else 0.0,
+            "input_tokens": answer.input_tokens if answer else 0,
+            "output_tokens": answer.output_tokens if answer else 0,
+            "bytes_scanned": sum(q.bytes_scanned or 0 for q in answer.queries if q.ok) if answer else 0,
             **extra,
         }
-        log.info(json.dumps(record))
+        if fidelity:
+            record["numbers_checked"] = fidelity["numbers_checked"]
+            record["unsupported_numbers"] = len(fidelity["unsupported"])
+        emit_event(record)
 
 
 # --------------------------------------------------------------------------- #

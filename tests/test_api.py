@@ -539,15 +539,17 @@ def test_the_api_key_is_read_once_per_instance_and_handed_to_the_client(executor
     assert rig.params.reads.count(f"{PREFIX}/salt") == 1
 
 
-def test_nothing_sensitive_is_in_the_response_or_the_log(executor, system, caplog):
+def test_nothing_sensitive_is_in_the_response_or_the_log(executor, system, caplog, capsys):
     rig = Rig(executor, system)
     caplog.set_level(logging.DEBUG)
     response = rig.ask("Pergunta secreta sobre o cadastro?", ip="198.51.100.23")
-    haystack = response["body"] + json.dumps(response["headers"]) + caplog.text
+    printed = capsys.readouterr().out
+    haystack = response["body"] + json.dumps(response["headers"]) + caplog.text + printed
     for secret in (API_KEY, SALT, "198.51.100.23", "Pergunta secreta"):
         assert secret not in haystack
-    assert '"event": "ask"' in caplog.text and '"status": "answered"' in caplog.text
-    record = json.loads(next(r.message for r in caplog.records if r.message.startswith("{")))
+    (line,) = printed.splitlines()  # uma linha de JSON puro por pergunta
+    record = json.loads(line)
+    assert record["event"] == "ask" and record["status"] == "answered"
     assert set(record) >= {"visitor", "ms", "llm_calls", "queries", "cost_usd", "http"}
     assert len(record["visitor"]) == 8
 
@@ -929,17 +931,17 @@ from test_agent_ask import doc_index, docs_turn  # noqa: E402
 from cnpj_pipeline.agent.retrieval import INTERNAL, PUBLIC, save_index  # noqa: E402
 
 
-def test_a_documentation_answer_carries_its_sources_and_no_query_result(executor, system, caplog):
+def test_a_documentation_answer_carries_its_sources_and_no_query_result(executor, system, capsys):
     rig = Rig(
         executor, system, script=[docs_turn("DuckDB CSV memória"), turn("Porque lê CSV.")],
         retriever=doc_index(),
     )  # fmt: skip
-    with caplog.at_level(logging.INFO, logger="cnpj_pipeline.api"):
-        body = body_of(rig.ask("Por que DuckDB?"))
+    body = body_of(rig.ask("Por que DuckDB?"))
+    printed = capsys.readouterr().out
 
     assert body["status"] == "answered" and body["sources"] == ["docs/architecture.md, seção Motor"]
     assert not ({"sql", "columns", "rows"} & set(body))
-    assert '"doc_searches": 1' in caplog.text and "Por que DuckDB" not in caplog.text
+    assert json.loads(printed)["doc_searches"] == 1 and "Por que DuckDB" not in printed
 
 
 def test_a_sql_answer_has_no_sources_field(executor, system):
