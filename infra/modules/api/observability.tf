@@ -242,11 +242,11 @@ resource "aws_cloudwatch_dashboard" "api" {
         width  = 8
         height = 6
         properties = {
-          title   = "Perguntas, erros e teto atingido (por dia)"
-          region  = local.region
-          view    = "timeSeries"
-          stat    = "Sum"
-          period  = 86400
+          title  = "Perguntas, erros e teto atingido (por dia)"
+          region = local.region
+          view   = "timeSeries"
+          stat   = "Sum"
+          period = 86400
           metrics = [
             [local.metric_ns, "Asks"],
             [local.metric_ns, "Errors"],
