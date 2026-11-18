@@ -1,0 +1,28 @@
+# Imagem da tarefa do ECS Fargate: so o que o pipeline completo precisa para baixar, processar e publicar a gold.
+# Sem testes nem dependencias de desenvolvimento; as credenciais da AWS vem do papel IAM da tarefa.
+#
+#   docker build -f Dockerfile.cloud -t cnpj-pipeline .
+#
+# A instalacao e editavel de proposito: o pacote descobre a raiz do projeto (docs/, data/) pela posicao
+# dos proprios arquivos, e uma instalacao comum o jogaria dentro do site-packages.
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    CNPJ_DATA_DIR=/data
+
+WORKDIR /app
+
+# Dependencias antes do codigo, para aproveitar o cache de camadas
+COPY pyproject.toml README.md ./
+COPY src ./src
+RUN pip install -e ".[aws]"
+
+# Usuario sem privilegios: a tarefa so escreve em /data (camadas) e /app/docs (relatorios da execucao)
+RUN useradd --create-home --uid 10001 pipeline \
+    && mkdir -p /data /app/docs \
+    && chown -R pipeline:pipeline /data /app
+USER pipeline
+
+CMD ["python", "-m", "cnpj_pipeline.cloud.task", "run"]

@@ -101,3 +101,33 @@ variable "api_daily_cost_alarm_usd" {
   type        = number
   default     = 1
 }
+
+variable "ecs_enabled" {
+  description = "Nivel 2: cria o cluster, o repositorio de imagens, o papel IAM e os logs para rodar o pipeline no ECS Fargate."
+  type        = bool
+  default     = false
+}
+
+variable "ecs_vcpu" {
+  description = "vCPUs da tarefa do pipeline no Fargate (1, 2, 4, 8 ou 16)."
+  type        = number
+  default     = 4
+}
+
+variable "ecs_memory_mib" {
+  description = "Memoria da tarefa em MiB, dentro da faixa que o Fargate aceita para as vCPUs (4 vCPUs: 8192 a 30720)."
+  type        = number
+  default     = 16384
+}
+
+variable "ecs_ephemeral_storage_gib" {
+  description = "Disco de trabalho da tarefa em GiB (21 a 200). Um mes ocupa cerca de 47 GiB."
+  type        = number
+  default     = 120
+}
+
+variable "ecs_task_timeout_minutes" {
+  description = "Tempo maximo de uma execucao; passado o limite, a tarefa se encerra sozinha."
+  type        = number
+  default     = 300
+}

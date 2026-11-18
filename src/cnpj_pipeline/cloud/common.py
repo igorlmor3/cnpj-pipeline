@@ -23,8 +23,18 @@ def default_bucket() -> str | None:
     return os.environ.get(BUCKET_ENV) or None
 
 
-def default_profile() -> str:
-    return os.environ.get(PROFILE_ENV, DEFAULT_PROFILE)
+def default_profile() -> str | None:
+    """Perfil do AWS CLI. Em um container do ECS as credenciais vem do papel da tarefa, sem perfil.
+
+    CNPJ_AWS_PROFILE=none (ou vazio) forca o uso da cadeia padrao de credenciais; dentro do ECS isso e
+    automatico quando a variavel nao esta definida.
+    """
+    if PROFILE_ENV in os.environ:
+        value = os.environ[PROFILE_ENV].strip()
+        return None if value.casefold() in ("", "none") else value
+    if os.environ.get("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI"):
+        return None
+    return DEFAULT_PROFILE
 
 
 def default_region() -> str:

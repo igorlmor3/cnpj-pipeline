@@ -60,6 +60,12 @@ def test_params_from_the_dag_become_a_config_with_booleans_parsed():
     assert RunConfig.from_params({}) == RunConfig()  # padrao: amostra, sem force, sem publicar
 
 
+def test_skip_site_comes_from_the_dag_params_and_is_off_by_default():
+    assert RunConfig.from_params({"mode": "full", "skip_site": "true"}).skip_site is True
+    assert RunConfig.from_params({"mode": "full", "skip_site": "false"}).skip_site is False
+    assert RunConfig.from_params({}).skip_site is False
+
+
 def test_the_sample_always_uses_the_fictitious_month_and_rebuilds_every_time():
     assert SAMPLE.effective_month == sample.DEFAULT_MONTH == orchestration.SAMPLE_MONTH
     assert SAMPLE.effective_force is True
@@ -283,6 +289,20 @@ def test_the_cloud_stages_join_the_flow_only_when_publishing_in_full_mode():
     assert not set(CLOUD_STAGES) & set(flow(RunConfig(mode=MODE_SAMPLE, month="2026-10", publish=True)))
 
 
+def test_skipping_the_site_removes_only_the_export_and_keeps_the_cloud_stages():
+    cfg = RunConfig(mode=MODE_FULL, month="2026-10", publish=True, skip_site=True)
+    assert flow(cfg) == ["baixar_dados", "bronze", "silver", "gold", "qualidade", *CLOUD_STAGES]
+    assert "exportar_site" not in flow(RunConfig(mode=MODE_FULL, month="2026-10", skip_site=True))
+    assert flow(FULL)[-1] == "exportar_site"  # sem a opcao, tudo continua como antes
+
+
+def test_run_flow_with_skip_site_never_runs_the_export():
+    runner = Recorder()
+    run_flow(["2026-07", "2026-08"], skip_site=True, runner=runner)
+    assert [stage for _, stage in runner.calls].count("exportar_site") == 0
+    assert [stage for _, stage in runner.calls].count("qualidade") == 2
+
+
 def test_each_month_runs_the_whole_flow_before_the_next_one_starts():
     runner = Recorder()
     results = run_flow(["2026-07", "2026-08"], runner=runner)
@@ -346,6 +366,20 @@ def test_main_returns_zero_and_prints_the_summary(monkeypatch, capsys):
     monkeypatch.setattr(orchestration, "run_flow", lambda *a, **k: run_flow(*a, runner=Recorder(), **k))
     assert main(["--months", "2026-09"]) == 0
     assert "2026-09  silver" in capsys.readouterr().out
+
+
+def test_main_forwards_skip_site_to_the_flow(monkeypatch):
+    seen = {}
+
+    def fake_flow(months, **kwargs):
+        seen.update(kwargs)
+        return []
+
+    monkeypatch.setattr(orchestration, "run_flow", fake_flow)
+    assert main(["--months", "2026-09", "--skip-site"]) == 0
+    assert seen["skip_site"] is True
+    assert main(["--months", "2026-09"]) == 0
+    assert seen["skip_site"] is False
 
 
 def test_main_tells_how_to_resume_after_a_failure(monkeypatch, capsys):

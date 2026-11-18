@@ -1,0 +1,9 @@
+# Contexto minimo da imagem da nuvem: so o que o Dockerfile.cloud copia.
+# (O BuildKit usa <nome-do-dockerfile>.dockerignore no lugar do .dockerignore.)
+*
+!pyproject.toml
+!README.md
+!src
+**/__pycache__
+**/*.pyc
+**/*.egg-info

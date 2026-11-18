@@ -15,3 +15,10 @@ alert_email = "seu-email@exemplo.com"
 # api_month           = "2026-10"
 # api_months          = ["2026-07", "2026-08", "2026-09", "2026-10"]
 # api_allowed_origins = ["https://seu-usuario.github.io"]
+
+# Nivel 2: o pipeline em uma tarefa do ECS Fargate (veja infra/README.md)
+# ecs_enabled               = true
+# ecs_vcpu                  = 4
+# ecs_memory_mib            = 16384
+# ecs_ephemeral_storage_gib = 120
+# ecs_task_timeout_minutes  = 300

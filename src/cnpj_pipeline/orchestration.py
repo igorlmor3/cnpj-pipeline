@@ -76,6 +76,8 @@ class RunConfig:
     month: str = "2026-10"
     force: bool = False
     publish: bool = False
+    # Pula a exportacao para o site: na nuvem a pasta do site some com o container, entao a etapa nao serve.
+    skip_site: bool = False
 
     def __post_init__(self) -> None:
         if self.mode not in MODES:
@@ -90,6 +92,7 @@ class RunConfig:
             month=str(params.get("month", cls.month)),
             force=_as_bool(params.get("force", False)),
             publish=_as_bool(params.get("publish", False)),
+            skip_site=_as_bool(params.get("skip_site", False)),
         )
 
     @property
@@ -260,7 +263,9 @@ class StageResult:
 
 def flow(cfg: RunConfig) -> list[str]:
     """Etapas de uma execucao completa de um mes, na ordem. A nuvem so entra com publish no modo full."""
-    stages = [SOURCE_STAGES[cfg.mode], "bronze", "silver", "gold", "qualidade", "exportar_site"]
+    stages = [SOURCE_STAGES[cfg.mode], "bronze", "silver", "gold", "qualidade"]
+    if not cfg.skip_site:
+        stages.append("exportar_site")
     if cfg.mode == MODE_FULL and cfg.publish:
         stages.extend(CLOUD_STAGES)
     return stages
@@ -272,6 +277,7 @@ def run_flow(
     mode: str = MODE_FULL,
     force: bool = False,
     publish: bool = False,
+    skip_site: bool = False,
     from_stage: str | None = None,
     runner: Callable[[str, Mapping[str, Any]], None] = run_stage,
     clock: Callable[[], float] = time.monotonic,
@@ -283,7 +289,10 @@ def run_flow(
         raise OrchestrationError("informe pelo menos um mes")
     if len(set(months)) != len(months):
         raise OrchestrationError("mes repetido na lista")
-    configs = [RunConfig(mode=mode, month=month, force=force, publish=publish) for month in months]
+    configs = [
+        RunConfig(mode=mode, month=month, force=force, publish=publish, skip_site=skip_site)
+        for month in months
+    ]
     if from_stage is not None and from_stage not in flow(configs[0]):
         raise OrchestrationError(
             f"etapa {from_stage!r} nao faz parte do fluxo: {', '.join(flow(configs[0]))}"
@@ -294,7 +303,13 @@ def run_flow(
         stages = flow(cfg)
         if index == 0 and from_stage is not None:
             stages = stages[stages.index(from_stage) :]
-        params = {"mode": cfg.mode, "month": cfg.month, "force": cfg.force, "publish": cfg.publish}
+        params = {
+            "mode": cfg.mode,
+            "month": cfg.month,
+            "force": cfg.force,
+            "publish": cfg.publish,
+            "skip_site": cfg.skip_site,
+        }
         for stage in stages:
             started = clock()
             try:
@@ -344,6 +359,9 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--force", action="store_true", help="Refaz bronze, silver e gold que ja existem")
     parser.add_argument("--publish", action="store_true", help="No modo full, publica a gold na AWS ao final")
     parser.add_argument(
+        "--skip-site", action="store_true", help="Nao exporta o site (usado na execucao na nuvem)"
+    )
+    parser.add_argument(
         "--from-stage",
         choices=STAGES,
         help="Retoma o primeiro mes a partir desta etapa (ex.: gold, depois de uma falha)",
@@ -358,7 +376,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     try:
         results = run_flow(
-            args.months, mode=args.mode, force=args.force, publish=args.publish, from_stage=args.from_stage
+            args.months,
+            mode=args.mode,
+            force=args.force,
+            publish=args.publish,
+            skip_site=args.skip_site,
+            from_stage=args.from_stage,
         )
     except FlowFailed as failure:
         if failure.completed:
