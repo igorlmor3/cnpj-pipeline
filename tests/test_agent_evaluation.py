@@ -42,6 +42,7 @@ from cnpj_pipeline.agent.evaluation_cases import (
     CASES,
     HOLDOUT_CASES,
     MESES_CASES,
+    RESERVADO2_CASES,
     ROBUSTEZ_CASES,
     SEM_POLITICAS,
     SUITES,
@@ -179,8 +180,8 @@ def test_rows_contain(expected, got, result):
 
 @pytest.mark.parametrize(
     "cases",
-    [CASES, HOLDOUT_CASES, ROBUSTEZ_CASES, VALIDACAO_CASES],
-    ids=["dev", "holdout", "robustez", "validacao"],
+    [CASES, HOLDOUT_CASES, ROBUSTEZ_CASES, VALIDACAO_CASES, RESERVADO2_CASES],
+    ids=["dev", "holdout", "robustez", "validacao", "reservado2"],
 )
 def test_each_case_set_is_well_formed(cases):
     assert len({c.id for c in cases}) == len(cases)
@@ -204,22 +205,28 @@ def test_the_suites_do_not_share_ids_questions_or_references():
     assert not [c.id for c in ROBUSTEZ_CASES if c.reference_sql in dev_sql | holdout_sql()]
     earlier = dev_sql | holdout_sql() | {c.reference_sql for c in ROBUSTEZ_CASES if c.reference_sql}
     assert not [c.id for c in VALIDACAO_CASES if c.reference_sql in earlier]
+    earlier |= {c.reference_sql for c in VALIDACAO_CASES if c.reference_sql}
+    assert not [c.id for c in RESERVADO2_CASES if c.reference_sql in earlier]
     assert all(c.id.startswith("ho_") for c in HOLDOUT_CASES)
     assert all(c.id.startswith("rb_") for c in ROBUSTEZ_CASES)
     assert all(c.id.startswith("va_") for c in VALIDACAO_CASES)
-    assert not any(c.id.startswith(("ho_", "rb_", "va_")) for c in CASES)
+    assert all(c.id.startswith("r2_") for c in RESERVADO2_CASES)
+    assert not any(c.id.startswith(("ho_", "rb_", "va_", "r2_")) for c in CASES)
     assert SUITES == {
         "dev": CASES,
         "holdout": HOLDOUT_CASES,
         "robustez": ROBUSTEZ_CASES,
         "validacao": VALIDACAO_CASES,
+        "reservado2": RESERVADO2_CASES,
         "meses": MESES_CASES,
         "all": ALL_CASES,
     }
     assert not set(c.id for c in MESES_CASES) & set(c.id for c in ALL_CASES)
     assert all(c.needs_months for c in MESES_CASES)
     assert not any(c.needs_months for c in ALL_CASES)
-    assert len(ALL_CASES) == len(CASES) + len(HOLDOUT_CASES) + len(ROBUSTEZ_CASES) + len(VALIDACAO_CASES)
+    assert len(ALL_CASES) == sum(
+        map(len, (CASES, HOLDOUT_CASES, ROBUSTEZ_CASES, VALIDACAO_CASES, RESERVADO2_CASES))
+    )
 
 
 def holdout_sql() -> set[str]:
@@ -249,6 +256,16 @@ def test_the_validation_set_has_the_same_kinds_as_the_robustness_set_with_new_co
     assert {c.category for c in VALIDACAO_CASES} == {c.category for c in ROBUSTEZ_CASES} - {"comparacao"}
     assert {c.kind for c in VALIDACAO_CASES} == {"data", "caveat", "refusal"}
     assert not {c.question for c in VALIDACAO_CASES} & {c.question for c in ROBUSTEZ_CASES}
+
+
+def test_the_second_reserved_set_has_the_same_kinds_with_new_content():
+    assert len(RESERVADO2_CASES) >= 24
+    assert {c.category for c in RESERVADO2_CASES} == {c.category for c in VALIDACAO_CASES}
+    assert {c.kind for c in RESERVADO2_CASES} == {"data", "caveat", "refusal"}
+    seen = {c.question for c in ALL_CASES if c not in RESERVADO2_CASES}
+    assert not {c.question for c in RESERVADO2_CASES} & seen
+    # as perguntas nao citam mes: valem com um mes ou com varios
+    assert not any("2026" in c.question for c in RESERVADO2_CASES)
 
 
 def test_every_reference_runs_through_the_guard_on_the_real_gold(executor):
@@ -718,6 +735,9 @@ def test_the_cli_runs_the_dev_suite_by_default_and_names_the_others(gold_root, t
     assert main(base + ["--suite", "validacao"]) == 0
     assert f"{len(VALIDACAO_CASES)} de {len(VALIDACAO_CASES)} casos certos" in capsys.readouterr().out
 
+    assert main(base + ["--suite", "reservado2"]) == 0
+    assert f"{len(RESERVADO2_CASES)} de {len(RESERVADO2_CASES)} casos certos" in capsys.readouterr().out
+
     assert main(base + ["--suite", "all"]) == 0
     assert f"{len(ALL_CASES)} de {len(ALL_CASES)} casos certos" in capsys.readouterr().out
     assert (out / f"{MONTH}_referencia_all.md").exists()
@@ -919,4 +939,26 @@ def test_main_runs_the_multi_month_suite_in_reference_mode(multi_gold, tmp_path,
         ]
     )  # fmt: skip
     assert code == 0
-    assert "5 de 5 casos certos" in capsys.readouterr().out
+    assert f"{len(MESES_CASES)} de {len(MESES_CASES)} casos certos" in capsys.readouterr().out
+
+
+def test_the_report_shows_the_interval_cost_per_correct_answer_and_percentiles():
+    results = [result("a"), result("b", passed=False, reason="resultado diferente do esperado")]
+    text = render_report(results, month=MONTH, label="x", generated_on="2026-11-18", model="x")
+
+    assert "Intervalo de 95% da acurácia" in text and "wilson, 2 perguntas" in text
+    assert "Custo por resposta certa | US$ 0,0020" in text
+    assert "Latência mediana (p50) / p95" in text
+    assert "Tokens por pergunta" in text
+    assert "| Categoria | Certos | Casos | Intervalo de 95% |" in text
+
+
+def test_the_json_summary_carries_the_interval_fields():
+    payload = json.loads(
+        results_json([result()], month=MONTH, label="x", generated_on="2026-11-18", model="m")
+    )
+    summary = payload["summary"]
+
+    assert summary["ci_method"] == "wilson" and summary["questions"] == 1
+    assert summary["accuracy_ci_low"] < 1.0 == summary["accuracy_ci_high"]
+    assert summary["cost_per_correct_usd"] == pytest.approx(0.001)

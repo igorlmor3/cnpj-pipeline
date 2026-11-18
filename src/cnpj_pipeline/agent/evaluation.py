@@ -32,6 +32,7 @@ from typing import Any
 from cnpj_pipeline.agent.ask import Answer, ask, build_system_prompt
 from cnpj_pipeline.agent.budget import HAIKU_5_5, Budget, Pricing
 from cnpj_pipeline.agent.context import TABLES
+from cnpj_pipeline.agent.eval_stats import bootstrap_interval, wilson_interval
 from cnpj_pipeline.agent.evaluation_cases import ALL_CASES, MESES_CASES, SUITES, EvalCase, by_id
 from cnpj_pipeline.agent.executor import DuckDBExecutor, Executor, run_query
 from cnpj_pipeline.agent.llm import DEFAULT_MODEL, LLMClient, LLMTurn, ToolCall
@@ -280,11 +281,39 @@ class Summary:
     latency_p95_s: float
     failed_queries: int
     extra: dict[str, Any] = field(default_factory=dict)
+    accuracy_ci_low: float = 0.0  # intervalo de 95% da acuracia (ver accuracy_interval)
+    accuracy_ci_high: float = 1.0
+    ci_method: str = "wilson"
+    questions: int = 0  # perguntas distintas (com repeticoes, menos que `cases`)
+    cost_per_correct_usd: float | None = None
+    mean_input_tokens: float = 0.0
+    mean_output_tokens: float = 0.0
+    cost_p95_usd: float = 0.0
 
 
 def _percentile(values: list[float], q: float) -> float:
     ordered = sorted(values)
     return ordered[min(len(ordered) - 1, int(round(q * (len(ordered) - 1))))] if ordered else 0.0
+
+
+def question_rates(results: list[CaseResult]) -> dict[str, float]:
+    """Taxa de acerto por pergunta (1 ou 0 sem repeticoes; fracao das repeticoes com elas)."""
+    grouped: dict[str, list[bool]] = {}
+    for r in results:
+        grouped.setdefault(r.id, []).append(r.passed)
+    return {qid: sum(v) / len(v) for qid, v in grouped.items()}
+
+
+def accuracy_interval(results: list[CaseResult]) -> tuple[float, float, str]:
+    """Intervalo de 95% da acuracia. Uma execucao por pergunta: Wilson sobre os acertos. Com
+    repeticoes: reamostragem das perguntas, porque repetir uma pergunta nao a torna independente."""
+    if not results:
+        return (0.0, 1.0, "wilson")
+    if max(r.run for r in results) == 1:
+        lo, hi = wilson_interval(sum(r.passed for r in results), len(results))
+        return (lo, hi, "wilson")
+    lo, hi = bootstrap_interval(list(question_rates(results).values()))
+    return (lo, hi, "reamostragem das perguntas")
 
 
 def summarize(results: list[CaseResult]) -> Summary:
@@ -296,6 +325,9 @@ def summarize(results: list[CaseResult]) -> Summary:
         bucket["cases"] += 1
         bucket["passed"] += int(r.passed)
     queried = [r for r in results if r.first_query_ok is not None]
+    ci_low, ci_high, ci_method = accuracy_interval(results)
+    passed = sum(r.passed for r in results)
+    total_cost = sum(r.cost_usd for r in results)
     return Summary(
         cases=len(results),
         passed=sum(r.passed for r in results),
@@ -310,6 +342,14 @@ def summarize(results: list[CaseResult]) -> Summary:
         latency_median_s=statistics.median(r.elapsed_s for r in results),
         latency_p95_s=_percentile([r.elapsed_s for r in results], 0.95),
         failed_queries=sum(r.failed_queries for r in results),
+        accuracy_ci_low=ci_low,
+        accuracy_ci_high=ci_high,
+        ci_method=ci_method,
+        questions=len({r.id for r in results}),
+        cost_per_correct_usd=(total_cost / passed) if passed else None,
+        mean_input_tokens=statistics.fmean(r.input_tokens for r in results),
+        mean_output_tokens=statistics.fmean(r.output_tokens for r in results),
+        cost_p95_usd=_percentile([r.cost_usd for r in results], 0.95),
     )
 
 
@@ -368,6 +408,10 @@ def stability(results: list[CaseResult]) -> list[CaseStability]:
 def _num(value: float, digits: int = 1) -> str:
     """Numero com virgula decimal, para o relatorio em portugues."""
     return f"{value:.{digits}f}".replace(".", ",")
+
+
+def _cost_per_correct(value: float | None) -> str:
+    return "-" if value is None else f"US$ {_num(value, 4)}"
 
 
 def _pct(value: float | None) -> str:
@@ -437,19 +481,27 @@ def render_report(
         "| Métrica | Valor |",
         "|---|---|",
         f"| {correct_label} | {s.passed} de {s.cases} ({_pct(s.accuracy)}) |",
+        f"| Intervalo de 95% da acurácia | {_pct(s.accuracy_ci_low)} a {_pct(s.accuracy_ci_high)} "
+        f"({s.ci_method}, {s.questions} perguntas) |",
         f"| Primeira consulta sem erro | {_pct(s.first_query_ok_rate)} |",
         f"| Consultas recusadas ou com erro (total) | {s.failed_queries} |",
         f"| Chamadas ao modelo por pergunta (média) | {_num(s.mean_llm_calls)} |",
-        f"| Custo por pergunta (média) | US$ {_num(s.mean_cost_usd, 4)} |",
+        f"| Custo por pergunta (média / p95) | US$ {_num(s.mean_cost_usd, 4)} / "
+        f"US$ {_num(s.cost_p95_usd, 4)} |",
+        f"| Custo por resposta certa | {_cost_per_correct(s.cost_per_correct_usd)} |",
         f"| Custo total | US$ {_num(s.total_cost_usd, 4)} |",
-        f"| Latência mediana / p95 | {_num(s.latency_median_s)} s / {_num(s.latency_p95_s)} s |",
+        f"| Tokens por pergunta (entrada / saída, média) | {_num(s.mean_input_tokens, 0)} / "
+        f"{_num(s.mean_output_tokens, 0)} |",
+        f"| Latência mediana (p50) / p95 | {_num(s.latency_median_s)} s / {_num(s.latency_p95_s)} s |",
         "",
         "## Por categoria",
         "",
-        "| Categoria | Certos | Casos |",
-        "|---|---|---|",
+        "| Categoria | Certos | Casos | Intervalo de 95% |",
+        "|---|---|---|---|",
     ]
-    out += [f"| {cat} | {b['passed']} | {b['cases']} |" for cat, b in s.by_category.items()]
+    for cat, b in s.by_category.items():
+        lo, hi, _ = accuracy_interval([r for r in results if r.category == cat])
+        out.append(f"| {cat} | {b['passed']} | {b['cases']} | {_pct(lo)} a {_pct(hi)} |")
     if repeats > 1:
         out += _stability_section(results)
     else:
@@ -489,7 +541,11 @@ def render_report(
         "contam como erro.",
         "- Nas de ressalva, o SQL precisa ter considerado `is_organizacao_politica`.",
         "- Nas de recusa, o certo é terminar sem resposta baseada em consulta.",
-        "- O custo usa a tabela de preços informada na execução; o valor cobrado é o da fatura do provedor.",
+        "- O custo usa a tabela de preços informada na execução; o valor cobrado é o da fatura do provedor. "
+        "O p95 de latência e de custo, com poucas perguntas, é praticamente o maior valor observado.",
+        "- O intervalo de 95% mostra o quanto a acurácia mediria de diferente em outro conjunto de perguntas "
+        "do mesmo tipo. Com 25 a 30 perguntas ele tem cerca de 20 pontos percentuais de largura; duas "
+        "execuções só diferem de verdade se a comparação pareada (`eval_compare`) disser isso.",
     ]
     if repeats > 1:
         out += [
@@ -558,7 +614,8 @@ def main(argv: list[str] | None = None) -> int:
         choices=sorted(SUITES),
         default="dev",
         help="conjunto de casos: dev (ajuste do prompt), holdout, robustez (frases informais, contas e "
-        "armadilhas), validacao (reservado, escrito depois do ajuste), meses (varios meses, exige "
+        "armadilhas), validacao (usado no ajuste de multiplos meses, agora de desenvolvimento), "
+        "reservado2 (reservado atual), meses (varios meses, exige "
         "--months) ou all",
     )
     parser.add_argument("--cases", help="ids separados por virgula; tem prioridade sobre --suite")

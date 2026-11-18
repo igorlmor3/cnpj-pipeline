@@ -482,6 +482,18 @@ Limites desta medição: 24 a 32 perguntas por conjunto é uma amostra pequena (
 - [x] Agente de IA, parte 4: gravador de respostas de exemplo com o modelo real, para o site mostrar sem custo por visita (`agent/record_examples.py`, testado com modelo simulado)
 - [x] Site em React com Tailwind: código, testes e build (pasta `site/`, 66 testes)
 - [x] Site publicado no GitHub Pages com o agente ao vivo e as respostas gravadas (https://igorlmor3.github.io/cnpj-pipeline/)
+- [x] Conjunto reservado `reservado2` (25 perguntas dos mesmos tipos do `validacao`, que passou a ser de desenvolvimento) para a próxima medição do agente
+- [x] Agente de IA, relatório de avaliação com intervalo de 95% da acurácia, custo por pergunta e por resposta certa e latência p50 e p95, e comparação pareada entre duas execuções (`agent/eval_stats.py`, `agent/eval_compare.py`, testados)
+- [ ] Agente de IA, conjunto de avaliação maior (cerca de 100 perguntas), com uma parte congelada que nunca é usada para ajustar o prompt
+- [ ] Agente de IA, verificação de fidelidade: conferir que os números da resposta aparecem no resultado da consulta
+- [ ] Agente de IA, comparação de modelos: tabela de acerto, custo e latência no mesmo conjunto
+- [ ] Agente de IA, segunda ferramenta: busca nos documentos do repositório (BM25 ou embeddings pequenos), com citação da fonte, índice restrito a uma lista de arquivos permitidos e a recuperação avaliada separadamente da resposta
+- [ ] Agente de IA, ferramentas de metadados: listar tabelas, colunas e meses publicados
+- [ ] Agente de IA, resposta estruturada (texto, SQL, mês usado, premissas e checagem de fidelidade) e a seção "como chegou lá" no site
+- [ ] Agente de IA, observabilidade: consultas do CloudWatch Logs Insights definidas no Terraform, só com contagens agregadas e sem guardar as perguntas dos visitantes
+- [ ] Agente de IA, testes mais duros da guarda: testes de propriedades com Hypothesis e uma suíte de injeção de prompt
+- [ ] Agente de IA, avaliação como portão do CI: modo de referência (sem custo) no GitHub Actions e arquivo de resultados de base para comparar
+- [ ] Agente de IA, relatório de uma página com método, números, custo e limites
 
 ## Dados e licença
 

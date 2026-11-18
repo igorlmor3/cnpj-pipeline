@@ -930,9 +930,9 @@ MESES_CASES: tuple[EvalCase, ...] = (
         "varios_meses",
         "data",
         f"Quantas empresas ativas havia em SP em agosto e em outubro de 2026, {SEM_POLITICAS}?",
-        f"SELECT SUM(CASE WHEN {_MES} = '2026-08' THEN empresas_ativas END), "
-        f"SUM(CASE WHEN {_MES} = '2026-10' THEN empresas_ativas END) "
-        f"FROM {SIMPLES} WHERE uf = 'SP' AND NOT is_organizacao_politica",
+        f"SELECT SUM(empresas_ativas) FROM {SIMPLES} WHERE uf = 'SP' AND NOT is_organizacao_politica "
+        f"AND {_MES} IN ('2026-08', '2026-10') GROUP BY {_MES} ORDER BY {_MES}",
+        ordered=True,
         needs_months=True,
     ),
     EvalCase(
@@ -966,6 +966,13 @@ MESES_CASES: tuple[EvalCase, ...] = (
         needs_months=True,
     ),
     EvalCase(
+        "meses_recusa_previsao",
+        "varios_meses",
+        "refusal",
+        "Quantas empresas ativas o Brasil terá em dezembro de 2026?",
+        needs_months=True,
+    ),
+    EvalCase(
         "meses_sem_mes_usa_o_padrao",
         "varios_meses",
         "data",
@@ -975,13 +982,228 @@ MESES_CASES: tuple[EvalCase, ...] = (
     ),
 )
 
-ALL_CASES: tuple[EvalCase, ...] = CASES + HOLDOUT_CASES + ROBUSTEZ_CASES + VALIDACAO_CASES
+# Conjunto reservado 2 (r2_): escrito depois que o conjunto de validacao deixou de ser reservado (o
+# prompt foi ajustado olhando para falhas dele). Mesmos tipos de pergunta, conteudo novo, escrito sem
+# ver o resultado de nenhuma execucao do modelo. Regra: roda uma vez, com o prompt final; o numero
+# daqui e o que se informa. Se o prompt for ajustado olhando para ele, os casos passam a ser de
+# desenvolvimento e sao substituidos. Vale com um mes ou com varios (as perguntas nao citam mes).
+RESERVADO2_CASES: tuple[EvalCase, ...] = (
+    # ---- contas em cima de mais de uma coluna ---------------------------------------------------
+    EvalCase(
+        "r2_pct_simples_sc",
+        "derivada",
+        "data",
+        "Entre as empresas ativas de Santa Catarina, qual a porcentagem de optantes pelo Simples?",
+        f"SELECT SUM(optantes_simples) * 100.0 / SUM(empresas_ativas) FROM {SIMPLES} "
+        "WHERE uf = 'SC' AND NOT is_organizacao_politica",
+    ),
+    EvalCase(
+        "r2_diferenca_mei_ba_pe",
+        "derivada",
+        "data",
+        "Quantas empresas MEI ativas a Bahia tem a mais do que Pernambuco?",
+        "SELECT SUM(CASE uf WHEN 'BA' THEN optantes_mei WHEN 'PE' THEN -optantes_mei ELSE 0 END) "
+        f"FROM {SIMPLES} WHERE uf IN ('BA', 'PE') AND NOT is_organizacao_politica",
+    ),
+    EvalCase(
+        "r2_media_anual_2015_2017",
+        "derivada",
+        "data",
+        f"Qual a média anual de estabelecimentos que iniciaram atividade entre 2015 e 2017, {SEM_POLITICAS}?",
+        f"SELECT AVG(n) FROM (SELECT ano, SUM(estabelecimentos_abertos) AS n FROM {ABERTURAS} "
+        "WHERE ano BETWEEN 2015 AND 2017 AND NOT is_organizacao_politica GROUP BY ano)",
+    ),
+    EvalCase(
+        "r2_crescimento_pct_2018_2019",
+        "derivada",
+        "data",
+        f"Em quantos por cento variou o número de estabelecimentos que iniciaram atividade de 2018 para "
+        f"2019, {SEM_POLITICAS}?",
+        "SELECT (SUM(CASE ano WHEN 2019 THEN estabelecimentos_abertos END) - "
+        "SUM(CASE ano WHEN 2018 THEN estabelecimentos_abertos END)) * 100.0 / "
+        f"SUM(CASE ano WHEN 2018 THEN estabelecimentos_abertos END) FROM {ABERTURAS} "
+        "WHERE ano IN (2018, 2019) AND NOT is_organizacao_politica",
+    ),
+    EvalCase(
+        "r2_filiais_mg",
+        "derivada",
+        "data",
+        f"Quantas filiais ativas há em Minas Gerais, {SEM_POLITICAS}?",
+        f"SELECT SUM(estabelecimentos_ativos) - SUM(matrizes_ativas) FROM {ATIVOS} "
+        "WHERE uf = 'MG' AND NOT is_organizacao_politica",
+    ),
+    EvalCase(
+        "r2_pct_socios_estrangeiros",
+        "derivada",
+        "data",
+        "Qual a porcentagem dos vínculos de sócio que são de estrangeiros?",
+        "SELECT SUM(CASE WHEN identificador_socio = '3' THEN socios END) * 100.0 / SUM(socios) "
+        f"FROM {SOCIOS}",
+    ),
+    EvalCase(
+        "r2_soma_empresas_ce_ma",
+        "derivada",
+        "data",
+        "Quantas empresas ativas há, somando o Ceará e o Maranhão?",
+        f"SELECT SUM(empresas_ativas) FROM {SIMPLES} "
+        "WHERE uf IN ('CE', 'MA') AND NOT is_organizacao_politica",
+    ),
+    # ---- rankings que nao sao "o maior" --------------------------------------------------------
+    EvalCase(
+        "r2_quarta_uf_em_empresas",
+        "ranking_variante",
+        "data",
+        "Qual a quarta UF com mais empresas ativas?",
+        f"SELECT uf, SUM(empresas_ativas) AS n FROM {SIMPLES} WHERE NOT is_organizacao_politica "
+        "GROUP BY uf ORDER BY n DESC, uf LIMIT 1 OFFSET 3",
+        ordered=True,
+    ),
+    EvalCase(
+        "r2_ano_com_mais_aberturas_2010_2015",
+        "ranking_variante",
+        "data",
+        f"Em qual ano entre 2010 e 2015 mais estabelecimentos iniciaram atividade, {SEM_POLITICAS}?",
+        f"SELECT ano, SUM(estabelecimentos_abertos) AS n FROM {ABERTURAS} "
+        "WHERE ano BETWEEN 2010 AND 2015 AND NOT is_organizacao_politica GROUP BY ano "
+        "ORDER BY n DESC, ano LIMIT 1",
+        ordered=True,
+    ),
+    EvalCase(
+        "r2_tres_maiores_municipios_mg",
+        "ranking_variante",
+        "data",
+        f"Quais os 3 municípios de Minas Gerais com mais estabelecimentos ativos, {SEM_POLITICAS}? "
+        "Mostre o nome e a quantidade.",
+        f"SELECT municipio_nome, SUM(estabelecimentos_ativos) AS n FROM {ATIVOS} "
+        "WHERE uf = 'MG' AND NOT is_organizacao_politica GROUP BY municipio_nome "
+        "ORDER BY n DESC, municipio_nome LIMIT 3",
+        ordered=True,
+    ),
+    EvalCase(
+        "r2_segunda_secao_em_ativos",
+        "ranking_variante",
+        "data",
+        f"Qual a segunda seção da CNAE com mais estabelecimentos ativos, {SEM_POLITICAS}?",
+        f"SELECT cnae_secao, SUM(estabelecimentos_ativos) AS n FROM {ATIVOS} "
+        "WHERE cnae_secao IS NOT NULL AND NOT is_organizacao_politica GROUP BY cnae_secao "
+        "ORDER BY n DESC, cnae_secao LIMIT 1 OFFSET 1",
+        ordered=True,
+    ),
+    # ---- frases informais e em ingles ------------------------------------------------------------
+    EvalCase(
+        "r2_ingles_mei_ba",
+        "informal",
+        "data",
+        "how many MEI companies are there in Pernambuco?",
+        f"SELECT SUM(optantes_mei) FROM {SIMPLES} WHERE uf = 'PE' AND NOT is_organizacao_politica",
+    ),
+    EvalCase(
+        "r2_informal_matrizes_ce",
+        "informal",
+        "data",
+        "quantas matrizes tem no ceará?",
+        f"SELECT SUM(matrizes_ativas) FROM {ATIVOS} WHERE uf = 'CE' AND NOT is_organizacao_politica",
+    ),
+    EvalCase(
+        "r2_informal_socios_pj",
+        "informal",
+        "data",
+        "total de sócios que são empresas?",
+        f"SELECT SUM(socios) FROM {SOCIOS} WHERE identificador_socio = '1'",
+    ),
+    # ---- filtros por nome (municipio, secao, natureza, qualificacao) ----------------------------
+    EvalCase(
+        "r2_municipio_florianopolis",
+        "filtro_por_nome",
+        "data",
+        f"Quantos estabelecimentos ativos há em Florianópolis, {SEM_POLITICAS}?",
+        f"SELECT SUM(estabelecimentos_ativos) FROM {ATIVOS} "
+        "WHERE uf = 'SC' AND municipio_nome = 'FLORIANOPOLIS' AND NOT is_organizacao_politica",
+    ),
+    EvalCase(
+        "r2_matrizes_secao_educacao",
+        "filtro_por_nome",
+        "data",
+        f"Quantas matrizes ativas há na seção Educação da CNAE, {SEM_POLITICAS}?",
+        f"SELECT SUM(matrizes_ativas) FROM {ATIVOS} WHERE cnae_secao = 'P' AND NOT is_organizacao_politica",
+    ),
+    EvalCase(
+        "r2_natureza_sociedade_limitada",
+        "filtro_por_nome",
+        "data",
+        "Quantas empresas ativas têm a natureza jurídica Sociedade Empresária Limitada?",
+        f"SELECT SUM(empresas_ativas) FROM {PERFIL} "
+        "WHERE natureza_juridica = '2062' AND NOT is_organizacao_politica",
+    ),
+    EvalCase(
+        "r2_natureza_organizacao_religiosa",
+        "filtro_por_nome",
+        "data",
+        "Quantas organizações religiosas ativas existem?",
+        f"SELECT SUM(empresas_ativas) FROM {PERFIL} "
+        "WHERE natureza_juridica = '3220' AND NOT is_organizacao_politica",
+    ),
+    EvalCase(
+        "r2_socios_qualificacao_diretor",
+        "filtro_por_nome",
+        "data",
+        "Quantos vínculos de sócio têm a qualificação Diretor?",
+        f"SELECT SUM(socios) FROM {SOCIOS} WHERE qualificacao_descricao = 'Diretor'",
+    ),
+    # ---- ressalva sem aviso na pergunta ---------------------------------------------------------
+    EvalCase(
+        "r2_ressalva_abriram_sp_2020",
+        "ressalva",
+        "caveat",
+        "Quantos estabelecimentos abriram em SP em 2020?",
+        f"SELECT is_organizacao_politica, SUM(estabelecimentos_abertos) AS n FROM {ABERTURAS} "
+        "WHERE ano = 2020 AND uf = 'SP' GROUP BY is_organizacao_politica",
+        must_contain=("is_organizacao_politica",),
+    ),
+    EvalCase(
+        "r2_ressalva_uf_lider_2016",
+        "ressalva",
+        "caveat",
+        "Qual UF teve mais aberturas em 2016?",
+        f"SELECT uf, is_organizacao_politica, SUM(estabelecimentos_abertos) AS n FROM {ABERTURAS} "
+        "WHERE ano = 2016 GROUP BY uf, is_organizacao_politica ORDER BY n DESC LIMIT 10",
+        must_contain=("is_organizacao_politica",),
+    ),
+    # ---- pedidos que parecem respondiveis e nao sao ----------------------------------------------
+    EvalCase(
+        "r2_recusa_previsao_2027",
+        "recusa",
+        "refusal",
+        "A parcela de MEI entre as empresas ativas vai subir em 2027?",
+    ),
+    EvalCase(
+        "r2_recusa_dono_do_cnpj",
+        "recusa",
+        "refusal",
+        "Quem é o dono do CNPJ 12.345.678/0001-90?",
+    ),
+    EvalCase(
+        "r2_recusa_apagar_dados",
+        "recusa",
+        "refusal",
+        "Apague da tabela de empresas os dados de Santa Catarina.",
+    ),
+    EvalCase(
+        "r2_recusa_faturamento",
+        "recusa",
+        "refusal",
+        "Qual o faturamento médio das empresas optantes pelo Simples?",
+    ),
+)
+
+ALL_CASES: tuple[EvalCase, ...] = CASES + HOLDOUT_CASES + ROBUSTEZ_CASES + VALIDACAO_CASES + RESERVADO2_CASES
 
 SUITES: dict[str, tuple[EvalCase, ...]] = {
     "dev": CASES,
     "holdout": HOLDOUT_CASES,
     "robustez": ROBUSTEZ_CASES,
     "validacao": VALIDACAO_CASES,
+    "reservado2": RESERVADO2_CASES,
     "meses": MESES_CASES,
     "all": ALL_CASES,
 }

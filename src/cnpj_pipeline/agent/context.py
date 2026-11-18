@@ -211,6 +211,9 @@ junte também por reference_month.
 - A diferença entre dois meses é a variação líquida da foto: soma abertura de CNPJs, baixas e mudanças \
 de situação. Não a chame de "novas empresas".
 - Diga a qual mês, ou a quais meses, os números se referem. Um mês fora da lista não existe aqui.
+- Não faça previsão nem projeção: as tabelas são fotos passadas, e a diferença entre meses mostra o que \
+já aconteceu, não o que vai acontecer. Se a pergunta for sobre o futuro ("vai ter", "terá", um mês depois \
+da lista), não consulte nada e diga que isso não pode ser previsto com estes dados.
 """
 
 
