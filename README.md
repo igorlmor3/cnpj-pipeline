@@ -494,7 +494,7 @@ Limites desta medição: 24 a 32 perguntas por conjunto é uma amostra pequena (
 - [ ] Site: seção "como chegou lá" a partir do trajeto
 - [x] Observabilidade da API: uma linha de JSON por pergunta (sem pergunta, SQL nem IP), 7 consultas salvas do Logs Insights, métricas, alarmes e painel do CloudWatch em Terraform, com teste que confere os campos usados contra o registro (código e testes; veja [infra/README.md](infra/README.md#observabilidade-da-api))
 - [x] Agente de IA, testes mais duros da guarda: testes de propriedades com Hypothesis (incluindo uma comparação do resultado com e sem os dados proibidos) e uma suíte de injeção de prompt com um modelo simulado que obedece a qualquer ordem; acharam e corrigiram 4 falhas da guarda (funções sem restrição, `ON 1 = 1`, `RecursionError`, `SELECT` vazio), em [docs/agent_design.md](docs/agent_design.md#testes-de-propriedade-e-suíte-de-injeção-de-prompt)
-- [ ] Agente de IA, avaliação como portão do CI: modo de referência (sem custo) no GitHub Actions e arquivo de resultados de base para comparar
+- [x] Agente de IA, avaliação como portão do CI: as consultas de referência dos seis conjuntos, o hash do prompt, as perguntas e as consultas medidas são conferidos a cada mudança, sem modelo e sem custo, contra uma base com a execução real de cada conjunto (`agent/eval_gate.py`, testado; em [docs/agent_design.md](docs/agent_design.md#avaliação-como-portão-do-ci))
 - [ ] Agente de IA, relatório de uma página com método, números, custo e limites
 
 ## Dados e licença

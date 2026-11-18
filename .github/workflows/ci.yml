@@ -25,6 +25,11 @@ jobs:
       - name: Testes (pytest)
         run: pytest -q
 
+      - name: Portao da avaliacao do agente (sem modelo, sem custo)
+        run: |
+          python -m cnpj_pipeline.demo --dir data/sample --month 2026-10
+          python -m cnpj_pipeline.agent.eval_gate check --gold-dir data/sample/gold --month 2026-10
+
   site:
     runs-on: ubuntu-latest
     defaults:

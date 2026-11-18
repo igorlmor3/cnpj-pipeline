@@ -1,6 +1,6 @@
 # Avaliação da recuperação: conjunto reservado, público all
 
-Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (386 trechos; versão do corpus `b35300422327`). Sem modelo e sem custo.
+Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (394 trechos; versão do corpus `ae001e6dfc6b`). Sem modelo e sem custo.
 
 ## Resumo
 
@@ -9,8 +9,8 @@ Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (386 tre
 | Perguntas com fonte neste público | 24 de 24 |
 | Acerto nos 1 primeiros | 10 de 24 (41,7%; intervalo de 95%: 24,5% a 61,2%) |
 | Acerto nos 3 primeiros | 17 de 24 (70,8%; intervalo de 95%: 50,8% a 85,1%) |
-| Acerto nos 5 primeiros | 19 de 24 (79,2%; intervalo de 95%: 59,5% a 90,8%) |
-| MRR@5 | 0,560 |
+| Acerto nos 5 primeiros | 18 de 24 (75,0%; intervalo de 95%: 55,1% a 88,0%) |
+| MRR@5 | 0,552 |
 | Resultados de público não permitido | 0 |
 
 ## Por categoria (acerto nos 3 primeiros)
@@ -40,11 +40,11 @@ Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (386 tre
 - README.md, seção cnpj-pipeline > Camada gold
 - docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Objetivo e limite
 
-**r_tempo_consulta** (posição 5): Quanto tempo uma consulta pode levar antes de ser cancelada?
+**r_tempo_consulta** (fora dos 5 primeiros): Quanto tempo uma consulta pode levar antes de ser cancelada?
 
+- infra/README.md, seção Infraestrutura na AWS (nível 1) > API pública do agente > Observabilidade da API
 - infra/README.md, seção Infraestrutura na AWS (nível 1)
 - docs/architecture.md, seção Arquitetura e decisões > Decisões de plataforma e de produto
-- docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Busca na documentação
 
 **r_comparacao_meses** (fora dos 5 primeiros): Como é feita a comparação entre dois meses do cadastro?
 

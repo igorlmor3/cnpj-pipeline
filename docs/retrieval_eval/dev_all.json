@@ -2,8 +2,8 @@
   "suite": "dev",
   "audience": "all",
   "generated_on": "2026-11-18",
-  "corpus": "b35300422327",
-  "chunks": 386,
+  "corpus": "ae001e6dfc6b",
+  "chunks": 394,
   "summary": {
     "cases": 24,
     "answerable": 24,
@@ -164,7 +164,7 @@
       "top": [
         "docs/architecture.md, seção Arquitetura e decisões > Decisões de plataforma e de produto",
         "infra/README.md, seção Infraestrutura na AWS (nível 1) > Publicar e consultar",
-        "README.md, seção cnpj-pipeline > Estrutura do repositório"
+        "docs/evolution/2026-10.md, seção Evolução do cadastro: de 2026-09 para 2026-10 > Defasagem dos CNPJs novos"
       ],
       "leaked": 0
     },
@@ -262,7 +262,7 @@
       "top": [
         "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > O laço do agente e o gasto",
         "docs/architecture.md, seção Arquitetura e decisões > Decisões de plataforma e de produto",
-        "README.md, seção cnpj-pipeline > Visão geral do projeto"
+        "infra/README.md, seção Infraestrutura na AWS (nível 1) > API pública do agente > Observabilidade da API"
       ],
       "leaked": 0
     },
@@ -344,9 +344,9 @@
       "relevant_chunks": 1,
       "rank": null,
       "top": [
-        "README.md, seção cnpj-pipeline > Resultados medidos > Publicação da gold na AWS",
         "infra/README.md, seção Infraestrutura na AWS (nível 1) > Passo a passo",
-        "infra/README.md, seção Infraestrutura na AWS (nível 1)"
+        "README.md, seção cnpj-pipeline > Resultados medidos > Publicação da gold na AWS",
+        "infra/README.md, seção Infraestrutura na AWS (nível 1) > API pública do agente > Observabilidade da API"
       ],
       "leaked": 0
     },
@@ -388,7 +388,7 @@
       "top": [
         "docs/data_quality_rules.md, seção Catálogo de regras de qualidade de dados > Verificações automatizadas (`quality.py`)",
         "docs/quality/2026-10.md, seção Qualidade de dados e tempos (2026-10)",
-        "docs/data_quality_rules.md, seção Catálogo de regras de qualidade de dados > Como usar"
+        "README.md, seção cnpj-pipeline > Resultados medidos > Verificações de qualidade e máquina"
       ],
       "leaked": 0
     },

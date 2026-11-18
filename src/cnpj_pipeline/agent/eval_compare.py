@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -66,24 +67,57 @@ def _row(name: str, payload: dict[str, Any], s: Summary) -> str:
     )
 
 
-def compare(
-    payload_a: dict[str, Any],
-    results_a: list[CaseResult],
-    payload_b: dict[str, Any],
-    results_b: list[CaseResult],
-) -> str:
+@dataclass(frozen=True)
+class Paired:
+    """O teste pareado entre duas execucoes, sobre as perguntas que existem nas duas."""
+
+    common: list[str]
+    rates_a: dict[str, float]
+    rates_b: dict[str, float]
+    only_a: list[str]  # perguntas em que A acerta mais
+    only_b: list[str]
+    diff: float  # media de (B - A) das taxas de acerto, em fracao
+    repeated: bool  # alguma das execucoes repetiu as perguntas
+    significant: bool  # a diferenca passa do que o acaso explicaria, a 5%
+    p_value: float | None  # McNemar exato (sem repeticoes)
+    interval: tuple[float, float] | None  # intervalo da diferenca (com repeticoes)
+
+
+def paired(results_a: list[CaseResult], results_b: list[CaseResult]) -> Paired:
     common = sorted({r.id for r in results_a} & {r.id for r in results_b})
     if not common:
         raise EvaluationError("as duas execucoes nao tem perguntas em comum")
     keep = set(common)
     a = [r for r in results_a if r.id in keep]
     b = [r for r in results_b if r.id in keep]
-    sa, sb = summarize(a), summarize(b)
     rates_a, rates_b = question_rates(a), question_rates(b)
     only_a = [q for q in common if rates_a[q] > rates_b[q]]
     only_b = [q for q in common if rates_b[q] > rates_a[q]]
     repeated = max(r.run for r in a + b) > 1
     diff = sum(rates_b[q] - rates_a[q] for q in common) / len(common)
+    p_value = interval = None
+    if repeated:
+        interval = paired_difference_interval([rates_a[q] for q in common], [rates_b[q] for q in common])
+        significant = not interval[0] <= 0 <= interval[1]
+    else:
+        p_value = exact_mcnemar_p(len(only_a), len(only_b))
+        significant = p_value < ALPHA
+    return Paired(common, rates_a, rates_b, only_a, only_b, diff, repeated, significant, p_value, interval)
+
+
+def compare(
+    payload_a: dict[str, Any],
+    results_a: list[CaseResult],
+    payload_b: dict[str, Any],
+    results_b: list[CaseResult],
+) -> str:
+    pair = paired(results_a, results_b)
+    common, rates_a, rates_b = pair.common, pair.rates_a, pair.rates_b
+    only_a, only_b, diff, repeated = pair.only_a, pair.only_b, pair.diff, pair.repeated
+    keep = set(common)
+    a = [r for r in results_a if r.id in keep]
+    b = [r for r in results_b if r.id in keep]
+    sa, sb = summarize(a), summarize(b)
 
     out = [
         "# Comparação de duas execuções da avaliação",
@@ -105,8 +139,8 @@ def compare(
         "## Diferença pareada (B menos A)",
         "",
     ]
-    if repeated:
-        lo, hi = paired_difference_interval([rates_a[q] for q in common], [rates_b[q] for q in common])
+    if repeated and pair.interval is not None:
+        lo, hi = pair.interval
         out += [
             f"Diferença média da taxa de acerto: {_signed(diff * 100)} pontos percentuais "
             f"(intervalo de 95%: {_signed(lo * 100)} a {_signed(hi * 100)}, "
@@ -114,9 +148,8 @@ def compare(
             "",
             f"Perguntas com taxa maior em A: {len(only_a)}. Com taxa maior em B: {len(only_b)}.",
         ]
-        significant = not lo <= 0 <= hi
     else:
-        p = exact_mcnemar_p(len(only_a), len(only_b))
+        p = pair.p_value if pair.p_value is not None else 1.0
         both_right = sum(rates_a[q] == rates_b[q] == 1 for q in common)
         both_wrong = sum(rates_a[q] == rates_b[q] == 0 for q in common)
         out += [
@@ -128,12 +161,11 @@ def compare(
             f"Diferença: {_signed(diff * 100)} pontos percentuais. Teste exato de McNemar sobre as "
             f"{len(only_a) + len(only_b)} perguntas em que as execuções discordam: p = {_p_value(p)}.",
         ]
-        significant = p < ALPHA
     out += [
         "",
         (
             "A diferença é maior do que o acaso explicaria, no nível de 5%."
-            if significant
+            if pair.significant
             else "A diferença não é distinguível do acaso com este número de perguntas. Isso não prova "
             "que as execuções são iguais: com poucas perguntas, só diferenças grandes aparecem."
         ),

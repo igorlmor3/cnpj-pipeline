@@ -1,6 +1,6 @@
 # Avaliação da recuperação: conjunto dev, público all
 
-Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (386 trechos; versão do corpus `b35300422327`). Sem modelo e sem custo.
+Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (394 trechos; versão do corpus `ae001e6dfc6b`). Sem modelo e sem custo.
 
 ## Resumo
 
@@ -66,9 +66,9 @@ Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (386 tre
 
 **d_recursos_terraform** (fora dos 5 primeiros): Que recursos o Terraform cria na AWS?
 
-- README.md, seção cnpj-pipeline > Resultados medidos > Publicação da gold na AWS
 - infra/README.md, seção Infraestrutura na AWS (nível 1) > Passo a passo
-- infra/README.md, seção Infraestrutura na AWS (nível 1)
+- README.md, seção cnpj-pipeline > Resultados medidos > Publicação da gold na AWS
+- infra/README.md, seção Infraestrutura na AWS (nível 1) > API pública do agente > Observabilidade da API
 
 **d_estabelecimento_nao_e_empresa** (fora dos 5 primeiros): Estabelecimento é a mesma coisa que empresa nos marts?
 

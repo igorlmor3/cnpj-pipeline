@@ -2,8 +2,8 @@
   "suite": "reservado",
   "audience": "public",
   "generated_on": "2026-11-18",
-  "corpus": "b35300422327",
-  "chunks": 386,
+  "corpus": "ae001e6dfc6b",
+  "chunks": 394,
   "summary": {
     "cases": 24,
     "answerable": 20,
@@ -85,7 +85,7 @@
       "top": [
         "docs/architecture.md, seção Arquitetura e decisões > Decisões em aberto",
         "docs/architecture.md, seção Arquitetura e decisões > Camadas",
-        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Publicação: o que os recrutadores veem"
+        "docs/architecture.md, seção Arquitetura e decisões > Decisões em aberto"
       ],
       "leaked": 0
     },
@@ -99,7 +99,7 @@
       "top": [
         "README.md, seção cnpj-pipeline > Resultados medidos > Agente de texto para SQL",
         "site/README.md, seção Site > Dados e configuração",
-        "README.md, seção cnpj-pipeline > Qualidade de dados"
+        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Avaliação como portão do CI"
       ],
       "leaked": 0
     },
@@ -377,9 +377,9 @@
       "relevant_chunks": 0,
       "rank": null,
       "top": [
+        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Avaliação como portão do CI",
         "docs/analysis/evolucao_2026-07_a_2026-10.md, seção Evolução do cadastro de CNPJ entre julho e outubro de 2026 > Ressalvas",
-        "README.md, seção cnpj-pipeline > Camada silver",
-        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Decisões"
+        "README.md, seção cnpj-pipeline > Camada silver"
       ],
       "leaked": 0
     },

@@ -67,6 +67,7 @@ ALLOWED_FUNCTIONS = frozenset(
     {
         # agregados
         "sum", "count", "avg", "min", "max", "stddev", "variance", "approxdistinct", "argmin", "argmax",
+        "countif", "arrayagg",
         # escalares
         "round", "ceil", "floor", "abs", "sign", "pow", "sqrt", "ln", "coalesce", "nullif", "greatest",
         "least", "cast", "trycast", "if", "case", "lower", "upper", "substring", "length", "trim",
@@ -76,7 +77,8 @@ ALLOWED_FUNCTIONS = frozenset(
     }
 )  # fmt: skip
 FUNCTIONS_HELP = (
-    "SUM, COUNT, AVG, MIN, MAX, STDDEV, VARIANCE, APPROX_DISTINCT, MIN_BY, MAX_BY, ROUND, CEIL, FLOOR, ABS, "
+    "SUM, COUNT, AVG, MIN, MAX, STDDEV, VARIANCE, APPROX_DISTINCT, MIN_BY, MAX_BY, COUNT_IF, ARRAY_AGG, "
+    "ROUND, CEIL, FLOOR, ABS, "
     "SIGN, POWER, SQRT, LN, COALESCE, NULLIF, GREATEST, LEAST, CAST, TRY_CAST, IF, CASE, LOWER, UPPER, "
     "SUBSTR, LENGTH, TRIM, CONCAT, REPLACE, DATE_TRUNC, YEAR, MONTH, EXTRACT, EXISTS e as de janela "
     "ROW_NUMBER, RANK, DENSE_RANK, LAG, LEAD, FIRST_VALUE, LAST_VALUE, NTILE, PERCENT_RANK"

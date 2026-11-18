@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "month": "2026-10",
+  "months": [
+    "2026-07",
+    "2026-08",
+    "2026-09",
+    "2026-10"
+  ],
+  "runs": {
+    "dev": {
+      "file": "docs/agent_eval/prompt_v3/2026-10_claude-haiku-5-5_x5.json",
+      "sha256": "b07cfbf31a8264d72a75ccab135bb2d68ad788ffd121def13550f3b7f28d2f14"
+    },
+    "holdout": {
+      "file": "docs/agent_eval/prompt_v3/2026-10_claude-haiku-5-5_holdout_x5.json",
+      "sha256": "52a46886a5f2077eb08cf41a885b5ce5705fc2a7aa50eb79796c55d1e8e74b56"
+    },
+    "meses": {
+      "file": "docs/agent_eval/2026-10_claude-haiku-5-5_meses.json",
+      "sha256": "f8814b3452fe4205b15e42244cabce536cad1ee507c02ba2c645827a17ac49b0"
+    },
+    "robustez": {
+      "file": "docs/agent_eval/prompt_v3/2026-10_claude-haiku-5-5_robustez.json",
+      "sha256": "19f5af0e05e66a91a851b063719ca837c397adc1a054f86c5977f9c9aa688e4e"
+    },
+    "validacao": {
+      "file": "docs/agent_eval/diagnostico/2026-10_claude-haiku-5-5_validacao_x3.json",
+      "sha256": "da03d86ab6fe26079e7d5b706827419e433dc0659e87926ed242f5e4ca80ebbd"
+    }
+  }
+}
