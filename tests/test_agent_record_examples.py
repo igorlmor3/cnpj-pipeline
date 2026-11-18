@@ -35,12 +35,13 @@ def good_script() -> list:
     return script
 
 
-def run_record(gold_root: Path, script: list):
+def run_record(gold_root: Path, script: list, months: tuple[str, ...] | None = None):
     executor = DuckDBExecutor(gold_root)
     try:
-        system = build_system_prompt(gold_columns(gold_root, MONTH, list(TABLES)), month=MONTH)
+        system = build_system_prompt(gold_columns(gold_root, MONTH, list(TABLES)), month=MONTH, months=months)
         return rec.record(
             MONTH,
+            months=months,
             llm=FakeLLM(*script),
             executor=executor,
             system=system,
@@ -55,8 +56,10 @@ def test_every_data_example_has_an_answer_and_a_result_and_the_refusal_has_none(
     document = run_record(gold_root, good_script())
     assert (document["esquema"], document["mes_referencia"], document["modelo"]) == (1, MONTH, "modelo-x")
     entries = document["exemplos"]
-    assert [e["id"] for e in entries] == [e.id for e in rec.EXAMPLES]
-    assert [e["pergunta"] for e in entries] == [e.question for e in rec.EXAMPLES]
+    single = [e for e in rec.EXAMPLES if not e.needs_months]
+    assert [e["id"] for e in entries] == [e.id for e in single]
+    assert [e["pergunta"] for e in entries] == [e.question for e in single]
+    assert "meses" not in document  # com um mes so, as perguntas de varios meses nao entram
     for entry in entries[:4]:
         assert entry["status"] == "answered" and entry["resposta"].startswith("Resposta")
         assert entry["sql"].startswith("SELECT") and entry["colunas"] == ["uf", "empresas_ativas"]
@@ -129,7 +132,7 @@ def test_main_writes_the_examples_next_to_the_site_data(gold_root, tmp_path, mon
     argv, path = prepare_main(gold_root, tmp_path, monkeypatch, good_script())
     assert rec.main(argv) == 0
     document = json.loads(path.read_text(encoding="utf-8"))
-    assert len(document["exemplos"]) == len(rec.EXAMPLES)
+    assert len(document["exemplos"]) == len([e for e in rec.EXAMPLES if not e.needs_months])
     assert "exemplos gravados" in capsys.readouterr().out
     assert "chave-falsa" not in path.read_text(encoding="utf-8")
 
@@ -166,3 +169,41 @@ def test_an_answered_example_without_any_query_result_aborts(gold_root, monkeypa
     monkeypatch.setattr(rec, "ask", lambda *a, **k: Answer("answered", "texto solto", []))
     with pytest.raises(rec.UnexpectedOutcome, match="nenhum resultado"):
         run_record(gold_root, [])
+
+
+def test_questions_that_compare_months_are_recorded_only_when_there_are_several_months(gold_root, tmp_path):
+    import shutil
+
+    root = tmp_path / "gold"
+    shutil.copytree(gold_root, root)
+    months = ("2026-09", MONTH)
+    for model in root.iterdir():
+        source = model / f"reference_month={MONTH}"
+        if source.exists():
+            shutil.copytree(source, model / "reference_month=2026-09")
+    month_sql = (
+        "SELECT reference_month, SUM(empresas_ativas) FROM gold_mart_simples_mei_uf GROUP BY reference_month"
+    )
+    script: list = []
+    for example in rec.EXAMPLES:
+        if example.expected_status == "out_of_scope":
+            script.append(turn("Não posso informar dados de um CNPJ específico."))
+        else:
+            sql = month_sql if example.needs_months else GOOD_SQL
+            script += [turn("", sql), turn(f"Resposta {example.id}.")]
+    document = run_record(root, script, months)
+    assert [e["id"] for e in document["exemplos"]] == [e.id for e in rec.EXAMPLES]
+    assert document["meses"] == list(months)
+    compared = [e for e in document["exemplos"] if e["id"] in {x.id for x in rec.EXAMPLES if x.needs_months}]
+    assert compared and all("reference_month" in e["sql"] for e in compared)
+
+
+def test_published_months_come_from_the_option_or_the_site_index(tmp_path):
+    index = tmp_path / "months.json"
+    assert rec.published_months(None, index) is None  # sem indice
+    index.write_text(json.dumps({"meses": ["2026-07", "2026-10"]}), encoding="utf-8")
+    assert rec.published_months(None, index) == ("2026-07", "2026-10")
+    assert rec.published_months("2026-10, 2026-09", index) == ("2026-09", "2026-10")  # a opcao vence
+    assert rec.published_months("2026-10", index) is None  # um mes so nao muda nada
+    index.write_text(json.dumps({"meses": ["2026-10"]}), encoding="utf-8")
+    assert rec.published_months(None, index) is None

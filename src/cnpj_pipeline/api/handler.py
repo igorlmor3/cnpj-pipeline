@@ -224,6 +224,7 @@ class Api:
         answer = ask(
             body["question"],
             month=self.config.month,
+            months=self.config.available_months,
             system=self.system,
             llm=self._llm,
             executor=self.executor,
@@ -237,7 +238,12 @@ class Api:
     # -- saida -------------------------------------------------------------------------------
 
     def _body(self, answer: Answer) -> dict[str, Any]:
-        body: dict[str, Any] = {"status": answer.status, "message": answer.text, "month": self.config.month}
+        body: dict[str, Any] = {
+            "status": answer.status,
+            "message": answer.text,
+            "month": self.config.month,
+            "months": list(self.config.available_months),
+        }
         last_ok = next((q for q in reversed(answer.queries) if q.ok), None)
         if answer.status == "answered" and last_ok is not None:
             body["sql"] = last_ok.sql
@@ -277,7 +283,7 @@ def build_default(env: Mapping[str, str] | None = None) -> Api:
 
     config = ApiConfig.from_env(env if env is not None else os.environ)
     columns = load_columns(config.columns_file, config.month)
-    system = build_system_prompt(columns, month=config.month)
+    system = build_system_prompt(columns, month=config.month, months=config.available_months)
     dynamo = boto3.client("dynamodb")
     executor = AthenaExecutor(
         boto3.client("athena"),

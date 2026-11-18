@@ -9,6 +9,12 @@ variable "month" {
   type        = string
 }
 
+variable "months" {
+  description = "Meses (AAAA-MM) que o agente pode consultar, incluindo month. Vazio: so month."
+  type        = list(string)
+  default     = []
+}
+
 variable "package_path" {
   description = "Caminho do zip da funcao, gerado por python -m cnpj_pipeline.api.package."
   type        = string

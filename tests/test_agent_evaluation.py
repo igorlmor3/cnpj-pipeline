@@ -41,6 +41,7 @@ from cnpj_pipeline.agent.evaluation_cases import (
     ALL_CASES,
     CASES,
     HOLDOUT_CASES,
+    MESES_CASES,
     ROBUSTEZ_CASES,
     SEM_POLITICAS,
     SUITES,
@@ -212,8 +213,12 @@ def test_the_suites_do_not_share_ids_questions_or_references():
         "holdout": HOLDOUT_CASES,
         "robustez": ROBUSTEZ_CASES,
         "validacao": VALIDACAO_CASES,
+        "meses": MESES_CASES,
         "all": ALL_CASES,
     }
+    assert not set(c.id for c in MESES_CASES) & set(c.id for c in ALL_CASES)
+    assert all(c.needs_months for c in MESES_CASES)
+    assert not any(c.needs_months for c in ALL_CASES)
     assert len(ALL_CASES) == len(CASES) + len(HOLDOUT_CASES) + len(ROBUSTEZ_CASES) + len(VALIDACAO_CASES)
 
 
@@ -814,3 +819,104 @@ def test_the_cli_writes_the_prompt_version_to_both_reports(gold_root, tmp_path):
     sha = json.loads((out / f"{MONTH}_referencia.json").read_text(encoding="utf-8"))["prompt_sha"]
     assert re.fullmatch(r"[0-9a-f]{12}", sha)
     assert f"`{sha}`" in (out / f"{MONTH}_referencia.md").read_text(encoding="utf-8")
+
+
+# --------------------------------------------------------------------------- #
+# Varios meses
+# --------------------------------------------------------------------------- #
+
+MONTHS = ("2026-07", "2026-08", "2026-09", "2026-10")
+
+
+@pytest.fixture(scope="module")
+def multi_gold(gold_root, tmp_path_factory):
+    """A gold do mes de teste copiada para os outros tres meses, com um valor diferente em cada um."""
+    import shutil
+
+    root = tmp_path_factory.mktemp("multigold") / "gold"
+    shutil.copytree(gold_root, root)
+    for model in root.iterdir():
+        source = model / f"reference_month={MONTH}"
+        if not source.exists():
+            continue
+        for other in MONTHS:
+            if other != MONTH:
+                shutil.copytree(source, model / f"reference_month={other}")
+    return root
+
+
+@pytest.fixture()
+def multi_executor(multi_gold):
+    ex = DuckDBExecutor(multi_gold)
+    yield ex
+    ex.close()
+
+
+def test_the_multi_month_reference_queries_run_and_pass_in_reference_mode(multi_gold, multi_executor):
+    system = build_system_prompt(gold_columns(multi_gold, MONTH, list(TABLES)), month=MONTH, months=MONTHS)
+    results = evaluate(
+        MESES_CASES,
+        month=MONTH,
+        months=MONTHS,
+        system=system,
+        llm=ReferenceLLM(MESES_CASES),
+        executor=multi_executor,
+    )
+    assert [r.id for r in results if not r.passed] == []
+    assert summarize(results).accuracy == 1.0
+
+
+def test_the_default_month_case_reads_only_one_month(multi_gold, multi_executor):
+    case = next(c for c in MESES_CASES if c.id == "meses_sem_mes_usa_o_padrao")
+    one = expected_rows((case,), executor=multi_executor, month=MONTH)[case.id]
+    many = expected_rows((case,), executor=multi_executor, month=MONTH, months=MONTHS)[case.id]
+    assert one == many  # sem citar reference_month, a consulta continua lendo so o mes padrao
+
+
+def test_summing_months_in_one_group_is_rejected_and_the_wrong_total_never_reaches_the_answer(
+    multi_executor,
+):
+    bad = f"SELECT SUM(empresas_ativas) FROM {SIMPLES} WHERE reference_month IN ('2026-09', '2026-10')"
+
+    class Summer(ReferenceLLM):
+        def step(self, system, messages, *, max_tokens):
+            if len(messages) == 1:
+                content = [{"type": "tool_use", "id": "q", "name": "run_sql", "input": {"sql": bad}}]
+                return LLMTurn("", [ToolCall("q", bad)], content, 1, 1)
+            return LLMTurn("Somei.", [], [{"type": "text", "text": "Somei."}], 1, 1)
+
+    from cnpj_pipeline.agent.ask import ask
+
+    answer = ask(
+        "Quantas empresas ativas há?",
+        month=MONTH,
+        months=MONTHS,
+        system="s",
+        llm=Summer(MESES_CASES),
+        executor=multi_executor,
+    )
+    assert answer.queries and not answer.queries[0].ok
+    assert "nao some valores de meses diferentes" in (answer.queries[0].error or "")
+    assert answer.status == "out_of_scope"  # nenhuma consulta bem-sucedida: o texto livre nao e exibido
+
+
+def test_main_refuses_multi_month_cases_without_months(multi_gold, tmp_path, capsys):
+    with pytest.raises(SystemExit):
+        main(
+            [
+                "--month", MONTH, "--gold-dir", str(multi_gold), "--out-dir", str(tmp_path),
+                "--reference", "--suite", "meses",
+            ]
+        )  # fmt: skip
+    assert "--months" in capsys.readouterr().err
+
+
+def test_main_runs_the_multi_month_suite_in_reference_mode(multi_gold, tmp_path, capsys):
+    code = main(
+        [
+            "--month", MONTH, "--months", ",".join(MONTHS), "--gold-dir", str(multi_gold),
+            "--out-dir", str(tmp_path), "--reference", "--suite", "meses",
+        ]
+    )  # fmt: skip
+    assert code == 0
+    assert "5 de 5 casos certos" in capsys.readouterr().out

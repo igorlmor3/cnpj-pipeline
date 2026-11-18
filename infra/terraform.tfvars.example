@@ -13,4 +13,5 @@ alert_email = "seu-email@exemplo.com"
 #   python -m cnpj_pipeline.api.package --month 2026-10
 # api_enabled         = true
 # api_month           = "2026-10"
+# api_months          = ["2026-07", "2026-08", "2026-09", "2026-10"]
 # api_allowed_origins = ["https://seu-usuario.github.io"]

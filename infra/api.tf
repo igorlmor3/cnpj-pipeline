@@ -9,6 +9,7 @@ module "api" {
   source = "./modules/api"
 
   month                 = var.api_month
+  months                = var.api_months
   package_path          = "${path.root}/${var.api_package}"
   bucket_arn            = aws_s3_bucket.lake.arn
   results_prefix        = local.results_prefix

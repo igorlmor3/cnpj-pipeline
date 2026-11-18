@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from cnpj_pipeline.agent.llm import DEFAULT_MODEL
+from cnpj_pipeline.agent.sql_guard import MAX_MONTHS
 
 PREFIX = "CNPJ_API_"
 MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
@@ -50,6 +51,12 @@ class ApiConfig:
     llm_timeout_s: float = DEFAULT_LLM_TIMEOUT_S
     model: str = DEFAULT_MODEL
     columns_file: Path = DEFAULT_COLUMNS_FILE
+    months: tuple[str, ...] = ()
+
+    @property
+    def available_months(self) -> tuple[str, ...]:
+        """Meses que o agente pode consultar: a lista configurada, ou so o mes padrao."""
+        return self.months or (self.month,)
 
     @property
     def param_enabled(self) -> str:
@@ -66,6 +73,15 @@ class ApiConfig:
     def __post_init__(self) -> None:
         if not MONTH_RE.fullmatch(self.month):
             raise ConfigError("CNPJ_API_MONTH deve ter o formato AAAA-MM")
+        if self.months and (
+            not all(MONTH_RE.fullmatch(m) for m in self.months)
+            or self.month not in self.months
+            or len(set(self.months)) != len(self.months)
+            or len(self.months) > MAX_MONTHS
+        ):
+            raise ConfigError(
+                f"{PREFIX}MONTHS deve listar meses AAAA-MM sem repeticao, incluindo CNPJ_API_MONTH"
+            )
         for name in ("database", "workgroup", "table", "param_prefix"):
             if not getattr(self, name):
                 raise ConfigError(f"{PREFIX}{name.upper()} e obrigatoria")
@@ -113,4 +129,5 @@ class ApiConfig:
             deadline_s=float(number("DEADLINE_S", DEFAULT_DEADLINE_S, float)),
             model=env.get(PREFIX + "MODEL") or DEFAULT_MODEL,
             columns_file=Path(env.get(PREFIX + "COLUMNS_FILE") or DEFAULT_COLUMNS_FILE),
+            months=tuple(sorted(m.strip() for m in env.get(PREFIX + "MONTHS", "").split(",") if m.strip())),
         )

@@ -114,3 +114,30 @@ def test_unknown_table_and_unglossed_column_fail_loudly(real_columns):
     extra = {**real_columns, "dim_porte": [*real_columns["dim_porte"], ("coluna_nova", "string")]}
     with pytest.raises(KeyError, match="coluna sem glossa"):
         build_context(extra, month=MONTH)
+
+
+MONTHS = ("2026-07", "2026-08", "2026-09", MONTH)
+
+
+def test_with_one_month_the_prompt_is_the_single_month_prompt(real_columns):
+    single = build_context(real_columns, month=MONTH)
+    assert build_context(real_columns, month=MONTH, months=(MONTH,)) == single
+    assert "Meses\n" not in single and "reference_month" in single  # so a regra de nao filtrar o mes
+
+
+def test_with_several_months_the_prompt_explains_how_to_compare_them(real_columns):
+    text = build_context(real_columns, month=MONTH, months=MONTHS)
+    assert ", ".join(MONTHS) in text
+    assert f"O mês padrão é {MONTH}" in text
+    assert f"filtre com reference_month = '{MONTH}'" in text  # sem mês na pergunta, o mais recente, explícito
+    assert f"que os números são de {MONTH}" in text
+    assert "nunca some" in text and "SUM(CASE WHEN reference_month" in text
+    assert "Não filtre por reference_month" not in text
+    # a coluna do mes aparece nos marts e nao nas dimensoes
+    marts = text.count("- reference_month (string)")
+    assert marts == len([n for n in TABLES if n.startswith("mart_")])
+
+
+def test_the_month_list_is_not_trusted_to_be_sorted_or_unique(real_columns):
+    shuffled = build_context(real_columns, month=MONTH, months=(MONTH, "2026-07", "2026-07", "2026-09"))
+    assert "2026-07, 2026-09, 2026-10" in shuffled

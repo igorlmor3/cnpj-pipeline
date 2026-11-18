@@ -32,7 +32,7 @@ from typing import Any
 from cnpj_pipeline.agent.ask import Answer, ask, build_system_prompt
 from cnpj_pipeline.agent.budget import HAIKU_5_5, Budget, Pricing
 from cnpj_pipeline.agent.context import TABLES
-from cnpj_pipeline.agent.evaluation_cases import ALL_CASES, SUITES, EvalCase, by_id
+from cnpj_pipeline.agent.evaluation_cases import ALL_CASES, MESES_CASES, SUITES, EvalCase, by_id
 from cnpj_pipeline.agent.executor import DuckDBExecutor, Executor, run_query
 from cnpj_pipeline.agent.llm import DEFAULT_MODEL, LLMClient, LLMTurn, ToolCall
 from cnpj_pipeline.cloud.athena import gold_columns
@@ -130,7 +130,7 @@ class CaseResult:
 
 
 def expected_rows(
-    cases: tuple[EvalCase, ...], *, executor: Executor, month: str
+    cases: tuple[EvalCase, ...], *, executor: Executor, month: str, months: tuple[str, ...] | None = None
 ) -> dict[str, list[list[Any]]]:
     """Executa as referencias antes de chamar o modelo. Falha cedo se alguma referencia estiver errada."""
     expected: dict[str, list[list[Any]]] = {}
@@ -138,7 +138,9 @@ def expected_rows(
         if not case.reference_sql:
             continue
         try:
-            expected[case.id] = run_query(case.reference_sql, executor=executor, month=month).rows
+            expected[case.id] = run_query(
+                case.reference_sql, executor=executor, month=month, months=months
+            ).rows
         except Exception as exc:
             raise EvaluationError(f"a referencia de '{case.id}' falhou: {exc}") from exc
     return expected
@@ -173,6 +175,7 @@ def run_case(
     expected: list[list[Any]] | None,
     *,
     month: str,
+    months: tuple[str, ...] | None = None,
     system: str,
     llm: LLMClient,
     executor: Executor,
@@ -181,7 +184,9 @@ def run_case(
     run: int = 1,
 ) -> CaseResult:
     started = clock()
-    answer = ask(case.question, month=month, system=system, llm=llm, executor=executor, budget=budget)
+    answer = ask(
+        case.question, month=month, months=months, system=system, llm=llm, executor=executor, budget=budget
+    )
     elapsed = clock() - started
     reason = judge(case, answer, expected)
     ok = [q for q in answer.queries if q.ok]
@@ -210,6 +215,7 @@ def evaluate(
     cases: tuple[EvalCase, ...],
     *,
     month: str,
+    months: tuple[str, ...] | None = None,
     system: str,
     llm: LLMClient,
     executor: Executor,
@@ -221,10 +227,10 @@ def evaluate(
     caso em sequencia; o gasto de todas elas conta no mesmo orcamento."""
     if repeats < 1:
         raise EvaluationError("repeats deve ser pelo menos 1")
-    expected = expected_rows(cases, executor=executor, month=month)
+    expected = expected_rows(cases, executor=executor, month=month, months=months)
     return [
         run_case(
-            c, expected.get(c.id), month=month, system=system, llm=llm, executor=executor,
+            c, expected.get(c.id), month=month, months=months, system=system, llm=llm, executor=executor,
             budget=budget, clock=clock, run=n,
         )
         for c in cases
@@ -240,7 +246,7 @@ def evaluate(
 class ReferenceLLM:
     """Responde cada pergunta com a consulta de referencia do caso. Nao gasta nada."""
 
-    def __init__(self, cases: tuple[EvalCase, ...] = ALL_CASES) -> None:
+    def __init__(self, cases: tuple[EvalCase, ...] = ALL_CASES + MESES_CASES) -> None:
         self._by_question = {c.question: c for c in cases}
 
     def step(self, system: str, messages: list[dict[str, Any]], *, max_tokens: int) -> LLMTurn:
@@ -528,7 +534,12 @@ def results_json(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Avalia o agente de texto para SQL contra a gold local.")
-    parser.add_argument("--month", required=True, help="mes de referencia, AAAA-MM")
+    parser.add_argument("--month", required=True, help="mes de referencia (o padrao do agente), AAAA-MM")
+    parser.add_argument(
+        "--months",
+        help="meses que o agente pode consultar, AAAA-MM separados por virgula, incluindo --month; "
+        "sem isso o agente enxerga so --month",
+    )
     parser.add_argument("--gold-dir", type=Path, default=Path("data/gold"))
     parser.add_argument("--out-dir", type=Path, default=Path("docs/agent_eval"))
     parser.add_argument(
@@ -547,7 +558,8 @@ def main(argv: list[str] | None = None) -> int:
         choices=sorted(SUITES),
         default="dev",
         help="conjunto de casos: dev (ajuste do prompt), holdout, robustez (frases informais, contas e "
-        "armadilhas), validacao (reservado, escrito depois do ajuste) ou all",
+        "armadilhas), validacao (reservado, escrito depois do ajuste), meses (varios meses, exige "
+        "--months) ou all",
     )
     parser.add_argument("--cases", help="ids separados por virgula; tem prioridade sobre --suite")
     parser.add_argument(
@@ -560,7 +572,12 @@ def main(argv: list[str] | None = None) -> int:
     if not 1 <= args.repeats <= MAX_REPEATS:
         parser.error(f"--repeats deve ficar entre 1 e {MAX_REPEATS}")
 
+    months = tuple(sorted({m.strip() for m in args.months.split(",") if m.strip()})) if args.months else None
+    if months and args.month not in months:
+        parser.error("--months precisa incluir --month")
     cases = by_id(args.cases.split(",")) if args.cases else SUITES[args.suite]
+    if any(c.needs_months for c in cases) and not months:
+        parser.error("os casos de varios meses precisam de --months")
     llm: LLMClient
     budget: Budget | None
     if args.reference:
@@ -583,12 +600,12 @@ def main(argv: list[str] | None = None) -> int:
         label = f"{label}_{args.suite}"
 
     columns = gold_columns(args.gold_dir, args.month, list(TABLES))
-    system = build_system_prompt(columns, month=args.month)
+    system = build_system_prompt(columns, month=args.month, months=months)
     executor = DuckDBExecutor(args.gold_dir)
     try:
         results = evaluate(
-            cases, month=args.month, system=system, llm=llm, executor=executor, budget=budget,
-            repeats=args.repeats,
+            cases, month=args.month, months=months, system=system, llm=llm, executor=executor,
+            budget=budget, repeats=args.repeats,
         )  # fmt: skip
     finally:
         executor.close()

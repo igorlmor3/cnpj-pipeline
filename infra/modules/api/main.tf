@@ -180,6 +180,7 @@ resource "aws_lambda_function" "api" {
   environment {
     variables = {
       CNPJ_API_MONTH              = var.month
+      CNPJ_API_MONTHS             = join(",", var.months)
       CNPJ_API_DATABASE           = var.glue_database
       CNPJ_API_WORKGROUP          = var.athena_workgroup_name
       CNPJ_API_TABLE              = aws_dynamodb_table.state.name

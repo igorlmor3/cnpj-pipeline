@@ -8,8 +8,12 @@ Regras (qualquer violacao levanta SqlRejected, com uma mensagem que o agente pod
 - exatamente uma instrucao, e ela deve ser um SELECT (com WITH e UNION permitidos);
 - so tabelas da lista permitida (marts agregados e dimensoes), sem catalogo e sem outro banco;
   o fato por estabelecimento nao esta na lista, entao nenhuma linha por CNPJ e acessivel;
-- cada leitura de tabela e trocada por uma subconsulta fixa no mes de referencia escolhido pelo
-  programa, nunca pelo modelo: a consulta nao consegue varrer meses que nao foram pedidos;
+- cada leitura de tabela e trocada por uma subconsulta fixa nos meses de referencia escolhidos pelo
+  programa, nunca pelo modelo: a consulta nao consegue varrer meses fora da lista publicada. Sem
+  `months` (ou sem que a consulta cite reference_month), so o mes padrao e lido, o que mantem as
+  contas de uma foto unica. Com varios meses e uma consulta que cita reference_month, os marts podem
+  ser lidos em todos os meses da lista, e uma verificacao barra somar fotos de meses diferentes (o
+  mesmo cadastro contado mais de uma vez); as dimensoes ficam sempre no mes padrao;
 - juncoes precisam de condicao (sem produto cartesiano) e ha um maximo de juncoes por consulta;
 - o resultado tem limite de linhas, acrescentado ou reduzido para o maximo.
 
@@ -33,6 +37,8 @@ MAX_ROWS = 200
 MAX_JOINS = 4
 MAX_SQL_CHARS = 4000
 MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
+MONTH_COLUMN = "reference_month"
+MAX_MONTHS = 36
 
 MARTS = (
     "gold_mart_aberturas_mensal",
@@ -149,9 +155,87 @@ def _validate_table(table: exp.Table, allowed: frozenset[str], database: str) ->
     return name
 
 
-def _month_subquery(name: str, alias: str, month: str) -> exp.Subquery:
-    inner = sqlglot.parse_one(f"SELECT * FROM {name} WHERE reference_month = '{month}'", read="trino")
+def _month_subquery(name: str, alias: str, months: tuple[str, ...]) -> exp.Subquery:
+    if len(months) == 1:
+        condition = f"{MONTH_COLUMN} = '{months[0]}'"
+    else:
+        condition = f"{MONTH_COLUMN} IN ({', '.join(repr(m) for m in months)})"
+    inner = sqlglot.parse_one(f"SELECT * FROM {name} WHERE {condition}", read="trino")
     return exp.Subquery(this=inner, alias=exp.TableAlias(this=exp.to_identifier(alias)))
+
+
+def _is_month_column(node: exp.Expression) -> bool:
+    return isinstance(node, exp.Column) and node.name.lower() == MONTH_COLUMN
+
+
+def _mentions_month(node: exp.Expression) -> bool:
+    return any(_is_month_column(c) for c in node.find_all(exp.Column))
+
+
+def _conjuncts(condition: exp.Expression) -> list[exp.Expression]:
+    if isinstance(condition, exp.Paren):
+        return _conjuncts(condition.this)
+    if isinstance(condition, exp.And):
+        return _conjuncts(condition.left) + _conjuncts(condition.right)
+    return [condition]
+
+
+def _pins_one_month(where: exp.Where | None) -> bool:
+    """O WHERE fixa reference_month em um unico texto (= ou IN com um valor)."""
+    if where is None:
+        return False
+    for part in _conjuncts(where.this):
+        if isinstance(part, exp.EQ):
+            sides = (part.left, part.right)
+            if any(_is_month_column(a) for a in sides) and any(
+                isinstance(b, exp.Literal) and b.is_string for b in sides
+            ):
+                return True
+        if isinstance(part, exp.In) and _is_month_column(part.this):
+            values = part.expressions
+            if len(values) == 1 and isinstance(values[0], exp.Literal) and values[0].is_string:
+                return True
+    return False
+
+
+def _sums_across_months(select: exp.Select) -> bool:
+    """True se esta consulta agrega linhas de meses diferentes juntas, sem separar por mes.
+
+    Esta tudo bem: agrupar por reference_month, fixar um unico mes no WHERE, nao agregar (listar
+    linhas), ou deixar o mes dentro de cada agregado (SUM(CASE WHEN reference_month = ...)).
+    """
+    group = select.args.get("group")
+    if group is not None and _mentions_month(group):
+        return False
+    if _pins_one_month(select.args.get("where")):
+        return False
+    aggregates: list[exp.Expression] = []
+    for node in select.find_all(exp.AggFunc, exp.Window):
+        if node.find_ancestor(exp.Select) is not select:
+            continue  # pertence a uma subconsulta, que tem o seu proprio escopo
+        if isinstance(node, exp.AggFunc) and node.find_ancestor(exp.Window):
+            continue  # o agregado de um Window e conferido junto com ele
+        aggregates.append(node.parent if isinstance(node.parent, exp.Filter) else node)
+    return not all(_mentions_month(a) for a in aggregates)
+
+
+def _check_month_use(statement: exp.Expression, marts: frozenset[str]) -> None:
+    """Barra a consulta que soma, no mesmo grupo, fotos de meses diferentes do mesmo cadastro."""
+    for scope in traverse_scope(statement):
+        select = scope.expression
+        if not isinstance(select, exp.Select):
+            continue
+        reads_mart = any(
+            not isinstance(scope.sources.get(t.alias_or_name), Scope) and t.name.lower() in marts
+            for t in scope.tables
+        )
+        if reads_mart and _sums_across_months(select):
+            raise SqlRejected(
+                "Com mais de um mes na consulta, nao some valores de meses diferentes: cada mes e uma "
+                "foto do mesmo cadastro e a soma conta tudo mais de uma vez. Fixe um mes com "
+                "reference_month = 'AAAA-MM', agrupe por reference_month ou use SUM(CASE WHEN "
+                "reference_month = 'AAAA-MM' THEN coluna END) para cada mes."
+            )
 
 
 def _apply_limit(statement: exp.Expression, max_rows: int) -> tuple[int, bool]:
@@ -172,14 +256,23 @@ def guard(
     sql: str,
     *,
     month: str,
+    months: tuple[str, ...] | None = None,
     allowed_tables: frozenset[str] = ALLOWED_TABLES,
     max_rows: int = MAX_ROWS,
     database: str = DEFAULT_DATABASE,
     write: str = "trino",
 ) -> GuardResult:
-    """Valida e reescreve o SQL. O mes vem do programa; o modelo nao escolhe o que varrer."""
+    """Valida e reescreve o SQL. Os meses vem do programa; o modelo nao escolhe o que varrer.
+
+    `month` e o mes padrao (o mais recente). `months` e a lista de meses publicados; sem ela, so
+    `month` pode ser lido."""
     if not MONTH_RE.match(month):
         raise ValueError(f"mes de referencia invalido: {month!r}")
+    available = tuple(sorted(set(months))) if months else (month,)
+    if len(available) > MAX_MONTHS or not all(MONTH_RE.match(m) for m in available):
+        raise ValueError("lista de meses invalida")
+    if month not in available:
+        raise ValueError("o mes padrao precisa estar na lista de meses")
     allowed = frozenset(t.lower() for t in allowed_tables)
 
     statement = _parse(sql)
@@ -187,9 +280,13 @@ def guard(
     real, _ = _classify_tables(statement)
     names = {id(t): _validate_table(t, allowed, database) for t in real}
 
+    multi = len(available) > 1 and _mentions_month(statement)
+    if multi:
+        _check_month_use(statement, frozenset(MARTS))
     for table in real:
         alias = table.alias or table.name
-        table.replace(_month_subquery(names[id(table)], alias, month))
+        wide = multi and names[id(table)] in MARTS
+        table.replace(_month_subquery(names[id(table)], alias, available if wide else (month,)))
 
     limit, capped = _apply_limit(statement, max_rows)
     final = statement.sql(dialect=write, comments=False)

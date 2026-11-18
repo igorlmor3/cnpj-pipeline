@@ -50,6 +50,22 @@ variable "api_month" {
   default     = "2026-10"
 }
 
+variable "api_months" {
+  description = "Meses (AAAA-MM) que o agente pode consultar, incluindo api_month, que e o padrao. Vazio: so api_month."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for m in var.api_months : can(regex("^[0-9]{4}-(0[1-9]|1[0-2])$", m))])
+    error_message = "Cada mes de api_months deve ter o formato AAAA-MM."
+  }
+
+  validation {
+    condition     = length(var.api_months) == 0 || contains(var.api_months, var.api_month)
+    error_message = "api_months deve incluir api_month."
+  }
+}
+
 variable "api_package" {
   description = "Caminho do zip da funcao, relativo a este diretorio."
   type        = string

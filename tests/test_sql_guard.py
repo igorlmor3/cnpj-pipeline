@@ -293,3 +293,89 @@ def test_the_limit_really_cuts_rows(con):
 def test_the_final_sql_is_what_gets_executed_and_cannot_touch_the_fato(con):
     with pytest.raises(SqlRejected):
         execute(con, "SELECT cnpj FROM gold_fato_estabelecimento")
+
+
+# --------------------------------------------------------------------------- #
+# Varios meses
+# --------------------------------------------------------------------------- #
+
+MONTHS = ("2026-07", "2026-08", "2026-09", "2026-10")
+IN_ALL = "reference_month IN ('2026-07', '2026-08', '2026-09', '2026-10')"
+
+
+def run_many(sql: str):
+    return guard(sql, month=MONTH, months=MONTHS)
+
+
+def test_without_mentioning_the_month_only_the_default_month_is_read():
+    result = run_many(f"SELECT SUM(empresas_ativas) FROM {MART}")
+    assert "reference_month = '2026-10'" in result.sql and "2026-07" not in result.sql
+
+
+def test_citing_the_month_widens_the_marts_but_the_dimensions_stay_on_the_default_month():
+    result = run_many(
+        f"SELECT a.reference_month, s.descricao FROM {MART} a JOIN gold_dim_cnae_secao s ON a.uf = s.codigo"
+    )
+    assert IN_ALL in result.sql
+    assert "FROM gold_dim_cnae_secao WHERE reference_month = '2026-10'" in result.sql
+
+
+S = "SELECT SUM(empresas_ativas) FROM " + MART
+CASE_10 = "SUM(CASE WHEN reference_month = '2026-10' THEN empresas_ativas END)"
+CASE_07 = "SUM(CASE WHEN reference_month = '2026-07' THEN empresas_ativas END)"
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        f"SELECT reference_month, SUM(empresas_ativas) FROM {MART} GROUP BY reference_month",
+        f"{S} WHERE reference_month = '2026-08'",
+        f"{S} WHERE reference_month IN ('2026-08')",
+        f"{S} WHERE NOT is_organizacao_politica AND reference_month = '2026-08'",
+        f"SELECT {CASE_10} - {CASE_07} FROM {MART}",
+        f"SELECT uf FROM {MART} GROUP BY uf ORDER BY {CASE_10} DESC",
+        f"SELECT SUM(empresas_ativas) FILTER (WHERE reference_month = '2026-10') FROM {MART}",
+        f"SELECT reference_month, uf, empresas_ativas FROM {MART} WHERE uf = 'SP'",
+        "WITH t AS (SELECT reference_month m, uf, SUM(empresas_ativas) s "
+        f"FROM {MART} GROUP BY reference_month, uf) SELECT * FROM t",
+        f"SELECT reference_month, SUM(empresas_ativas) OVER (PARTITION BY reference_month) FROM {MART}",
+    ],
+)
+def test_comparing_or_pinning_months_passes(sql):
+    assert IN_ALL in run_many(sql).sql
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        f"{S} WHERE reference_month IN ('2026-09', '2026-10')",
+        f"{S} WHERE reference_month >= '2026-08'",
+        f"SELECT uf, AVG(pct_mei) FROM {MART} WHERE reference_month <> '2026-07' GROUP BY uf",
+        f"SELECT {CASE_10}, COUNT(*) FROM {MART}",
+        "WITH t AS (SELECT uf, SUM(empresas_ativas) s FROM "
+        f"{MART} WHERE reference_month IN ('2026-07', '2026-10') GROUP BY uf) SELECT * FROM t",
+        f"SELECT SUM(empresas_ativas) OVER (PARTITION BY uf) FROM {MART} WHERE reference_month > '2026-01'",
+    ],
+)
+def test_summing_snapshots_of_different_months_is_rejected(sql):
+    with pytest.raises(SqlRejected, match="nao some valores de meses diferentes"):
+        run_many(sql)
+
+
+def test_a_text_that_only_looks_like_the_column_does_not_widen_anything():
+    result = run_many(f"SELECT SUM(empresas_ativas) FROM {MART} WHERE uf = 'reference_month'")
+    assert "2026-07" not in result.sql
+
+
+def test_the_list_of_months_is_validated():
+    with pytest.raises(ValueError):
+        guard("SELECT 1", month=MONTH, months=("2026-09",))  # o padrao precisa estar na lista
+    with pytest.raises(ValueError):
+        guard("SELECT 1", month=MONTH, months=(MONTH, "2026-13"))
+    with pytest.raises(ValueError):
+        guard("SELECT 1", month=MONTH, months=(MONTH, "x"))
+
+
+def test_the_model_cannot_reach_months_outside_the_list():
+    result = run_many(f"SELECT reference_month FROM {MART} WHERE reference_month = '2020-01'")
+    assert "2020-01" in result.sql and IN_ALL in result.sql  # o filtro dele vem depois do da guarda

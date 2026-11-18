@@ -218,6 +218,22 @@ def test_config_overrides_from_env():
     assert config.allowed_origins == (ORIGIN, "http://localhost:5173")
 
 
+def test_config_reads_the_list_of_months_and_defaults_to_the_one_month():
+    assert ApiConfig.from_env(ENV).available_months == (MONTH,)
+    env = {**ENV, "CNPJ_API_MONTHS": f"{MONTH}, 2026-08,2026-09"}
+    config = ApiConfig.from_env(env)
+    assert config.months == ("2026-08", "2026-09", MONTH) and config.available_months == config.months
+
+
+@pytest.mark.parametrize(
+    "months",
+    ["2026-08,2026-09", f"{MONTH},{MONTH}", f"{MONTH},2026-13", f"{MONTH},agosto"],
+)
+def test_config_rejects_a_list_of_months_that_is_wrong(months):
+    with pytest.raises(ConfigError, match="MONTHS"):
+        ApiConfig.from_env({**ENV, "CNPJ_API_MONTHS": months})
+
+
 @pytest.mark.parametrize("missing", ["MONTH", "WORKGROUP", "TABLE", "PARAM_PREFIX"])
 def test_config_requires_the_essentials(missing):
     env = {k: v for k, v in ENV.items() if k != f"CNPJ_API_{missing}"}
@@ -582,11 +598,27 @@ def test_ask_receives_the_month_budget_and_deadline_from_the_config(executor, sy
     rig = Rig(executor, system, config=make_config(deadline_s=17.0, monthly_budget_usd=2.5))
     rig.ask("Pergunta?")
     assert seen["question"] == "Pergunta?" and seen["month"] == MONTH
+    assert seen["months"] == (MONTH,)
     assert seen["deadline_s"] == 17.0 and seen["system"] == system
     assert (
         seen["budget"].limit_usd == 2.5 and seen["budget"].period == "2026-11"
     )  # mes do relogio, nao o dos dados
     assert seen["budget"].ledger is rig.ledger
+
+
+def test_the_agent_reads_every_configured_month_and_the_response_lists_them(executor, system, monkeypatch):
+    seen: dict[str, Any] = {}
+
+    def fake_ask(question, **kwargs):
+        seen.update(kwargs)
+        return Answer("answered", "ok")
+
+    monkeypatch.setattr(handler, "ask", fake_ask)
+    months = ("2026-08", MONTH)
+    rig = Rig(executor, system, config=make_config(months=months))
+    body = body_of(rig.ask("Pergunta?"))
+    assert seen["months"] == months
+    assert body["month"] == MONTH and body["months"] == list(months)
 
 
 # -- entrada ----------------------------------------------------------------------------------

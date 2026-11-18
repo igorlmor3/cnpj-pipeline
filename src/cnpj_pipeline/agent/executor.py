@@ -80,11 +80,14 @@ def run_query(
     *,
     executor: Executor,
     month: str,
+    months: tuple[str, ...] | None = None,
     max_rows: int = sql_guard.MAX_ROWS,
     clock: Callable[[], float] = time.monotonic,
 ) -> QueryResult:
     """Guarda, executa e devolve o resultado. Levanta SqlRejected ou QueryFailed (mensagens seguras)."""
-    guarded: GuardResult = sql_guard.guard(sql, month=month, max_rows=max_rows, write=executor.dialect)
+    guarded: GuardResult = sql_guard.guard(
+        sql, month=month, months=months, max_rows=max_rows, write=executor.dialect
+    )
     started = clock()
     raw = executor.run(guarded.sql, max_rows=guarded.limit)
     rows = [[simple_value(c) for c in row] for row in raw.rows[: guarded.limit]]

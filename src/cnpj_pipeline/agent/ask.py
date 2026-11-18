@@ -87,9 +87,11 @@ class Answer:
     cost_usd: float = 0.0
 
 
-def build_system_prompt(columns: Mapping[str, Sequence[tuple[str, str]]], *, month: str) -> str:
-    """Contexto das tabelas + regras de resposta. Monte uma vez por mes e reaproveite."""
-    return build_context(columns, month=month) + ANSWER_RULES
+def build_system_prompt(
+    columns: Mapping[str, Sequence[tuple[str, str]]], *, month: str, months: Sequence[str] | None = None
+) -> str:
+    """Contexto das tabelas + regras de resposta. Monte uma vez e reaproveite."""
+    return build_context(columns, month=month, months=months) + ANSWER_RULES
 
 
 def _cell(value: Any) -> str:
@@ -114,13 +116,15 @@ def format_result(result: QueryResult) -> str:
     return text + ("\n(" + "; ".join(notes) + ")" if notes else "")
 
 
-def _run_tool(sql: str, *, executor: Executor, month: str) -> tuple[QueryRecord, str, bool]:
+def _run_tool(
+    sql: str, *, executor: Executor, month: str, months: tuple[str, ...] | None = None
+) -> tuple[QueryRecord, str, bool]:
     """Executa um pedido da ferramenta. Devolve (registro, texto para o modelo, houve_erro)."""
     if not sql.strip():
         message = "a chamada de run_sql veio sem o campo sql"
         return QueryRecord(sql="", ok=False, error=message), message, True
     try:
-        result = run_query(sql, executor=executor, month=month)
+        result = run_query(sql, executor=executor, month=month, months=months)
     except (SqlRejected, QueryFailed) as exc:
         message = str(exc)
         return QueryRecord(sql=sql, ok=False, error=message), message, True
@@ -139,6 +143,7 @@ def ask(
     question: str,
     *,
     month: str,
+    months: tuple[str, ...] | None = None,
     system: str,
     llm: LLMClient,
     executor: Executor,
@@ -203,7 +208,9 @@ def ask(
                         True,
                     )
                 else:
-                    record, output, is_error = _run_tool(call.sql, executor=executor, month=month)
+                    record, output, is_error = _run_tool(
+                        call.sql, executor=executor, month=month, months=months
+                    )
                     queries.append(record)
                 results.append(
                     {"type": "tool_result", "tool_use_id": call.id, "content": output, "is_error": is_error}

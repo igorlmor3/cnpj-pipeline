@@ -44,6 +44,7 @@ class EvalCase:
     must_contain: tuple[str, ...] = ()  # trechos que o SQL das consultas bem-sucedidas deve ter
     answer_must_mention: tuple[str, ...] = ()  # trechos que o texto da resposta deve ter
     reference_answer: str = ""  # texto final do modo de referencia (so quando a resposta e checada)
+    needs_months: bool = False  # o caso consulta mais de um mes: a avaliacao precisa de --months
 
     @property
     def compares_result(self) -> bool:
@@ -918,6 +919,62 @@ VALIDACAO_CASES: tuple[EvalCase, ...] = (
     ),
 )
 
+# ---- varios meses ---------------------------------------------------------------------------
+# Estes casos citam meses pelo nome (jul a out de 2026) e so valem com a gold que tem esses meses e com
+# --months. Por isso ficam fora de ALL_CASES, que roda sobre um mes so.
+_MES = "reference_month"
+
+MESES_CASES: tuple[EvalCase, ...] = (
+    EvalCase(
+        "meses_ativas_sp",
+        "varios_meses",
+        "data",
+        f"Quantas empresas ativas havia em SP em agosto e em outubro de 2026, {SEM_POLITICAS}?",
+        f"SELECT SUM(CASE WHEN {_MES} = '2026-08' THEN empresas_ativas END), "
+        f"SUM(CASE WHEN {_MES} = '2026-10' THEN empresas_ativas END) "
+        f"FROM {SIMPLES} WHERE uf = 'SP' AND NOT is_organizacao_politica",
+        needs_months=True,
+    ),
+    EvalCase(
+        "meses_ganho_uf",
+        "varios_meses",
+        "data",
+        f"Qual UF mais ganhou empresas ativas de julho para outubro de 2026, {SEM_POLITICAS}?",
+        f"SELECT uf FROM {SIMPLES} WHERE NOT is_organizacao_politica GROUP BY uf "
+        f"ORDER BY SUM(CASE WHEN {_MES} = '2026-10' THEN empresas_ativas ELSE 0 END) "
+        f"- SUM(CASE WHEN {_MES} = '2026-07' THEN empresas_ativas ELSE 0 END) DESC, uf LIMIT 1",
+        ordered=True,
+        needs_months=True,
+    ),
+    EvalCase(
+        "meses_total_por_mes",
+        "varios_meses",
+        "data",
+        f"Quantas empresas ativas havia no Brasil em cada mês, {SEM_POLITICAS}?",
+        f"SELECT {_MES}, SUM(empresas_ativas) FROM {SIMPLES} WHERE NOT is_organizacao_politica "
+        f"GROUP BY {_MES} ORDER BY {_MES}",
+        ordered=True,
+        needs_months=True,
+    ),
+    EvalCase(
+        "meses_mes_unico",
+        "varios_meses",
+        "data",
+        f"Quantos estabelecimentos ativos havia em MG em setembro de 2026, {SEM_POLITICAS}?",
+        f"SELECT SUM(estabelecimentos_ativos) FROM {ATIVOS} "
+        f"WHERE uf = 'MG' AND {_MES} = '2026-09' AND NOT is_organizacao_politica",
+        needs_months=True,
+    ),
+    EvalCase(
+        "meses_sem_mes_usa_o_padrao",
+        "varios_meses",
+        "data",
+        f"Quantas empresas ativas existem em SP, {SEM_POLITICAS}?",
+        f"SELECT SUM(empresas_ativas) FROM {SIMPLES} WHERE uf = 'SP' AND NOT is_organizacao_politica",
+        needs_months=True,
+    ),
+)
+
 ALL_CASES: tuple[EvalCase, ...] = CASES + HOLDOUT_CASES + ROBUSTEZ_CASES + VALIDACAO_CASES
 
 SUITES: dict[str, tuple[EvalCase, ...]] = {
@@ -925,12 +982,13 @@ SUITES: dict[str, tuple[EvalCase, ...]] = {
     "holdout": HOLDOUT_CASES,
     "robustez": ROBUSTEZ_CASES,
     "validacao": VALIDACAO_CASES,
+    "meses": MESES_CASES,
     "all": ALL_CASES,
 }
 
 
 def by_id(ids: list[str]) -> tuple[EvalCase, ...]:
-    known = {c.id: c for c in ALL_CASES}
+    known = {c.id: c for c in ALL_CASES + MESES_CASES}
     missing = [i for i in ids if i not in known]
     if missing:
         raise KeyError(f"casos desconhecidos: {missing}")

@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from cnpj_pipeline.agent.sql_guard import MAX_JOINS, MAX_ROWS
+from cnpj_pipeline.agent.sql_guard import MARTS, MAX_JOINS, MAX_ROWS
 from cnpj_pipeline.gold_models import (
     CNAE_ORG_POLITICA,
     CNAE_SECOES,
@@ -176,8 +176,16 @@ def _codes(pairs: Sequence[tuple[str, str]]) -> str:
     return "; ".join(f"{code} = {label}" for code, label in pairs)
 
 
-def _table_section(name: str, doc: TableDoc, columns: Sequence[tuple[str, str]]) -> str:
+MONTH_GLOSS = "Mês da foto do cadastro (texto AAAA-MM); ver 'Meses'."
+
+
+def _table_section(
+    name: str, doc: TableDoc, columns: Sequence[tuple[str, str]], *, with_month: bool = False
+) -> str:
     lines = [f"Tabela {TABLE_PREFIX}{name}: {doc.description}", f"  Granularidade: {doc.grain}."]
+    if with_month and TABLE_PREFIX + name in MARTS:
+        lines[1] = f"  Granularidade: {doc.grain}, em cada mês."
+        lines.append(f"  - {PARTITION_COLUMN} (string): {MONTH_GLOSS}")
     for column, column_type in visible_columns(columns):
         gloss = doc.columns.get(column)
         if gloss is None:
@@ -186,20 +194,57 @@ def _table_section(name: str, doc: TableDoc, columns: Sequence[tuple[str, str]])
     return "\n".join(lines)
 
 
-def build_context(columns: Mapping[str, Sequence[tuple[str, str]]], *, month: str) -> str:
-    """Texto de contexto para o modelo. `columns` mapeia o modelo (sem o prefixo gold_) as suas colunas."""
+def _months_section(months: Sequence[str], month: str) -> str:
+    listed = ", ".join(months)
+    return f"""
+Meses
+- Há fotos completas do cadastro em {len(months)} meses: {listed}. O mês padrão é {month}, o mais recente.
+- Se a pergunta não falar de mês, responda com o mês mais recente: filtre com reference_month = '{month}' \
+e diga na resposta que os números são de {month}. Os outros meses continuam disponíveis para comparar.
+- Para um mês específico, filtre com reference_month = 'AAAA-MM'. Para comparar meses ou mostrar a \
+evolução, agrupe por reference_month, ou use SUM(CASE WHEN reference_month = 'AAAA-MM' THEN coluna END) \
+para cada mês, deixando a diferença para o SQL.
+- Cada mês é uma foto do mesmo cadastro: nunca some empresas, estabelecimentos ou sócios de meses \
+diferentes, porque o mesmo CNPJ seria contado mais de uma vez. A consulta que faz isso é recusada.
+- Só os marts têm reference_month. As tabelas dim_ são sempre as do mês {month}. Ao juntar dois marts, \
+junte também por reference_month.
+- A diferença entre dois meses é a variação líquida da foto: soma abertura de CNPJs, baixas e mudanças \
+de situação. Não a chame de "novas empresas".
+- Diga a qual mês, ou a quais meses, os números se referem. Um mês fora da lista não existe aqui.
+"""
+
+
+def build_context(
+    columns: Mapping[str, Sequence[tuple[str, str]]], *, month: str, months: Sequence[str] | None = None
+) -> str:
+    """Texto de contexto para o modelo. `columns` mapeia o modelo (sem o prefixo gold_) as suas colunas.
+
+    Com `months` de mais de um mes, o contexto explica como comparar meses; sem ela, descreve so `month`."""
+    many = months is not None and len(set(months)) > 1
     unknown = set(columns) - set(TABLES)
     if unknown:
         raise KeyError(f"tabelas sem documentacao: {sorted(unknown)}")
-    sections = [_table_section(name, TABLES[name], columns[name]) for name in TABLES if name in columns]
+    sections = [
+        _table_section(name, TABLES[name], columns[name], with_month=many)
+        for name in TABLES
+        if name in columns
+    ]
     secoes = "; ".join(f"{letter} = {desc}" for letter, desc, _, _ in CNAE_SECOES)
-    return f"""Você responde perguntas sobre o cadastro de CNPJ da Receita Federal, no mês {month}, \
+    tables = "\n".join(sections)
+    if many:
+        tables += "\n" + _months_section(sorted(set(months or ())), month).rstrip("\n")
+        scope = f"em fotos mensais, com o mês padrão {month}"
+        month_rule = "- Use reference_month como explicado em 'Meses'."
+    else:
+        scope = f"no mês {month}"
+        month_rule = f"- Não filtre por reference_month: o mês {month} já está fixado para todas as tabelas."
+    return f"""Você responde perguntas sobre o cadastro de CNPJ da Receita Federal, {scope}, \
 consultando tabelas agregadas por meio da ferramenta run_sql.
 
 Regras do SQL
 - O dialeto é o do Athena (Trino). Escreva uma única instrução SELECT.
 - Use somente as tabelas listadas abaixo. Não existe tabela com linhas individuais de empresas.
-- Não filtre por reference_month: o mês {month} já está fixado para todas as tabelas.
+{month_rule}
 - Toda junção precisa de condição ON (no máximo {MAX_JOINS} junções). O resultado é cortado em \
 {MAX_ROWS} linhas; agregue e ordene em vez de listar.
 - Devolva só o que foi perguntado. Para "qual" ou "o maior", ordene e use LIMIT 1 (ou o número \
@@ -217,7 +262,7 @@ por essa coluna para depois escolher um dos grupos.
 - Se o SQL for recusado ou der erro, leia a mensagem, corrija e tente de novo.
 
 Tabelas
-{chr(10).join(sections)}
+{tables}
 
 Convenções do cadastro
 - Estabelecimento é uma matriz ou uma filial. Empresa ativa, nos marts de perfil e de Simples e MEI, \

@@ -184,7 +184,8 @@ def test_every_env_var_set_by_terraform_is_one_the_function_reads():
 def test_the_required_settings_are_all_provided_by_terraform():
     declared = set(re.findall(r"\bCNPJ_API_([A-Z_]+)\b", (MODULE / "main.tf").read_text(encoding="utf-8")))
     env = {f"CNPJ_API_{name}": "valor" for name in declared}
-    env.update({"CNPJ_API_MONTH": MONTH, "CNPJ_API_ALLOWED_ORIGINS": "https://exemplo.github.io"})
+    env.update({"CNPJ_API_MONTH": MONTH, "CNPJ_API_MONTHS": f"2026-09,{MONTH}"})
+    env.update({"CNPJ_API_ALLOWED_ORIGINS": "https://exemplo.github.io"})
     env.update({"CNPJ_API_PER_MINUTE": "3", "CNPJ_API_PER_DAY": "15", "CNPJ_API_GLOBAL_PER_DAY": "150"})
     env.update({"CNPJ_API_MONTHLY_BUDGET_USD": "4", "CNPJ_API_PARAM_PREFIX": "/cnpj-pipeline/api"})
     assert ApiConfig.from_env(env).table == "valor"

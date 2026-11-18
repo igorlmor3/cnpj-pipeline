@@ -113,6 +113,7 @@ Limites padrão: 3 perguntas por minuto e 15 por dia por visitante, 150 por dia 
    ```
    api_enabled         = true
    api_month           = "2026-10"
+   api_months          = ["2026-07", "2026-08", "2026-09", "2026-10"]
    api_allowed_origins = ["https://seu-usuario.github.io"]
    ```
 
@@ -151,7 +152,7 @@ Para desligar a API na hora, mude o mesmo parâmetro para `false` (o valor é re
 
 - O endereço da função é público, sem WAF. Pedidos feitos fora de um navegador não carregam o cabeçalho de origem, então o que os limita são os contadores. Cada pedido barrado custa uma escrita no DynamoDB, e o gasto com o modelo só acontece depois de passar por todos os limites.
 - `api_reserved_concurrency` limita as execuções simultâneas, mas é opcional: contas novas têm um limite total baixo de execuções, e a AWS exige que 10 fiquem sem reserva.
-- A API responde só sobre o mês indicado em `api_month`, e só a partir de agregados (a gold).
+- A API responde só a partir de agregados (a gold). Sem pergunta de mês, lê `api_month` (o padrão, o mais recente); com `api_months`, o agente também compara os meses da lista. Para um mês novo, acrescente-o à lista e rode `terraform apply`: a tabela do Athena já enxerga o mês novo (partition projection), e a função relê a lista na próxima execução a frio.
 
 ## Custos e cuidados
 
