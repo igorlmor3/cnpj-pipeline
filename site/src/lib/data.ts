@@ -1,4 +1,4 @@
-import type { AgentExamples, Envelope, SiteConfig, SiteData } from "./types";
+import type { AgentExamples, Envelope, Evolucao, SiteConfig, SiteData } from "./types";
 
 type Fetcher = typeof fetch;
 
@@ -54,19 +54,36 @@ function checkConfig(value: Partial<SiteConfig> | null): SiteConfig {
   return { apiUrl, repoUrl };
 }
 
-/** Carrega o mes mais recente listado em months.json e valida o envelope de cada arquivo. */
-export async function loadSite(base: string, fetcher: Fetcher = fetch): Promise<SiteData> {
+const MONTH = /^\d{4}-\d{2}$/;
+
+/** Aceita a serie de evolucao so quando o formato e o esquema batem; qualquer outra coisa vira null. */
+function checkEvolution(value: Partial<Evolucao> | null): Evolucao | null {
+  if (!value || value.esquema !== 1 || !Array.isArray(value.meses) || !value.dados) return null;
+  const d = value.dados;
+  const lists = [d.serie, d.movimentos, d.transicoes, d.defasagem, d.saldo_uf];
+  if (!lists.every(Array.isArray)) return null;
+  return value as Evolucao;
+}
+
+/**
+ * Carrega um mes listado em months.json (por padrao o mais recente; um mes que nao esta na lista
+ * e ignorado) e valida o envelope de cada arquivo. A serie de evolucao e opcional.
+ */
+export async function loadSite(base: string, fetcher: Fetcher = fetch, requested?: string | null): Promise<SiteData> {
   const root = base.endsWith("/") ? base : `${base}/`;
-  const months = await getJson<{ esquema: number; ultimo: string }>(fetcher, `${root}data/months.json`);
-  if (months.esquema !== 1 || !/^\d{4}-\d{2}$/.test(months.ultimo)) throw new Error("months.json invalido");
-  const month = months.ultimo;
+  const index = await getJson<{ esquema: number; ultimo: string; meses?: string[] }>(fetcher, `${root}data/months.json`);
+  if (index.esquema !== 1 || !MONTH.test(index.ultimo)) throw new Error("months.json invalido");
+  const listed = (Array.isArray(index.meses) ? index.meses : []).filter((m) => MONTH.test(m));
+  const months = [...new Set([...listed, index.ultimo])].sort();
+  const month = requested && months.includes(requested) ? requested : index.ultimo;
   const dir = `${root}data/${month}/`;
 
   const keys = Object.keys(FILES) as (keyof typeof FILES)[];
-  const [index, config, examples, ...loaded] = await Promise.all([
+  const [monthIndex, config, examples, evolution, ...loaded] = await Promise.all([
     getJson<{ fonte: string; mes_referencia: string }>(fetcher, `${dir}index.json`),
     getOptional<Partial<SiteConfig>>(fetcher, `${root}config.json`),
     getOptional<AgentExamples>(fetcher, `${dir}agent_examples.json`),
+    getOptional<Partial<Evolucao>>(fetcher, `${root}data/evolucao.json`),
     ...keys.map((key) => getJson<Envelope<unknown>>(fetcher, `${dir}${FILES[key]}`)),
   ]);
 
@@ -84,9 +101,11 @@ export async function loadSite(base: string, fetcher: Fetcher = fetch): Promise<
 
   return {
     month,
-    source: index.fonte,
-    ...(result as unknown as Omit<SiteData, "month" | "source" | "examples" | "config">),
+    months,
+    source: monthIndex.fonte,
+    ...(result as unknown as Omit<SiteData, "month" | "months" | "source" | "examples" | "evolution" | "config">),
     examples: validExamples,
+    evolution: checkEvolution(evolution),
     config: checkConfig(config),
   };
 }
@@ -109,6 +128,7 @@ export function collectCaveats(site: SiteData): { code: string; text: string }[]
     site.socios,
     site.pipeline,
   ] as Envelope<unknown>[];
+  if (site.evolution) envelopes.push({ ressalvas: site.evolution.ressalvas } as Envelope<unknown>);
   for (const envelope of envelopes) {
     for (const [code, text] of Object.entries(envelope.ressalvas ?? {})) {
       if (!seen.has(code)) seen.set(code, text);

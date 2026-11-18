@@ -183,8 +183,73 @@ export interface SiteConfig {
   repoUrl: string;
 }
 
+export interface EvolucaoSerie {
+  mes: string;
+  estabelecimentos_ativos: number;
+  empresas_ativas: number;
+  optantes_simples: number;
+  optantes_mei: number;
+  pct_simples: number;
+  pct_mei: number;
+}
+
+export interface EvolucaoMovimento {
+  mes: string;
+  mes_anterior: string;
+  novos: number;
+  novos_ativos: number;
+  removidos: number;
+  removidos_ativos: number;
+  mudaram_de_situacao: number;
+  passaram_a_ativos: number;
+  deixaram_de_ser_ativos: number;
+  saldo_ativos: number;
+}
+
+export interface EvolucaoTransicao {
+  mes: string;
+  de: string;
+  para: string;
+  de_descricao: string;
+  para_descricao: string;
+  estabelecimentos: number;
+}
+
+export interface EvolucaoDefasagem {
+  mes: string;
+  faixa: string;
+  faixa_descricao: string;
+  novos: number;
+}
+
+export interface EvolucaoSaldoUf {
+  mes: string;
+  uf: string | null;
+  uf_nome: string | null;
+  saldo: number;
+}
+
+export interface Evolucao {
+  arquivo: string;
+  esquema: number;
+  titulo: string;
+  descricao: string;
+  ressalvas: Record<string, string>;
+  meses: string[];
+  celulas_suprimidas?: number;
+  dados: {
+    serie: EvolucaoSerie[];
+    movimentos: EvolucaoMovimento[];
+    transicoes: EvolucaoTransicao[];
+    defasagem: EvolucaoDefasagem[];
+    saldo_uf: EvolucaoSaldoUf[];
+  };
+}
+
 export interface SiteData {
   month: string;
+  /** Meses publicados, do mais antigo ao mais recente. */
+  months: string[];
   source: string;
   overview: Envelope<Overview>;
   uf: Envelope<UfRow[]>;
@@ -203,5 +268,6 @@ export interface SiteData {
   socios: Envelope<Socios["dados"]> & { tipos: Socios["tipos"] };
   pipeline: Envelope<Pipeline>;
   examples: AgentExamples | null;
+  evolution: Evolucao | null;
   config: SiteConfig;
 }

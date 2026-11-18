@@ -7,10 +7,10 @@ import { publicFetch } from "./helpers";
 afterEach(cleanup);
 
 describe("Como foi feito", () => {
-  it("monta oito etapas com os numeros reais do pipeline", async () => {
+  it("monta as etapas com os numeros reais do pipeline", async () => {
     const site = await loadSite("/", publicFetch());
     const steps = buildSteps(site);
-    expect(steps.map((s) => s.title)).toEqual(["Download", "Bronze", "Silver", "Gold", "Qualidade", "AWS", "Agente", "API e site"]);
+    expect(steps.map((s) => s.title)).toEqual(["Download", "Bronze", "Silver", "Gold", "Qualidade", "Orquestração", "Evolução", "AWS", "Agente", "API e site"]);
     const byTitle = Object.fromEntries(steps.map((s) => [s.title, s]));
     expect(byTitle.Bronze?.metric).toBe("223,6 mi");
     expect(byTitle.Bronze?.caption).toContain("0 rejeitadas");
@@ -18,14 +18,24 @@ describe("Como foi feito", () => {
     expect(byTitle.Gold?.text[0]).toContain("13 modelos em SQL do DuckDB: 7 dimensões, 1 fato");
     expect(byTitle.Gold?.text[0]).toContain("5 marts agregados");
     expect(byTitle.Qualidade?.metric).toBe("73");
-    expect(byTitle.Download?.caption).toBe("de CSV em 10 tabelas");
+    expect(byTitle.Download?.caption).toBe("de CSV em 10 tabelas, em out/2026");
+    expect(byTitle.Download?.text[0]).toContain("processou 4 meses, de jul/2026 a out/2026");
+    expect(byTitle.Orquestração?.metric).toBe("Airflow");
+    expect(byTitle.Evolução?.metric).toBe("1,5 mi");
+    expect(byTitle.Evolução?.caption).toBe("CNPJs novos em 3 comparações entre meses");
+    expect(byTitle.Agente?.metric).toBe("24 de 25");
+  });
+
+  it("sem a serie de evolucao, a etapa de evolucao some", async () => {
+    const site = await loadSite("/", publicFetch({ "data/evolucao.json": null }));
+    expect(buildSteps(site).map((s) => s.title)).not.toContain("Evolução");
   });
 
   it("mostra etapas, decisoes e links do repositorio", async () => {
     const site = await loadSite("/", publicFetch());
     render(<HowItWasMade site={site} />);
     expect(screen.getByRole("heading", { level: 2, name: "Como foi feito" })).toBeInTheDocument();
-    expect(screen.getAllByText(/^Etapa \d$/)).toHaveLength(8);
+    expect(screen.getAllByText(/^Etapa \d+$/)).toHaveLength(10);
     expect(screen.getByRole("heading", { level: 2, name: "Decisões de engenharia" })).toBeInTheDocument();
     const docs = screen.getByRole("heading", { name: "Leia no repositório" }).closest("article") as HTMLElement;
     const link = within(docs).getByRole("link", { name: "docs/architecture.md" });

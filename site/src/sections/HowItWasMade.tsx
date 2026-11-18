@@ -1,5 +1,5 @@
 import { Poster, Row } from "../components/ui";
-import { bytes, compact, int } from "../lib/format";
+import { bytes, compact, int, monthLabel } from "../lib/format";
 import type { SiteData } from "../lib/types";
 
 interface Step {
@@ -17,15 +17,43 @@ export function buildSteps(site: SiteData): Step[] {
   const facts = models.filter((m) => m.nome.startsWith("fato_")).length;
   const silverOut = p.silver.tabelas.reduce((sum, t) => sum + t.linhas_saida, 0);
   const silverDuplicates = p.silver.tabelas.reduce((sum, t) => sum + t.duplicadas_removidas, 0);
+  const months = site.months;
+  const first = months[0] ?? site.month;
+  const last = months[months.length - 1] ?? site.month;
+  const evolution = site.evolution;
+  const comparisons = evolution?.dados.movimentos.length ?? 0;
+  const newTotal = evolution?.dados.movimentos.reduce((sum, m) => sum + m.novos, 0) ?? 0;
+  const orchestration: Step = {
+    title: "Orquestração",
+    text: [
+      "O fluxo roda no Airflow, em um DAG mensal que escolhe entre dados reais e amostra sintética, usa a qualidade como porta de entrada da publicação e deixa o envio à AWS opcional.",
+      "Sem o Airflow, um comando roda vários meses em sequência, mostra o tempo de cada etapa e, se algo falha, imprime o comando para retomar do ponto em que parou.",
+    ],
+    metric: "Airflow",
+    caption: "DAG com 11 tarefas; 40 a 50 min de processamento por mês real, fora o download",
+  };
+  const evolutionStep: Step[] = evolution
+    ? [
+        {
+          title: "Evolução",
+          text: [
+            "Cada mês é uma foto completa do cadastro. Comparar duas fotos, CNPJ a CNPJ, separa os CNPJs novos, os que sumiram e as mudanças de situação, e mede a defasagem entre o início da atividade e a foto em que o CNPJ aparece.",
+            "Só contagens saem do cálculo: recortes com menos de 5 estabelecimentos são omitidos, e a variação de ativos de cada mês é conferida contra a diferença dos estoques.",
+          ],
+          metric: compact(newTotal),
+          caption: `CNPJs novos em ${comparisons} comparações entre meses`,
+        },
+      ]
+    : [];
   return [
     {
       title: "Download",
       text: [
-        "A Receita Federal publica o cadastro todo mês em arquivos .zip de CSV: Empresas, Estabelecimentos e Sócios, divididos em várias partes, mais as tabelas de domínio (CNAE, municípios, naturezas e outras).",
-        "O download retoma de onde parou e grava um manifesto com o tamanho e o SHA-256 de cada arquivo.",
+        `A Receita Federal publica o cadastro todo mês em arquivos .zip de CSV: Empresas, Estabelecimentos e Sócios, divididos em várias partes, mais as tabelas de domínio (CNAE, municípios, naturezas e outras). O pipeline já processou ${months.length} meses, de ${monthLabel(first)} a ${monthLabel(last)}.`,
+        "O download retoma de onde parou, tenta de novo com espera crescente quando o servidor derruba a conexão e grava um manifesto com o tamanho e o SHA-256 de cada arquivo. Um arquivo que não começa como zip é recusado: em um dos meses o firewall da Receita devolveu páginas de recusa no lugar de dois arquivos, e hoje isso é detectado e repetido.",
       ],
       metric: bytes(p.bronze.bytes_csv),
-      caption: `de CSV em ${p.bronze.tabelas.length} tabelas`,
+      caption: `de CSV em ${p.bronze.tabelas.length} tabelas, em ${monthLabel(site.month)}`,
     },
     {
       title: "Bronze",
@@ -63,6 +91,8 @@ export function buildSteps(site: SiteData): Step[] {
       metric: int(p.qualidade.verificacoes),
       caption: `verificações, ${int(p.qualidade.verificacoes_bloqueantes)} bloqueantes`,
     },
+    orchestration,
+    ...evolutionStep,
     {
       title: "AWS",
       text: [
@@ -78,8 +108,8 @@ export function buildSteps(site: SiteData): Step[] {
         "O modelo recebe o esquema da gold e escreve uma consulta. Uma guarda só deixa passar SELECT, só sobre as tabelas permitidas e com o mês fixado pelo programa. Se a consulta falhar, o erro volta ao modelo para uma correção.",
         "A avaliação compara o resultado da consulta com o de uma consulta de referência, num conjunto reservado que o prompt nunca viu.",
       ],
-      metric: "23 de 24",
-      caption: "respostas certas no conjunto reservado",
+      metric: "24 de 25",
+      caption: "respostas certas no conjunto reservado, na primeira execução",
     },
     {
       title: "API e site",
@@ -123,6 +153,8 @@ const DECISIONS: { title: string; text: string }[] = [
 const TOOLS = [
   "Python",
   "DuckDB",
+  "Airflow",
+  "Docker",
   "Parquet",
   "sqlglot",
   "Terraform",
@@ -152,7 +184,7 @@ export function HowItWasMade({ site }: { site: SiteData }) {
   const repo = site.config.repoUrl.replace(/\/+$/, "");
   return (
     <>
-      <Row id="como-foi-feito" title="Como foi feito" hint="Do arquivo da Receita ao agente, em oito etapas">
+      <Row id="como-foi-feito" title="Como foi feito" hint="Do arquivo da Receita ao agente">
         {steps.map((step, i) => (
           <Poster key={step.title} size="md">
             <span className="tag">Etapa {i + 1}</span>

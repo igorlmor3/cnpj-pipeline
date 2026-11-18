@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import { loadSite } from "./lib/data";
 import { monthLabel } from "./lib/format";
 import type { SiteData } from "./lib/types";
 import { Agent } from "./sections/Agent";
 import { Cities } from "./sections/Cities";
+import { Evolution } from "./sections/Evolution";
 import { Caveats, Footer } from "./sections/Footer";
 import { Hero } from "./sections/Hero";
 import { HowItWasMade } from "./sections/HowItWasMade";
@@ -18,6 +19,7 @@ import { States } from "./sections/States";
 const LINKS: [string, string][] = [
   ["#panorama", "Em números"],
   ["#ufs", "Estados"],
+  ["#evolucao", "Evolução"],
   ["#aberturas", "Aberturas"],
   ["#perfil", "Perfil"],
   ["#municipios", "Municípios"],
@@ -27,9 +29,51 @@ const LINKS: [string, string][] = [
   ["#agente", "Agente"],
 ];
 
-type State = { name: "loading" } | { name: "error"; message: string } | { name: "ready"; site: SiteData };
+type State =
+  | { name: "loading" }
+  | { name: "error"; message: string }
+  | { name: "ready"; site: SiteData; switching: boolean; notice: string | null };
 
-function TopBar({ month }: { month?: string }) {
+/** Mes pedido no endereco (?mes=2026-09); loadSite ignora o que nao estiver publicado. */
+function requestedMonth(): string | null {
+  const value = new URLSearchParams(window.location.search).get("mes");
+  return value && /^\d{4}-\d{2}$/.test(value) ? value : null;
+}
+
+function rememberMonth(month: string, latest: string): void {
+  const url = new URL(window.location.href);
+  if (month === latest) url.searchParams.delete("mes");
+  else url.searchParams.set("mes", month);
+  window.history.replaceState(null, "", url);
+}
+
+function MonthSelect({ months, value, busy, onChange }: { months: string[]; value: string; busy: boolean; onChange: (month: string) => void }) {
+  const id = useId();
+  return (
+    <label htmlFor={id} style={{ marginLeft: "auto", fontSize: "0.8rem", color: "var(--color-muted)", whiteSpace: "nowrap" }}>
+      Mês{" "}
+      <select id={id} className="field" value={value} disabled={busy} onChange={(event) => onChange(event.target.value)}>
+        {months.map((month) => (
+          <option key={month} value={month}>
+            {monthLabel(month)}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function TopBar({
+  site,
+  busy = false,
+  onMonth,
+}: {
+  site?: SiteData;
+  busy?: boolean;
+  onMonth?: (month: string) => void;
+}) {
+  const month = site?.month;
+  const links = LINKS.filter(([href]) => href !== "#evolucao" || site?.evolution);
   const [solid, setSolid] = useState(false);
   useEffect(() => {
     const onScroll = () => setSolid(window.scrollY > 24);
@@ -43,13 +87,15 @@ function TopBar({ month }: { month?: string }) {
         CNPJ Pipeline
       </a>
       <nav className="nav" aria-label="Seções">
-        {LINKS.map(([href, label]) => (
+        {links.map(([href, label]) => (
           <a key={href} href={href}>
             {label}
           </a>
         ))}
       </nav>
-      {month ? (
+      {site && month && site.months.length > 1 && onMonth ? (
+        <MonthSelect months={site.months} value={month} busy={busy} onChange={onMonth} />
+      ) : month ? (
         <span style={{ marginLeft: "auto", fontSize: "0.8rem", color: "var(--color-muted)", whiteSpace: "nowrap" }}>
           {monthLabel(month)}
         </span>
@@ -62,9 +108,9 @@ export default function App() {
   const [state, setState] = useState<State>({ name: "loading" });
   useEffect(() => {
     let cancelled = false;
-    loadSite(import.meta.env.BASE_URL)
+    loadSite(import.meta.env.BASE_URL, fetch, requestedMonth())
       .then((site) => {
-        if (!cancelled) setState({ name: "ready", site });
+        if (!cancelled) setState({ name: "ready", site, switching: false, notice: null });
       })
       .catch((error: unknown) => {
         if (!cancelled) setState({ name: "error", message: error instanceof Error ? error.message : "erro desconhecido" });
@@ -73,6 +119,25 @@ export default function App() {
       cancelled = true;
     };
   }, []);
+
+  const selectMonth = useCallback(
+    (month: string) => {
+      if (state.name !== "ready" || month === state.site.month) return;
+      const current = state.site;
+      const latest = current.months[current.months.length - 1] ?? month;
+      setState({ name: "ready", site: current, switching: true, notice: null });
+      loadSite(import.meta.env.BASE_URL, fetch, month)
+        .then((site) => {
+          rememberMonth(site.month, latest);
+          setState({ name: "ready", site, switching: false, notice: null });
+        })
+        .catch((error: unknown) => {
+          const reason = error instanceof Error ? error.message : "erro desconhecido";
+          setState({ name: "ready", site: current, switching: false, notice: `Não foi possível carregar ${monthLabel(month)}. ${reason}` });
+        });
+    },
+    [state],
+  );
 
   if (state.name !== "ready") {
     return (
@@ -95,12 +160,18 @@ export default function App() {
   const { site } = state;
   return (
     <>
-      <TopBar month={site.month} />
+      <TopBar site={site} busy={state.switching} onMonth={selectMonth} />
+      {state.notice ? (
+        <div className="notice" role="alert" style={{ margin: "5rem auto 0", maxWidth: "36rem" }}>
+          {state.notice}
+        </div>
+      ) : null}
       <Hero site={site} />
       <main>
         <Numbers site={site} />
         <SimplesMei site={site} />
         <States site={site} />
+        <Evolution site={site} />
         <Openings site={site} />
         <Profile site={site} />
         <Cities site={site} />

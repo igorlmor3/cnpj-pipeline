@@ -15,6 +15,16 @@ export function compact(n: number, long = false): string {
   return nf.format(n);
 }
 
+/** Numero com sinal explicito: 348635 -> "+348.635", -5 -> "-5". */
+export function signed(n: number): string {
+  return `${n > 0 ? "+" : n < 0 ? "-" : ""}${int(Math.abs(n))}`;
+}
+
+/** Como compact, com sinal: 348635 -> "+348,6 mil". */
+export function signedCompact(n: number): string {
+  return `${n > 0 ? "+" : n < 0 ? "-" : ""}${compact(Math.abs(n))}`;
+}
+
 export function brl(n: number): string {
   return `R$ ${nf.format(Math.round(n))}`;
 }
