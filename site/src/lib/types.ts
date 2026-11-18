@@ -160,6 +160,39 @@ export interface Pipeline {
   };
 }
 
+export interface TraceQuery {
+  sql: string;
+  ok: boolean;
+  error: string | null;
+  rows: number | null;
+  cut: boolean | null;
+  bytesScanned: number | null;
+}
+
+export interface TraceDocSearch {
+  query: string;
+  ok: boolean;
+  sources: string[];
+}
+
+export interface TraceFidelity {
+  checked: number;
+  /** Nulo quando o texto da resposta nao tem numero nenhum para conferir. */
+  faithful: boolean | null;
+  unsupported: string[];
+}
+
+/** O que o agente fez para chegar na resposta, montado pelo programa (agent/trace.py), nunca pelo modelo. */
+export interface AgentTrace {
+  queries: TraceQuery[];
+  docSearches: TraceDocSearch[];
+  llmCalls: number;
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+  fidelity: TraceFidelity | null;
+}
+
 export interface AgentExample {
   id: string;
   pergunta: string;
@@ -169,6 +202,10 @@ export interface AgentExample {
   colunas?: string[];
   linhas?: (string | number | null)[][];
   truncado?: boolean;
+  /** Trajeto gravado no JSON dos exemplos (nomes em portugues). */
+  trajeto?: unknown;
+  /** Trajeto ja lido: o da API nas respostas ao vivo, o de `trajeto` nas gravadas. */
+  trace?: AgentTrace | null;
 }
 
 export interface AgentExamples {

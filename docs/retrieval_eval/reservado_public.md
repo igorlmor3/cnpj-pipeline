@@ -1,6 +1,6 @@
 # Avaliação da recuperação: conjunto reservado, público public
 
-Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (396 trechos; versão do corpus `8e77603d0ee0`). Sem modelo e sem custo.
+Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (397 trechos; versão do corpus `66627e788b87`). Sem modelo e sem custo.
 
 ## Resumo
 
@@ -31,8 +31,8 @@ Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (396 tre
 **r_camadas** (fora dos 5 primeiros): Quais são as camadas do pipeline e o que cada uma guarda?
 
 - README.md, seção cnpj-pipeline > Resultados medidos > Agente de texto para SQL
+- README.md, seção cnpj-pipeline > Roadmap
 - README.md, seção cnpj-pipeline > Qualidade de dados
-- site/README.md, seção Site > Dados e configuração
 
 **r_linhas_fato** (fora dos 5 primeiros): Quantas linhas tem a tabela fato da gold?
 

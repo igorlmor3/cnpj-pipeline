@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { askAgent, interpret } from "../src/lib/api";
 import { bytes, compact, int, monthLabel, pct, seconds, titleCase, ufLabel } from "../src/lib/format";
 import { inlineParts, parseMarkdown } from "../src/lib/markdown";
+import { parseTrace } from "../src/lib/trace";
 import { evenTicks, niceStep, niceTicks } from "../src/lib/scale";
 
 describe("formatacao em pt-BR", () => {
@@ -170,5 +171,57 @@ describe("askAgent", () => {
   it("aceita corpo que nao e JSON", async () => {
     const html = (() => Promise.resolve(new Response("<html>", { status: 502 }))) as unknown as typeof fetch;
     expect((await askAgent("https://x.test", "pergunta", html)).kind).toBe("error");
+  });
+});
+
+describe("trajeto da resposta", () => {
+  const pt = {
+    consultas: [{ sql: "SELECT 1", ok: true, erro: null, linhas: 5, cortado: false, bytes_lidos: null }],
+    buscas_docs: [{ consulta: "duckdb", ok: true, fontes: ["docs/architecture.md"] }],
+    chamadas_modelo: 2,
+    tokens_entrada: 11938,
+    tokens_saida: 475,
+    custo_usd: 0.001431,
+    fidelidade: { numeros_verificados: 8, fiel: true, sem_apoio: [] },
+  };
+  it("le o formato em portugues dos exemplos gravados", () => {
+    expect(parseTrace(pt, "pt")).toEqual({
+      queries: [{ sql: "SELECT 1", ok: true, error: null, rows: 5, cut: false, bytesScanned: null }],
+      docSearches: [{ query: "duckdb", ok: true, sources: ["docs/architecture.md"] }],
+      llmCalls: 2,
+      inputTokens: 11938,
+      outputTokens: 475,
+      costUsd: 0.001431,
+      fidelity: { checked: 8, faithful: true, unsupported: [] },
+    });
+  });
+  it("le o formato em ingles da API", () => {
+    const en = {
+      queries: [{ sql: "SELECT 1", ok: false, error: "tabela nao permitida", rows: null, cut: null, bytes_scanned: null }],
+      doc_searches: [],
+      llm_calls: 1,
+      input_tokens: 10,
+      output_tokens: 5,
+      cost_usd: 0.0001,
+      fidelity: { numbers_checked: 0, faithful: null, unsupported: [] },
+    };
+    const trace = parseTrace(en, "en");
+    expect(trace?.queries[0]).toMatchObject({ ok: false, error: "tabela nao permitida", rows: null });
+    expect(trace?.fidelity).toEqual({ checked: 0, faithful: null, unsupported: [] });
+  });
+  it("ignora o que nao tem o formato esperado", () => {
+    expect(parseTrace(null, "en")).toBeNull();
+    expect(parseTrace("texto", "pt")).toBeNull();
+    expect(parseTrace([], "pt")).toBeNull();
+    const odd = parseTrace({ consultas: [1, "x", { sql: 5, ok: "sim" }], chamadas_modelo: "dois", fidelidade: 3 }, "pt");
+    expect(odd).toEqual({
+      queries: [{ sql: "", ok: false, error: null, rows: null, cut: null, bytesScanned: null }],
+      docSearches: [],
+      llmCalls: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      costUsd: 0,
+      fidelity: null,
+    });
   });
 });

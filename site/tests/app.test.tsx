@@ -18,6 +18,18 @@ const EXAMPLES = {
       colunas: ["uf", "empresas"],
       linhas: [["SP", 8]],
       truncado: false,
+      trajeto: {
+        consultas: [
+          { sql: "SELECT uf FROM tabela_nao_permitida", ok: false, erro: "tabela nao permitida", linhas: null, cortado: null, bytes_lidos: null },
+          { sql: "SELECT uf FROM mart LIMIT 5", ok: true, erro: null, linhas: 5, cortado: false, bytes_lidos: 2048 },
+        ],
+        buscas_docs: [{ consulta: "por que duckdb", ok: true, fontes: ["docs/architecture.md, secao Decisoes"] }],
+        chamadas_modelo: 3,
+        tokens_entrada: 12000,
+        tokens_saida: 500,
+        custo_usd: 0.00152,
+        fidelidade: { numeros_verificados: 8, fiel: true, sem_apoio: [] },
+      },
     },
     { id: "fora", pergunta: "Qual o endereço do CNPJ 00.000.000/0001-91?", status: "out_of_scope", resposta: "Não informo dados de uma empresa específica." },
   ],
@@ -118,10 +130,63 @@ describe("agente", () => {
     fireEvent.click((await screen.findAllByRole("button", { name: /Quais são as 5 UFs/ }))[0] as HTMLElement);
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByText("São Paulo lidera.")).toBeInTheDocument();
-    expect(within(dialog).getByText("SELECT uf FROM mart LIMIT 5")).toBeInTheDocument();
+    expect(within(dialog).getAllByText("SELECT uf FROM mart LIMIT 5")).toHaveLength(2);
     expect(within(dialog).getAllByRole("table").length).toBeGreaterThan(0);
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("mostra como a resposta gravada chegou la, a partir do trajeto", async () => {
+    install({ "data/2026-10/agent_examples.json": EXAMPLES });
+    render(<App />);
+    fireEvent.click((await screen.findAllByRole("button", { name: /Quais são as 5 UFs/ }))[0] as HTMLElement);
+    const dialog = within(screen.getByRole("dialog"));
+    expect(dialog.getByText("Como chegou lá")).toBeInTheDocument();
+    expect(dialog.getByText("Consulta SQL 1: não executada")).toBeInTheDocument();
+    expect(dialog.getByText(/tabela nao permitida/)).toBeInTheDocument();
+    expect(dialog.getByText("Consulta SQL 2: executada")).toBeInTheDocument();
+    expect(dialog.getByText(/5 linhas, resultado completo, 2 KiB lidos no Athena/)).toBeInTheDocument();
+    expect(dialog.getByText(/Fontes: docs\/architecture.md, secao Decisoes/)).toBeInTheDocument();
+    expect(dialog.getByText(/3 chamadas, 12\.000 tokens de entrada e 500 de saída, custo de US\$ 0,0015/)).toBeInTheDocument();
+    expect(dialog.getByText(/8 números do texto foram conferidos e todos aparecem/)).toBeInTheDocument();
+  });
+
+  it("sem trajeto no exemplo, nao mostra a secao", async () => {
+    install({ "data/2026-10/agent_examples.json": EXAMPLES });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: /endereço do CNPJ/ }));
+    expect(within(screen.getByRole("dialog")).queryByText("Como chegou lá")).toBeNull();
+  });
+
+  it("mostra o trajeto devolvido pela API na resposta ao vivo", async () => {
+    install({}, () =>
+      new Response(
+        JSON.stringify({
+          status: "answered",
+          message: "Existem 27 UFs.",
+          sql: "SELECT 1",
+          columns: ["n"],
+          rows: [[27]],
+          trace: {
+            queries: [{ sql: "SELECT 1", ok: true, error: null, rows: 1, cut: false, bytes_scanned: 100 }],
+            doc_searches: [],
+            llm_calls: 2,
+            input_tokens: 100,
+            output_tokens: 20,
+            cost_usd: 0.0002,
+            fidelity: { numbers_checked: 1, faithful: true, unsupported: [] },
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+    render(<App />);
+    const box = await screen.findByLabelText("Pergunta sobre o cadastro de CNPJ");
+    const user = userEvent.setup();
+    await user.type(box, "Quantas UFs existem?");
+    await user.click(screen.getByRole("button", { name: /Perguntar$/ }));
+    expect(await screen.findByText("Consulta SQL 1: executada")).toBeInTheDocument();
+    expect(screen.getByText(/1 número do texto foi conferido e todos aparecem/)).toBeInTheDocument();
   });
 
   it("explica que as respostas do agente excluem as organizacoes politicas", async () => {

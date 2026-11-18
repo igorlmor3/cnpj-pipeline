@@ -1,5 +1,7 @@
 import { inlineParts, parseMarkdown } from "../lib/markdown";
+import { parseTrace } from "../lib/trace";
 import type { AgentExample } from "../lib/types";
+import { TraceView } from "./Trace";
 import { DataTable } from "./ui";
 
 function Inline({ text }: { text: string }) {
@@ -55,6 +57,7 @@ export function AnswerText({ text }: { text: string }) {
 export function AnswerView({ answer }: { answer: AgentExample }) {
   const rows = answer.linhas ?? [];
   const columns = answer.colunas ?? [];
+  const trace = answer.trace ?? parseTrace(answer.trajeto, "pt");
   return (
     <div>
       <AnswerText text={answer.resposta} />
@@ -80,6 +83,7 @@ export function AnswerView({ answer }: { answer: AgentExample }) {
           </div>
         </details>
       ) : null}
+      {trace ? <TraceView trace={trace} /> : null}
     </div>
   );
 }

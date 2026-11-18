@@ -1,3 +1,4 @@
+import { parseTrace } from "./trace";
 import type { AgentExample } from "./types";
 
 export const MAX_QUESTION_CHARS = 300;
@@ -16,6 +17,7 @@ interface ApiBody {
   columns?: unknown;
   rows?: unknown;
   truncated?: unknown;
+  trace?: unknown;
 }
 
 const GENERIC = "Não foi possível obter uma resposta agora. Tente de novo em instantes.";
@@ -48,6 +50,7 @@ export function interpret(httpStatus: number, body: ApiBody | null, question: st
         colunas: Array.isArray(body?.columns) ? (body?.columns as unknown[]).map(String) : undefined,
         linhas: asRows(body?.rows),
         truncado: body?.truncated === true,
+        trace: parseTrace(body?.trace, "en"),
       },
     };
   }

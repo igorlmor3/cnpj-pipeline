@@ -614,6 +614,27 @@ section[id] {
 .answer li {
   margin: 0 0 0.25rem;
 }
+.trace__lead {
+  margin: 0.6rem 0 0.8rem;
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+.trace__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 1rem;
+  border-left: 2px solid var(--color-line);
+}
+.trace__steps > li {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0 0 0.9rem;
+  line-height: 1.5;
+}
+.trace__steps > li > span {
+  color: var(--color-ink2);
+  font-size: 0.92rem;
+}
 .answer pre,
 .sql {
   overflow-x: auto;
