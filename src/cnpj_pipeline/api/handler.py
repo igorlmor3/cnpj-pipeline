@@ -30,6 +30,7 @@ from cnpj_pipeline.agent.budget import Budget, SpendLedger
 from cnpj_pipeline.agent.executor import AthenaExecutor, Executor
 from cnpj_pipeline.agent.llm import LLMClient
 from cnpj_pipeline.agent.retrieval import PUBLIC, Retriever
+from cnpj_pipeline.agent.trace import build_trace
 from cnpj_pipeline.api.columns import load_columns
 from cnpj_pipeline.api.config import ApiConfig
 from cnpj_pipeline.api.limits import Limiter, visitor_key
@@ -47,6 +48,7 @@ log = logging.getLogger("cnpj_pipeline.api")
 MAX_BODY_BYTES = 2048
 MAX_ROWS_RETURNED = 40
 ASK_PATHS = ("/", "/ask")
+TRACE_STATUSES = ("answered", "out_of_scope", "failed")  # os demais nao chegam a ter trajeto
 
 MESSAGES = {
     "disabled": "O agente está desligado no momento. As perguntas de exemplo continuam disponíveis.",
@@ -238,11 +240,11 @@ class Api:
         )
         code = HTTP_BY_STATUS.get(answer.status, 500)
         self._log(answer.status, code, visitor, answer, started)
-        return self._response(code, self._body(answer))
+        return self._response(code, self._body(answer, body["question"]))
 
     # -- saida -------------------------------------------------------------------------------
 
-    def _body(self, answer: Answer) -> dict[str, Any]:
+    def _body(self, answer: Answer, question: str = "") -> dict[str, Any]:
         body: dict[str, Any] = {
             "status": answer.status,
             "message": answer.text,
@@ -258,6 +260,8 @@ class Api:
         sources = list(dict.fromkeys(s for d in answer.docs for s in d.sources))
         if answer.status == "answered" and sources:
             body["sources"] = sources
+        if answer.status in TRACE_STATUSES:
+            body["trace"] = build_trace(question, answer)
         return body
 
     def _log(

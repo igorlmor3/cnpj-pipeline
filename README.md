@@ -489,8 +489,9 @@ Limites desta medição: 24 a 32 perguntas por conjunto é uma amostra pequena (
 - [ ] Agente de IA, comparação de modelos: tabela de acerto, custo e latência no mesmo conjunto
 - [x] Agente de IA, busca nos documentos do repositório (BM25 em Python puro), com índice restrito a uma lista de arquivos permitidos, filtro por público aplicado antes da pontuação e a recuperação avaliada separadamente da resposta, com intervalo de 95% (`agent/retrieval.py`, `agent/retrieval_eval.py`, relatórios em `docs/retrieval_eval/`)
 - [x] Agente de IA, segunda ferramenta: `search_docs` ligada ao agente e à API, com a fonte devolvida junto da resposta, busca limitada ao público `public` e a opção `--docs` na avaliação (testada)
-- [ ] Agente de IA, ferramentas de metadados: listar tabelas, colunas e meses publicados
-- [ ] Agente de IA, resposta estruturada (texto, SQL, mês usado, premissas e checagem de fidelidade) e a seção "como chegou lá" no site
+- [x] Agente de IA, ferramentas de metadados avaliadas e descartadas: o prompt já traz tabelas, colunas e meses, e uma ferramenta de listagem repetiria isso a cada pergunta (decisão em [docs/agent_design.md](docs/agent_design.md))
+- [x] Agente de IA, trajeto estruturado da resposta (consultas, buscas na documentação, uso do modelo, custo e checagem de fidelidade), na API e nos exemplos gravados (`agent/trace.py`, testado)
+- [ ] Site: seção "como chegou lá" a partir do trajeto
 - [ ] Agente de IA, observabilidade: consultas do CloudWatch Logs Insights definidas no Terraform, só com contagens agregadas e sem guardar as perguntas dos visitantes
 - [ ] Agente de IA, testes mais duros da guarda: testes de propriedades com Hypothesis e uma suíte de injeção de prompt
 - [ ] Agente de IA, avaliação como portão do CI: modo de referência (sem custo) no GitHub Actions e arquivo de resultados de base para comparar

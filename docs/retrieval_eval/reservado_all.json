@@ -2,8 +2,8 @@
   "suite": "reservado",
   "audience": "all",
   "generated_on": "2026-11-18",
-  "corpus": "938f836fb3fb",
-  "chunks": 377,
+  "corpus": "f36d278b7390",
+  "chunks": 379,
   "summary": {
     "cases": 24,
     "answerable": 24,
@@ -94,7 +94,7 @@
       "top": [
         "README.md, seção cnpj-pipeline > Resultados medidos > Agente de texto para SQL",
         "README.md, seção cnpj-pipeline > Qualidade de dados",
-        "site/README.md, seção Site > Dados e configuração"
+        "README.md, seção cnpj-pipeline > Camada bronze"
       ],
       "leaked": 0
     },
@@ -276,7 +276,7 @@
       "top": [
         "infra/README.md, seção Infraestrutura na AWS (nível 1) > Custos e cuidados",
         "README.md, seção cnpj-pipeline > Resultados medidos > Publicação da gold na AWS",
-        "README.md, seção cnpj-pipeline > Camada gold"
+        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Trajeto da resposta"
       ],
       "leaked": 0
     },

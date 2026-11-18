@@ -1,6 +1,6 @@
 # Avaliação da recuperação: conjunto reservado, público all
 
-Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (377 trechos; versão do corpus `938f836fb3fb`). Sem modelo e sem custo.
+Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (379 trechos; versão do corpus `f36d278b7390`). Sem modelo e sem custo.
 
 ## Resumo
 
@@ -32,7 +32,7 @@ Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (377 tre
 
 - README.md, seção cnpj-pipeline > Resultados medidos > Agente de texto para SQL
 - README.md, seção cnpj-pipeline > Qualidade de dados
-- site/README.md, seção Site > Dados e configuração
+- README.md, seção cnpj-pipeline > Camada bronze
 
 **r_linhas_fato** (fora dos 5 primeiros): Quantas linhas tem a tabela fato da gold?
 

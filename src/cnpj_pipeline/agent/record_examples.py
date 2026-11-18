@@ -24,6 +24,7 @@ from cnpj_pipeline.agent.budget import HAIKU_5_5, Budget, Pricing
 from cnpj_pipeline.agent.context import TABLES
 from cnpj_pipeline.agent.executor import DuckDBExecutor, Executor
 from cnpj_pipeline.agent.llm import DEFAULT_MODEL, LLMClient
+from cnpj_pipeline.agent.trace import build_trace
 from cnpj_pipeline.site_export import AGENT_EXAMPLES_FILE
 
 SCHEMA_VERSION = 1
@@ -84,6 +85,7 @@ def example_entry(example: Example, answer: Answer) -> dict[str, Any]:
         entry["colunas"] = record.columns
         entry["linhas"] = record.rows[:MAX_ROWS]
         entry["truncado"] = record.may_be_truncated or len(record.rows) > MAX_ROWS
+    entry["trajeto"] = build_trace(example.question, answer, lang="pt")
     return entry
 
 
