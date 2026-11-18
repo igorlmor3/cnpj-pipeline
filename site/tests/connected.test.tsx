@@ -58,11 +58,12 @@ describe("paginas conectadas entre os meses", () => {
     expect(screen.getAllByText(/empresas$/).length).toBeGreaterThanOrEqual(10);
   });
 
-  it("avisa que o agente consulta o mes mais recente", async () => {
+  it("avisa que o agente consulta todos os meses e usa o mais recente por padrao", async () => {
     const site = await loadSite("/", publicFetch(), "2026-08");
     expect(site.agentMonth).toBe("2026-10");
     expect(site.examples).not.toBeNull();
     render(<Agent site={site} />);
-    expect(screen.getByText(/consulta sempre o mês mais recente/)).toBeTruthy();
+    expect(screen.getByText(/consulta todos os meses publicados \(jul\/2026 a out\/2026\)/)).toBeTruthy();
+    expect(screen.getByText(/Sem citar um mês, ele usa o mais recente, out\/2026/)).toBeTruthy();
   });
 });
