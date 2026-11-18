@@ -9,7 +9,10 @@ Um numero do texto conta como apoiado se:
 - bate com uma celula de uma consulta bem-sucedida (exato, ou arredondado/truncado para as casas
   mostradas; "12,3%" tambem bate com 0,123; "1,2 milhao" com 1.234.567);
 - ou veio da pergunta, do SQL executado (ano, UF, LIMIT: o recorte que a resposta deve citar) ou e
-  o numero de linhas de um resultado ("os 3 maiores").
+  o numero de linhas de um resultado ("os 3 maiores");
+- ou e o codigo da CNAE das organizacoes politicas, que o proprio programa escreve no contexto e
+  manda o modelo citar na ressalva (`CNAE_ORG_POLITICA`). So esse codigo: qualquer outro numero do
+  contexto, como um limite ou uma contagem de tabelas, continua precisando de apoio.
 
 Limites: so confere numeros, nao a frase em volta (um rotulo trocado passa se o numero existir) e
 nao reconhece conta feita no texto (a soma de duas linhas aparece como sem apoio, que e o certo: o
@@ -26,6 +29,7 @@ from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
 from cnpj_pipeline.agent.ask import MAX_TOOL_ROWS, Answer
+from cnpj_pipeline.gold_models import CNAE_ORG_POLITICA
 
 # datas e meses em formato ISO ou brasileiro nao sao numeros de resultado
 _DATE = re.compile(r"\b\d{4}-\d{2}(?:-\d{2})?\b|\b\d{1,2}/\d{1,2}/\d{2,4}\b|\b\d{1,2}/\d{4}\b")
@@ -37,6 +41,10 @@ _SCALES = (
     (re.compile(r"\s*(?:milh[õo]es|milh[ãa]o|million)\b", re.I), Decimal(10**6)),
     (re.compile(r"\s*(?:mil|thousand)\b", re.I), Decimal(10**3)),
 )
+
+
+# Numeros que o programa escreveu no contexto do modelo e que a resposta pode citar sem consulta.
+PROGRAM_CONSTANTS: frozenset[Decimal] = frozenset({Decimal(CNAE_ORG_POLITICA)})
 
 
 @dataclass(frozen=True)
@@ -158,8 +166,9 @@ def check_text(
 ) -> Faithfulness:
     """`rows` traz o resultado de cada consulta bem-sucedida (lista de linhas); `sqls`, os SQL
     executados; `docs`, os trechos de documentacao que o modelo viu. Cada numero do texto precisa
-    estar nas linhas, na pergunta, no SQL, nos trechos ou ser a contagem de linhas de um resultado."""
-    available: set[Decimal] = set()
+    estar nas linhas, na pergunta, no SQL, nos trechos, ser a contagem de linhas de um resultado ou
+    ser uma das constantes que o programa escreve no contexto (`PROGRAM_CONSTANTS`)."""
+    available: set[Decimal] = set(PROGRAM_CONSTANTS)
     for result in rows:
         listed = [list(r) for r in result]
         available.add(Decimal(len(listed)))

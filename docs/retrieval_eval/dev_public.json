@@ -2,8 +2,8 @@
   "suite": "dev",
   "audience": "public",
   "generated_on": "2026-11-18",
-  "corpus": "2d505e4e2acc",
-  "chunks": 394,
+  "corpus": "8e77603d0ee0",
+  "chunks": 396,
   "summary": {
     "cases": 24,
     "answerable": 22,
@@ -256,7 +256,7 @@
       "category": "limite",
       "question": "Qual o teto de gasto mensal do agente com o modelo?",
       "answerable": true,
-      "relevant_chunks": 2,
+      "relevant_chunks": 3,
       "rank": 1,
       "top": [
         "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > O laço do agente e o gasto",
@@ -330,8 +330,8 @@
       "rank": 1,
       "top": [
         "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Decisões",
-        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Decisões",
-        "README.md, seção cnpj-pipeline > Camada gold"
+        "README.md, seção cnpj-pipeline > Camada gold",
+        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Decisões"
       ],
       "leaked": 0
     },

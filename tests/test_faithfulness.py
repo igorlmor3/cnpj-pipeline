@@ -145,3 +145,18 @@ def test_check_answer_uses_the_documentation_text_shown_to_the_model():
     )
     assert check_answer("quanto tempo?", answer).faithful
     assert not check_answer("quanto tempo?", Answer("answered", "Foram 77 segundos.")).faithful
+
+
+def test_the_cnae_code_the_context_tells_the_model_to_cite_is_supported():
+    text = "Há 120 aberturas; o CNAE 9492800 (organizações políticas) concentra picos em anos de eleição."
+    result = check(text, [[120]])
+
+    assert result.faithful is True and result.checked == 2
+
+
+def test_only_that_code_is_a_program_constant():
+    # um dígito trocado no código, ou outro código de sete dígitos, continua sem apoio
+    assert check("O CNAE 9492801 tem 120.", [[120]]).unsupported == ["9492801"]
+    assert check("O CNAE 9492700 tem 120.", [[120]]).unsupported == ["9492700"]
+    # um número que está no prompt mas não é o código (o limite de linhas) não ganha apoio
+    assert check("Há 200 resultados.", [[120]]).unsupported == ["200"]

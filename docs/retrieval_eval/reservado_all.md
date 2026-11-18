@@ -1,6 +1,6 @@
 # Avaliação da recuperação: conjunto reservado, público all
 
-Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (394 trechos; versão do corpus `2d505e4e2acc`). Sem modelo e sem custo.
+Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (396 trechos; versão do corpus `8e77603d0ee0`). Sem modelo e sem custo.
 
 ## Resumo
 
@@ -48,8 +48,8 @@ Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (394 tre
 
 **r_comparacao_meses** (fora dos 5 primeiros): Como é feita a comparação entre dois meses do cadastro?
 
-- docs/analysis/evolucao_2026-07_a_2026-10.md, seção Evolução do cadastro de CNPJ entre julho e outubro de 2026
 - docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Avaliação
+- docs/analysis/evolucao_2026-07_a_2026-10.md, seção Evolução do cadastro de CNPJ entre julho e outubro de 2026
 - docs/analysis/evolucao_2026-07_a_2026-10.md, seção Evolução do cadastro de CNPJ entre julho e outubro de 2026 > 3. As saídas variam mais do que as entradas
 
 **r_limite_athena** (posição 4): Qual o limite de dados lidos por consulta no workgroup do Athena?

@@ -1,6 +1,6 @@
 # Avaliação da recuperação: conjunto dev, público all
 
-Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (394 trechos; versão do corpus `2d505e4e2acc`). Sem modelo e sem custo.
+Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (396 trechos; versão do corpus `8e77603d0ee0`). Sem modelo e sem custo.
 
 ## Resumo
 
@@ -10,7 +10,7 @@ Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (394 tre
 | Acerto nos 1 primeiros | 12 de 24 (50,0%; intervalo de 95%: 31,4% a 68,6%) |
 | Acerto nos 3 primeiros | 16 de 24 (66,7%; intervalo de 95%: 46,7% a 82,0%) |
 | Acerto nos 5 primeiros | 18 de 24 (75,0%; intervalo de 95%: 55,1% a 88,0%) |
-| MRR@5 | 0,593 |
+| MRR@5 | 0,595 |
 | Resultados de público não permitido | 0 |
 
 ## Por categoria (acerto nos 3 primeiros)
@@ -40,7 +40,7 @@ Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (394 tre
 - docs/data_quality_rules.md, seção Catálogo de regras de qualidade de dados > Achados do mês real (2026-10)
 - docs/quality/2026-10.md, seção Qualidade de dados e tempos (2026-10) > Verificações informativas
 
-**d_exclusao_simples_zerada** (posição 5): O que significam as datas de exclusão do Simples zeradas?
+**d_exclusao_simples_zerada** (posição 4): O que significam as datas de exclusão do Simples zeradas?
 
 - docs/profiling/2026-10/simples.md, seção Profiling: Simples (2026-10) > Detalhes > `data_exclusao_simples`
 - docs/profiling/2026-10/simples.md, seção Profiling: Simples (2026-10) > Detalhes > `data_exclusao_mei`

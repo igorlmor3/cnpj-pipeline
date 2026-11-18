@@ -20,6 +20,10 @@
       "file": "docs/agent_eval/2026-10_claude-haiku-5-5_meses.json",
       "sha256": "f8814b3452fe4205b15e42244cabce536cad1ee507c02ba2c645827a17ac49b0"
     },
+    "reservado2": {
+      "file": "docs/agent_eval/2026-10_claude-haiku-5-5_reservado2.json",
+      "sha256": "248966b569a226c604c5f8afb64b76ac35047bc1226fa6d4607bc77c9eb8fb4b"
+    },
     "robustez": {
       "file": "docs/agent_eval/prompt_v3/2026-10_claude-haiku-5-5_robustez.json",
       "sha256": "19f5af0e05e66a91a851b063719ca837c397adc1a054f86c5977f9c9aa688e4e"

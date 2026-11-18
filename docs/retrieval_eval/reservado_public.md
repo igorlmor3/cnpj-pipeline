@@ -1,6 +1,6 @@
 # Avaliação da recuperação: conjunto reservado, público public
 
-Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (394 trechos; versão do corpus `2d505e4e2acc`). Sem modelo e sem custo.
+Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (396 trechos; versão do corpus `8e77603d0ee0`). Sem modelo e sem custo.
 
 ## Resumo
 
@@ -31,8 +31,8 @@ Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (394 tre
 **r_camadas** (fora dos 5 primeiros): Quais são as camadas do pipeline e o que cada uma guarda?
 
 - README.md, seção cnpj-pipeline > Resultados medidos > Agente de texto para SQL
+- README.md, seção cnpj-pipeline > Qualidade de dados
 - site/README.md, seção Site > Dados e configuração
-- docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Avaliação como portão do CI
 
 **r_linhas_fato** (fora dos 5 primeiros): Quantas linhas tem a tabela fato da gold?
 
@@ -48,9 +48,9 @@ Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (394 tre
 
 **r_comparacao_meses** (fora dos 5 primeiros): Como é feita a comparação entre dois meses do cadastro?
 
-- docs/analysis/evolucao_2026-07_a_2026-10.md, seção Evolução do cadastro de CNPJ entre julho e outubro de 2026
 - docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Avaliação
-- docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Avaliação > Segunda rodada: robustez e validação
+- docs/analysis/evolucao_2026-07_a_2026-10.md, seção Evolução do cadastro de CNPJ entre julho e outubro de 2026
+- docs/analysis/2026-10.md, seção Análise do cadastro de CNPJ (mês de referência 2026-10) > 4. Eleições distorcem a série de aberturas
 
 **r_cnae_9492800** (fora dos 5 primeiros): O que é o CNAE 9492800?
 

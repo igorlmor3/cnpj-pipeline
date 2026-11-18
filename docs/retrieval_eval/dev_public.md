@@ -1,6 +1,6 @@
 # Avaliação da recuperação: conjunto dev, público public
 
-Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (394 trechos; versão do corpus `2d505e4e2acc`). Sem modelo e sem custo.
+Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (396 trechos; versão do corpus `8e77603d0ee0`). Sem modelo e sem custo.
 
 ## Resumo
 

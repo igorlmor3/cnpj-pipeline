@@ -2,8 +2,8 @@
   "suite": "reservado",
   "audience": "public",
   "generated_on": "2026-11-18",
-  "corpus": "2d505e4e2acc",
-  "chunks": 394,
+  "corpus": "8e77603d0ee0",
+  "chunks": 396,
   "summary": {
     "cases": 24,
     "answerable": 20,
@@ -98,8 +98,8 @@
       "rank": null,
       "top": [
         "README.md, seção cnpj-pipeline > Resultados medidos > Agente de texto para SQL",
-        "site/README.md, seção Site > Dados e configuração",
-        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Avaliação como portão do CI"
+        "README.md, seção cnpj-pipeline > Qualidade de dados",
+        "site/README.md, seção Site > Dados e configuração"
       ],
       "leaked": 0
     },
@@ -223,9 +223,9 @@
       "relevant_chunks": 1,
       "rank": null,
       "top": [
-        "docs/analysis/evolucao_2026-07_a_2026-10.md, seção Evolução do cadastro de CNPJ entre julho e outubro de 2026",
         "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Avaliação",
-        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Avaliação > Segunda rodada: robustez e validação"
+        "docs/analysis/evolucao_2026-07_a_2026-10.md, seção Evolução do cadastro de CNPJ entre julho e outubro de 2026",
+        "docs/analysis/2026-10.md, seção Análise do cadastro de CNPJ (mês de referência 2026-10) > 4. Eleições distorcem a série de aberturas"
       ],
       "leaked": 0
     },
@@ -290,7 +290,7 @@
       "category": "definicao",
       "question": "O que é o CNAE 9492800?",
       "answerable": true,
-      "relevant_chunks": 5,
+      "relevant_chunks": 6,
       "rank": null,
       "top": [
         "docs/analysis/2026-10.md, seção Análise do cadastro de CNPJ (mês de referência 2026-10) > Apêndice: consultas",
