@@ -35,11 +35,13 @@ from cnpj_pipeline.agent.context import TABLES
 from cnpj_pipeline.agent.eval_stats import bootstrap_interval, wilson_interval
 from cnpj_pipeline.agent.evaluation_cases import ALL_CASES, MESES_CASES, SUITES, EvalCase, by_id
 from cnpj_pipeline.agent.executor import DuckDBExecutor, Executor, run_query
+from cnpj_pipeline.agent.faithfulness import check_answer
 from cnpj_pipeline.agent.llm import DEFAULT_MODEL, LLMClient, LLMTurn, ToolCall
 from cnpj_pipeline.cloud.athena import gold_columns
 
 MAX_PROJECTION_COLUMNS = 8
 MAX_REPEATS = 20
+MAX_UNSUPPORTED_SHOWN = 8  # numeros sem apoio guardados por resposta
 ONE_DECIMAL = Decimal("0.1")
 REASON_DIFFERENT = "resultado diferente do esperado"
 REASON_FORMAT = "resultado diferente do esperado, mas o valor esperado aparece entre as linhas devolvidas"
@@ -128,6 +130,10 @@ class CaseResult:
     elapsed_s: float
     final_sql: str | None = None
     run: int = 1  # repeticao (1 a N) quando a avaliacao roda cada caso mais de uma vez
+    # fidelidade: None se a resposta nao tinha numero a conferir (recusa, falha ou texto sem numeros)
+    faithful: bool | None = None
+    numbers_checked: int = 0
+    unsupported_numbers: list[str] = field(default_factory=list)
 
 
 def expected_rows(
@@ -191,6 +197,7 @@ def run_case(
     elapsed = clock() - started
     reason = judge(case, answer, expected)
     ok = [q for q in answer.queries if q.ok]
+    faith = check_answer(case.question, answer) if answer.status == "answered" else None
     return CaseResult(
         id=case.id,
         category=case.category,
@@ -209,6 +216,9 @@ def run_case(
         elapsed_s=elapsed,
         final_sql=ok[-1].sql if ok else None,
         run=run,
+        faithful=faith.faithful if faith else None,
+        numbers_checked=faith.checked if faith else 0,
+        unsupported_numbers=faith.unsupported[:MAX_UNSUPPORTED_SHOWN] if faith else [],
     )
 
 
@@ -289,6 +299,11 @@ class Summary:
     mean_input_tokens: float = 0.0
     mean_output_tokens: float = 0.0
     cost_p95_usd: float = 0.0
+    faithfulness_checked: int = 0  # respostas com algum numero a conferir
+    faithful_answers: int = 0  # dessas, as que tem todos os numeros apoiados
+    faithfulness: float | None = None
+    faithfulness_ci_low: float = 0.0
+    faithfulness_ci_high: float = 1.0
 
 
 def _percentile(values: list[float], q: float) -> float:
@@ -298,22 +313,37 @@ def _percentile(values: list[float], q: float) -> float:
 
 def question_rates(results: list[CaseResult]) -> dict[str, float]:
     """Taxa de acerto por pergunta (1 ou 0 sem repeticoes; fracao das repeticoes com elas)."""
+    return _rates([(r.id, r.passed) for r in results])
+
+
+def _rates(pairs: list[tuple[str, bool]]) -> dict[str, float]:
     grouped: dict[str, list[bool]] = {}
-    for r in results:
-        grouped.setdefault(r.id, []).append(r.passed)
+    for qid, ok in pairs:
+        grouped.setdefault(qid, []).append(ok)
     return {qid: sum(v) / len(v) for qid, v in grouped.items()}
+
+
+def _interval(pairs: list[tuple[str, bool]], *, repeated: bool) -> tuple[float, float, str]:
+    if not pairs:
+        return (0.0, 1.0, "wilson")
+    if not repeated:
+        lo, hi = wilson_interval(sum(ok for _, ok in pairs), len(pairs))
+        return (lo, hi, "wilson")
+    lo, hi = bootstrap_interval(list(_rates(pairs).values()))
+    return (lo, hi, "reamostragem das perguntas")
 
 
 def accuracy_interval(results: list[CaseResult]) -> tuple[float, float, str]:
     """Intervalo de 95% da acuracia. Uma execucao por pergunta: Wilson sobre os acertos. Com
     repeticoes: reamostragem das perguntas, porque repetir uma pergunta nao a torna independente."""
-    if not results:
-        return (0.0, 1.0, "wilson")
-    if max(r.run for r in results) == 1:
-        lo, hi = wilson_interval(sum(r.passed for r in results), len(results))
-        return (lo, hi, "wilson")
-    lo, hi = bootstrap_interval(list(question_rates(results).values()))
-    return (lo, hi, "reamostragem das perguntas")
+    repeated = bool(results) and max(r.run for r in results) > 1
+    return _interval([(r.id, r.passed) for r in results], repeated=repeated)
+
+
+def faithfulness_interval(results: list[CaseResult]) -> tuple[float, float, str]:
+    """Mesmo calculo, sobre as respostas que tinham numero a conferir."""
+    repeated = bool(results) and max(r.run for r in results) > 1
+    return _interval([(r.id, bool(r.faithful)) for r in results if r.faithful is not None], repeated=repeated)
 
 
 def summarize(results: list[CaseResult]) -> Summary:
@@ -326,6 +356,8 @@ def summarize(results: list[CaseResult]) -> Summary:
         bucket["passed"] += int(r.passed)
     queried = [r for r in results if r.first_query_ok is not None]
     ci_low, ci_high, ci_method = accuracy_interval(results)
+    checked = [r for r in results if r.faithful is not None]
+    f_low, f_high, _ = faithfulness_interval(results)
     passed = sum(r.passed for r in results)
     total_cost = sum(r.cost_usd for r in results)
     return Summary(
@@ -350,6 +382,11 @@ def summarize(results: list[CaseResult]) -> Summary:
         mean_input_tokens=statistics.fmean(r.input_tokens for r in results),
         mean_output_tokens=statistics.fmean(r.output_tokens for r in results),
         cost_p95_usd=_percentile([r.cost_usd for r in results], 0.95),
+        faithfulness_checked=len(checked),
+        faithful_answers=sum(bool(r.faithful) for r in checked),
+        faithfulness=(sum(bool(r.faithful) for r in checked) / len(checked)) if checked else None,
+        faithfulness_ci_low=f_low,
+        faithfulness_ci_high=f_high,
     )
 
 
@@ -408,6 +445,31 @@ def stability(results: list[CaseResult]) -> list[CaseStability]:
 def _num(value: float, digits: int = 1) -> str:
     """Numero com virgula decimal, para o relatorio em portugues."""
     return f"{value:.{digits}f}".replace(".", ",")
+
+
+def _faithfulness_row(s: Summary) -> str:
+    if not s.faithfulness_checked:
+        return "| Respostas fiéis (todo número do texto está nos resultados) | sem números a conferir |"
+    return (
+        f"| Respostas fiéis (todo número do texto está nos resultados) | {s.faithful_answers} de "
+        f"{s.faithfulness_checked} ({_pct(s.faithfulness)}; intervalo de 95%: "
+        f"{_pct(s.faithfulness_ci_low)} a {_pct(s.faithfulness_ci_high)}) |"
+    )
+
+
+def _faithfulness_section(results: list[CaseResult]) -> list[str]:
+    bad = [r for r in results if r.faithful is False]
+    if not bad:
+        return []
+    out = ["", "## Fidelidade", "", "| Caso | Números do texto sem apoio nos resultados |", "|---|---|"]
+    seen: set[tuple[str, tuple[str, ...]]] = set()
+    for r in bad:
+        key = (r.id, tuple(r.unsupported_numbers))
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(f"| {r.id} | {', '.join(r.unsupported_numbers)} |")
+    return out
 
 
 def _cost_per_correct(value: float | None) -> str:
@@ -490,6 +552,7 @@ def render_report(
         f"US$ {_num(s.cost_p95_usd, 4)} |",
         f"| Custo por resposta certa | {_cost_per_correct(s.cost_per_correct_usd)} |",
         f"| Custo total | US$ {_num(s.total_cost_usd, 4)} |",
+        _faithfulness_row(s),
         f"| Tokens por pergunta (entrada / saída, média) | {_num(s.mean_input_tokens, 0)} / "
         f"{_num(s.mean_output_tokens, 0)} |",
         f"| Latência mediana (p50) / p95 | {_num(s.latency_median_s)} s / {_num(s.latency_p95_s)} s |",
@@ -517,6 +580,7 @@ def render_report(
                 f"| {r.id} | {'certo' if r.passed else 'errado'} | {r.llm_calls} | {r.queries} "
                 f"| {_num(r.cost_usd, 4)} | {r.reason or '-'} |"
             )
+    out += _faithfulness_section(results)
     failures = [r for r in results if not r.passed]
     if failures:
         out += ["", "## Falhas", ""]
@@ -541,6 +605,10 @@ def render_report(
         "contam como erro.",
         "- Nas de ressalva, o SQL precisa ter considerado `is_organizacao_politica`.",
         "- Nas de recusa, o certo é terminar sem resposta baseada em consulta.",
+        "- Fidelidade: cada número do texto da resposta precisa estar nas linhas que o modelo viu, na "
+        "pergunta, no SQL executado ou ser a contagem de linhas (arredondado ou truncado nas casas "
+        'mostradas; "12,3%" bate com 0,123). Só confere números, não a frase em volta, e uma conta '
+        "feita no texto aparece como sem apoio. Não entra no critério de acerto: é uma métrica à parte.",
         "- O custo usa a tabela de preços informada na execução; o valor cobrado é o da fatura do provedor. "
         "O p95 de latência e de custo, com poucas perguntas, é praticamente o maior valor observado.",
         "- O intervalo de 95% mostra o quanto a acurácia mediria de diferente em outro conjunto de perguntas "

@@ -485,7 +485,7 @@ Limites desta medição: 24 a 32 perguntas por conjunto é uma amostra pequena (
 - [x] Conjunto reservado `reservado2` (25 perguntas dos mesmos tipos do `validacao`, que passou a ser de desenvolvimento) para a próxima medição do agente
 - [x] Agente de IA, relatório de avaliação com intervalo de 95% da acurácia, custo por pergunta e por resposta certa e latência p50 e p95, e comparação pareada entre duas execuções (`agent/eval_stats.py`, `agent/eval_compare.py`, testados)
 - [ ] Agente de IA, conjunto de avaliação maior (cerca de 100 perguntas), com uma parte congelada que nunca é usada para ajustar o prompt
-- [ ] Agente de IA, verificação de fidelidade: conferir que os números da resposta aparecem no resultado da consulta
+- [x] Agente de IA, verificação de fidelidade: todo número do texto da resposta precisa estar no resultado da consulta, na pergunta ou no SQL (`agent/faithfulness.py`, métrica à parte nos relatórios, testada)
 - [ ] Agente de IA, comparação de modelos: tabela de acerto, custo e latência no mesmo conjunto
 - [ ] Agente de IA, segunda ferramenta: busca nos documentos do repositório (BM25 ou embeddings pequenos), com citação da fonte, índice restrito a uma lista de arquivos permitidos e a recuperação avaliada separadamente da resposta
 - [ ] Agente de IA, ferramentas de metadados: listar tabelas, colunas e meses publicados

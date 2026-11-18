@@ -962,3 +962,66 @@ def test_the_json_summary_carries_the_interval_fields():
     assert summary["ci_method"] == "wilson" and summary["questions"] == 1
     assert summary["accuracy_ci_low"] < 1.0 == summary["accuracy_ci_high"]
     assert summary["cost_per_correct_usd"] == pytest.approx(0.001)
+
+
+# --------------------------------------------------------------------------- #
+# Fidelidade da resposta
+# --------------------------------------------------------------------------- #
+
+
+def test_a_wrong_number_in_the_text_is_flagged_without_changing_the_pass_criterion(executor, system):
+    case = by_id(["ativas_sp"])
+    llm = QuestionLLM(lambda c: c.reference_sql, final="Há 987.654.321 empresas ativas em SP.")
+    (res,) = run(case, llm, executor, system).values()
+
+    assert res.passed  # o resultado da consulta esta certo
+    assert res.faithful is False and res.numbers_checked == 1
+    assert res.unsupported_numbers == ["987.654.321"]
+
+
+def test_a_text_without_numbers_has_no_faithfulness_verdict(executor, system):
+    (res,) = run(by_id(["ativas_sp"]), QuestionLLM(lambda c: c.reference_sql), executor, system).values()
+
+    assert res.passed and res.faithful is None and res.numbers_checked == 0
+
+
+def test_a_refusal_has_no_faithfulness_verdict(executor, system):
+    refusals = [c for c in CASES if c.kind == "refusal"][:1]
+    (res,) = run(
+        tuple(refusals), QuestionLLM(lambda c: None, final="Sem dados 123."), executor, system
+    ).values()
+
+    assert res.status == "out_of_scope" and res.faithful is None
+
+
+def test_summary_and_report_count_faithful_answers_and_list_the_unsupported_numbers():
+    good = result("a")
+    object.__setattr__(good, "faithful", True)
+    object.__setattr__(good, "numbers_checked", 2)
+    bad = result("b")
+    object.__setattr__(bad, "faithful", False)
+    object.__setattr__(bad, "numbers_checked", 1)
+    object.__setattr__(bad, "unsupported_numbers", ["1.234", "56,7"])
+    silent = result("c")  # sem numero a conferir: fora da conta
+    s = summarize([good, bad, silent])
+
+    assert (s.faithfulness_checked, s.faithful_answers) == (2, 1)
+    assert s.faithfulness == pytest.approx(0.5) and s.faithfulness_ci_low < 0.5 < s.faithfulness_ci_high
+
+    text = render_report([good, bad, silent], month=MONTH, label="x", generated_on="2026-11-18", model="x")
+    assert "Respostas fiéis (todo número do texto está nos resultados) | 1 de 2 (50,0%" in text
+    assert "## Fidelidade" in text and "| b | 1.234, 56,7 |" in text
+    assert "| a |" not in text.split("## Fidelidade")[1].split("## ")[0]
+
+
+def test_the_report_says_when_there_were_no_numbers_to_check():
+    text = render_report([result()], month=MONTH, label="x", generated_on="2026-11-18", model="x")
+
+    assert "sem números a conferir" in text and "## Fidelidade" not in text
+
+
+def test_the_json_keeps_the_faithfulness_fields_and_old_reports_still_load(tmp_path):
+    payload = json.loads(results_json([result()], month=MONTH, label="x", generated_on="d", model="m"))
+
+    assert payload["cases"][0]["faithful"] is None and payload["cases"][0]["unsupported_numbers"] == []
+    assert payload["summary"]["faithfulness"] is None and payload["summary"]["faithfulness_checked"] == 0

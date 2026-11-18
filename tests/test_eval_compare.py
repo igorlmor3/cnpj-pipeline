@@ -60,7 +60,7 @@ def test_compare_single_runs_uses_mcnemar_and_lists_changed_questions(tmp_path):
     )
 
     assert "12 perguntas em comum." in text
-    assert "McNemar" in text and "p = 0.031" in text  # 6 discordantes, todos a favor de B
+    assert "McNemar" in text and "p = 0,031" in text  # 6 discordantes, todos a favor de B
     assert "maior do que o acaso" in text
     assert "- q0: A 0% e B 100%" in text
     assert "m, prompt abc123" in text and "n, prompt abc123" in text
@@ -71,7 +71,7 @@ def test_compare_with_one_discordant_question_is_not_significant(tmp_path):
     b = [case("a"), case("b"), case("c")]
     text = compare(*load_run(write(tmp_path / "a.json", a)), *load_run(write(tmp_path / "b.json", b)))
 
-    assert "p = 1.000" in text and "não é distinguível do acaso" in text
+    assert "p = 1,000" in text and "não é distinguível do acaso" in text
 
 
 def test_compare_pairs_only_the_common_questions_and_says_so(tmp_path):
@@ -87,7 +87,7 @@ def test_compare_with_repeats_reports_the_difference_interval(tmp_path):
     b = [case(q, passed=True, run=r) for q in "abcdef" for r in (1, 2, 3)]
     text = compare(*load_run(write(tmp_path / "a.json", a)), *load_run(write(tmp_path / "b.json", b)))
 
-    assert "Diferença média da taxa de acerto: +66.7 pontos percentuais" in text
+    assert "Diferença média da taxa de acerto: +66,7 pontos percentuais" in text
     assert "McNemar" not in text
 
 

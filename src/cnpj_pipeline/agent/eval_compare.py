@@ -32,6 +32,14 @@ from cnpj_pipeline.agent.evaluation import (
 ALPHA = 0.05
 
 
+def _signed(value: float) -> str:
+    return f"{value:+.1f}".replace(".", ",")
+
+
+def _p_value(p: float) -> str:
+    return f"{p:.3f}".replace(".", ",")
+
+
 def load_run(path: Path) -> tuple[dict[str, Any], list[CaseResult]]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     fields = set(CaseResult.__dataclass_fields__)
@@ -53,6 +61,7 @@ def _row(name: str, payload: dict[str, Any], s: Summary) -> str:
         f"| {name}: {_label(payload)} | {_pct(s.accuracy)} ({_pct(s.accuracy_ci_low)} a "
         f"{_pct(s.accuracy_ci_high)}) | US$ {_num(s.mean_cost_usd, 4)} "
         f"| {_cost_per_correct(s.cost_per_correct_usd)} "
+        f"| {_pct(s.faithfulness)} "
         f"| {_num(s.latency_median_s)} s / {_num(s.latency_p95_s)} s |"
     )
 
@@ -88,8 +97,8 @@ def compare(
         ),
         "",
         "| Execução | Acurácia (intervalo de 95%) | Custo por pergunta | Custo por resposta certa "
-        "| Latência p50 / p95 |",
-        "|---|---|---|---|---|",
+        "| Fidelidade | Latência p50 / p95 |",
+        "|---|---|---|---|---|---|",
         _row("A", payload_a, sa),
         _row("B", payload_b, sb),
         "",
@@ -99,8 +108,8 @@ def compare(
     if repeated:
         lo, hi = paired_difference_interval([rates_a[q] for q in common], [rates_b[q] for q in common])
         out += [
-            f"Diferença média da taxa de acerto: {diff * 100:+.1f} pontos percentuais "
-            f"(intervalo de 95%: {lo * 100:+.1f} a {hi * 100:+.1f}, "
+            f"Diferença média da taxa de acerto: {_signed(diff * 100)} pontos percentuais "
+            f"(intervalo de 95%: {_signed(lo * 100)} a {_signed(hi * 100)}, "
             f"reamostrando as {len(common)} perguntas).",
             "",
             f"Perguntas com taxa maior em A: {len(only_a)}. Com taxa maior em B: {len(only_b)}.",
@@ -116,8 +125,8 @@ def compare(
             f"| **A certo** | {both_right} | {len(only_a)} |",
             f"| **A errado** | {len(only_b)} | {both_wrong} |",
             "",
-            f"Diferença: {diff * 100:+.1f} pontos percentuais. Teste exato de McNemar sobre as "
-            f"{len(only_a) + len(only_b)} perguntas em que as execuções discordam: p = {p:.3f}.",
+            f"Diferença: {_signed(diff * 100)} pontos percentuais. Teste exato de McNemar sobre as "
+            f"{len(only_a) + len(only_b)} perguntas em que as execuções discordam: p = {_p_value(p)}.",
         ]
         significant = p < ALPHA
     out += [
