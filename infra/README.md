@@ -275,3 +275,18 @@ Tarefa com 4 vCPUs, 16 GiB e 120 GiB de disco, iniciada às 15:51 (horário de B
 - Antes de começar, a tarefa confere o espaço livre no disco (`CNPJ_MIN_FREE_GIB`, padrão 60 GiB) e recusa a execução se não houver.
 - Um mês por tarefa: as camadas de um mês somam cerca de 47 GiB, e a tarefa não apaga um mês para processar o seguinte.
 - Para desmontar o nível 2, volte `ecs_enabled` para `false` e aplique. O repositório de imagens é esvaziado junto.
+
+## Experimento: a gold com Spark na AWS Glue
+
+Módulo opcional (`infra/modules/glue/`, ligado por `glue_enabled`, desligado por padrão) para comparar o DuckDB com o Spark na construção do fato e dos marts de um mês. O que o job faz, como a conferência contra o resultado do DuckDB funciona e os limites da comparação estão em [experiments/glue_spark/README.md](../experiments/glue_spark/README.md). Estado: o código e o Terraform estão escritos e o job foi validado em Spark local sobre dados sintéticos; ainda não foi aplicado nem executado na AWS, então não há tempo nem custo medidos na Glue.
+
+| Recurso | Para que serve |
+| --- | --- |
+| Job `cnpj-gold-spark` (Glue 5.0, Spark 3.5, workers G.1X) | Constrói 9 modelos da gold e, com `--verify`, os confere contra a gold do DuckDB publicada no S3. Sem tentativas automáticas e com limite de tempo. |
+| Papel IAM do job | Lê `experiments/spark/input/`, `code/` e `gold/`; grava só em `experiments/spark/output/`; escreve logs. Não lê a silver nem as camadas bronze e raw. |
+| Dois objetos em `experiments/spark/code/` | O script do job e o `gold_models.py`, o mesmo SQL do DuckDB. |
+| Regra de ciclo de vida `expire-experiments` | Expira o prefixo `experiments/` depois de `experiments_retention_days` dias (30 por padrão). Aparece no plano mesmo com `glue_enabled = false`. |
+
+- Custo: US$ 0,44 por DPU-hora, cobrado por segundo, com mínimo de 1 minuto por execução (preço de lista; o job usa no mínimo 2 DPUs). O launcher `run_job.py` imprime os DPU-segundos e o custo calculado de cada execução.
+- Privacidade: a silver completa tem nomes de sócios, endereços e contatos e continua fora da nuvem. Só sobe para o S3 a fatia da silver com as colunas que o fato e os marts usam, montada por `make_input.py`.
+- Para desmontar: volte `glue_enabled` para `false` e aplique. Os objetos de `experiments/` restantes expiram sozinhos.

@@ -22,3 +22,8 @@ alert_email = "seu-email@exemplo.com"
 # ecs_memory_mib            = 16384
 # ecs_ephemeral_storage_gib = 120
 # ecs_task_timeout_minutes  = 300
+
+# Experimento: o fato e os marts da gold com Spark na AWS Glue (veja experiments/glue_spark/README.md)
+# glue_enabled         = true
+# glue_workers         = 5
+# glue_timeout_minutes = 60

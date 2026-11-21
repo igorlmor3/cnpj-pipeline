@@ -1,6 +1,6 @@
 # Avaliação da recuperação: conjunto reservado, público public
 
-Gerado em 2026-11-19. Busca BM25 sobre a documentação do repositório (410 trechos; versão do corpus `a515c441a969`). Sem modelo e sem custo.
+Gerado em 2026-11-21. Busca BM25 sobre a documentação do repositório (414 trechos; versão do corpus `43052b1032cb`). Sem modelo e sem custo.
 
 ## Resumo
 

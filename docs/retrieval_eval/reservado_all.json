@@ -1,9 +1,9 @@
 {
   "suite": "reservado",
   "audience": "all",
-  "generated_on": "2026-11-19",
-  "corpus": "a515c441a969",
-  "chunks": 410,
+  "generated_on": "2026-11-21",
+  "corpus": "43052b1032cb",
+  "chunks": 414,
   "summary": {
     "cases": 24,
     "answerable": 24,
@@ -386,8 +386,8 @@
       "relevant_chunks": 1,
       "rank": 3,
       "top": [
-        "README.md, seção cnpj-pipeline > Arquitetura planejada",
         "docs/architecture.md, seção Arquitetura e decisões > Decisões em aberto",
+        "README.md, seção cnpj-pipeline > Arquitetura planejada",
         "docs/architecture.md, seção Arquitetura e decisões > Decisões em aberto"
       ],
       "leaked": 0

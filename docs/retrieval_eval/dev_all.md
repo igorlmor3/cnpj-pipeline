@@ -1,6 +1,6 @@
 # Avaliação da recuperação: conjunto dev, público all
 
-Gerado em 2026-11-19. Busca BM25 sobre a documentação do repositório (410 trechos; versão do corpus `a515c441a969`). Sem modelo e sem custo.
+Gerado em 2026-11-21. Busca BM25 sobre a documentação do repositório (414 trechos; versão do corpus `43052b1032cb`). Sem modelo e sem custo.
 
 ## Resumo
 
@@ -10,7 +10,7 @@ Gerado em 2026-11-19. Busca BM25 sobre a documentação do repositório (410 tre
 | Acerto nos 1 primeiros | 11 de 24 (45,8%; intervalo de 95%: 27,9% a 64,9%) |
 | Acerto nos 3 primeiros | 16 de 24 (66,7%; intervalo de 95%: 46,7% a 82,0%) |
 | Acerto nos 5 primeiros | 18 de 24 (75,0%; intervalo de 95%: 55,1% a 88,0%) |
-| MRR@5 | 0,574 |
+| MRR@5 | 0,567 |
 | Resultados de público não permitido | 0 |
 
 ## Por categoria (acerto nos 3 primeiros)

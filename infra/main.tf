@@ -53,6 +53,19 @@ resource "aws_s3_bucket_lifecycle_configuration" "lake" {
   }
 
   rule {
+    id     = "expire-experiments"
+    status = "Enabled"
+
+    filter {
+      prefix = "experiments/"
+    }
+
+    expiration {
+      days = var.experiments_retention_days
+    }
+  }
+
+  rule {
     id     = "abort-incomplete-multipart-uploads"
     status = "Enabled"
 

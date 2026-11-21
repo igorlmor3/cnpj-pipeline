@@ -1,9 +1,9 @@
 {
   "suite": "reservado",
   "audience": "public",
-  "generated_on": "2026-11-19",
-  "corpus": "a515c441a969",
-  "chunks": 410,
+  "generated_on": "2026-11-21",
+  "corpus": "43052b1032cb",
+  "chunks": 414,
   "summary": {
     "cases": 24,
     "answerable": 20,

@@ -60,3 +60,18 @@ output "ecs_log_group" {
   description = "Grupo de logs da tarefa no CloudWatch."
   value       = one(module.ecs[*].log_group)
 }
+
+output "glue_job_name" {
+  description = "Job Spark do experimento. Use em CNPJ_GLUE_JOB."
+  value       = one(module.glue[*].job_name)
+}
+
+output "glue_input_uri" {
+  description = "Onde enviar a entrada do experimento Spark (experiments/glue_spark/make_input.py)."
+  value       = one(module.glue[*].input_uri)
+}
+
+output "glue_output_uri" {
+  description = "Onde o job Spark grava o resultado."
+  value       = one(module.glue[*].output_uri)
+}

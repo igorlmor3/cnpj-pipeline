@@ -131,3 +131,27 @@ variable "ecs_task_timeout_minutes" {
   type        = number
   default     = 300
 }
+
+variable "glue_enabled" {
+  description = "Experimento: cria o job Spark na AWS Glue que constroi o fato e os marts da gold, para comparar com o DuckDB."
+  type        = bool
+  default     = false
+}
+
+variable "glue_workers" {
+  description = "Workers do job Spark (G.1X, 4 vCPUs e 16 GB cada; um deles e o driver). Cada execucao pode usar outro valor."
+  type        = number
+  default     = 5
+}
+
+variable "glue_timeout_minutes" {
+  description = "Limite de duracao de uma execucao do job Spark; passado o limite, a Glue a encerra."
+  type        = number
+  default     = 60
+}
+
+variable "experiments_retention_days" {
+  description = "Dias que os arquivos de experiments/ (entrada, saida e codigo do experimento Spark) ficam no bucket."
+  type        = number
+  default     = 30
+}

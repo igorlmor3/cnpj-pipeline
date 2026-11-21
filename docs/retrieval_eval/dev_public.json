@@ -1,9 +1,9 @@
 {
   "suite": "dev",
   "audience": "public",
-  "generated_on": "2026-11-19",
-  "corpus": "a515c441a969",
-  "chunks": 410,
+  "generated_on": "2026-11-21",
+  "corpus": "43052b1032cb",
+  "chunks": 414,
   "summary": {
     "cases": 24,
     "answerable": 22,
@@ -11,7 +11,7 @@
       "d_recursos_terraform",
       "d_dag_sem_agenda"
     ],
-    "mrr": 0.6515151515151515,
+    "mrr": 0.6590909090909091,
     "leaked": 0,
     "by_category": {
       "decisao": {
@@ -145,11 +145,11 @@
       "question": "Por que o site não publica recortes com poucas ocorrências?",
       "answerable": true,
       "relevant_chunks": 1,
-      "rank": 3,
+      "rank": 2,
       "top": [
         "site/README.md, seção Site",
-        "README.md, seção cnpj-pipeline > Roadmap",
-        "docs/site_data.md, seção Dados do site > O que é seguro publicar, e por quê"
+        "docs/site_data.md, seção Dados do site > O que é seguro publicar, e por quê",
+        "README.md, seção cnpj-pipeline > Roadmap"
       ],
       "leaked": 0
     },

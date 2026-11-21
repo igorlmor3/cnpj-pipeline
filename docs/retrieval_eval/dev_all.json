@@ -1,14 +1,14 @@
 {
   "suite": "dev",
   "audience": "all",
-  "generated_on": "2026-11-19",
-  "corpus": "a515c441a969",
-  "chunks": 410,
+  "generated_on": "2026-11-21",
+  "corpus": "43052b1032cb",
+  "chunks": 414,
   "summary": {
     "cases": 24,
     "answerable": 24,
     "unanswerable_ids": [],
-    "mrr": 0.5743055555555555,
+    "mrr": 0.5673611111111111,
     "leaked": 0,
     "by_category": {
       "decisao": {
@@ -76,11 +76,11 @@
       "question": "Por que o projeto usa DuckDB em vez de Spark ou Polars?",
       "answerable": true,
       "relevant_chunks": 1,
-      "rank": 2,
+      "rank": 3,
       "top": [
-        "docs/architecture.md, seção Arquitetura e decisões > Decisões de plataforma e de produto",
-        "docs/architecture.md, seção Arquitetura e decisões > Decisões em aberto",
-        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Busca na documentação"
+        "infra/README.md, seção Infraestrutura na AWS (nível 1) > Experimento: a gold com Spark na AWS Glue",
+        "infra/README.md, seção Infraestrutura na AWS (nível 1) > Experimento: a gold com Spark na AWS Glue",
+        "docs/architecture.md, seção Arquitetura e decisões > Decisões em aberto"
       ],
       "leaked": 0
     },

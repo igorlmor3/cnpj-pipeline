@@ -473,7 +473,7 @@ Limites desta medição: 24 a 32 perguntas por conjunto é uma amostra pequena (
 - [x] AWS nível 1, registrar o volume lido por consulta no Athena e o custo estimado nos primeiros dias
 - [x] AWS nível 2, código: tarefa do ECS Fargate (limite de tempo, checagem de disco e teste de acesso à Receita), disparador, imagem `Dockerfile.cloud` e módulo Terraform, testados com clientes simulados (`cloud/task.py`, `cloud/run_task.py`, `infra/modules/ecs/`)
 - [x] AWS nível 2, aplicado: imagem enviada, acesso à Receita testado a partir da AWS e o mês 2026-10 processado no Fargate em 2 h 23 min, a cerca de US$ 0,60 pelo preço de lista (medições em [infra/README.md](infra/README.md#execução-medida-2026-10))
-- [ ] Comparação limitada com Glue e PySpark sobre a silver de um mês, com tempo e custo medidos contra o DuckDB
+- [ ] Comparação limitada com Glue e PySpark sobre a silver de um mês, com tempo e custo medidos contra o DuckDB (código, testes e Terraform prontos em [experiments/glue_spark/](experiments/glue_spark/README.md); falta executar na Glue e registrar as medições)
 - [x] Orquestração do fluxo completo com Airflow (DAG com portão de qualidade, testada no Airflow 3.4.0 em modo amostra)
 - [x] Primeira análise e principais insights sobre o cadastro de empresas (docs/analysis/2026-10.md)
 - [x] Série de vários meses (2026-07 a 2026-10) e análise da evolução entre fotos, com o `mart_movimentos`, a série no site e o relatório em [docs/analysis/evolucao_2026-07_a_2026-10.md](docs/analysis/evolucao_2026-07_a_2026-10.md)
