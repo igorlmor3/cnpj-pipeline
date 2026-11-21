@@ -15,34 +15,67 @@ ARGS = [
 ]  # fmt: skip
 
 
-class FakeWaiter:
-    def __init__(self) -> None:
-        self.kwargs: dict = {}
-
-    def wait(self, **kwargs) -> None:
-        self.kwargs = kwargs
-
-
 class FakeEcs:
-    def __init__(self, *, failures=None, tasks=None, exit_code=0, stopped_reason=None) -> None:
+    """Cliente simulado. `script` e uma lista de respostas de describe_tasks (ou excecoes) consumidas em
+    ordem; depois dela, a tarefa aparece parada, com o codigo de saida pedido."""
+
+    def __init__(self, *, failures=None, tasks=None, exit_code=0, stopped_reason=None, script=None) -> None:
         self.failures = failures or []
         self.tasks = [{"taskArn": ARN}] if tasks is None else tasks
         self.exit_code = exit_code
         self.stopped_reason = stopped_reason
-        self.waiter = FakeWaiter()
+        self.script = list(script or [])
         self.started: list[dict] = []
+        self.described = 0
 
     def run_task(self, **kwargs):
         self.started.append(kwargs)
         return {"tasks": self.tasks, "failures": self.failures}
 
-    def get_waiter(self, name):
-        assert name == "tasks_stopped"
-        return self.waiter
-
     def describe_tasks(self, cluster, tasks):
+        assert cluster and tasks == [ARN]
+        self.described += 1
+        if self.script:
+            item = self.script.pop(0)
+            if isinstance(item, Exception):
+                raise item
+            return item
         container = {} if self.exit_code is None else {"exitCode": self.exit_code}
-        return {"tasks": [{"containers": [container], "stoppedReason": self.stopped_reason}]}
+        return {
+            "tasks": [
+                {"lastStatus": "STOPPED", "containers": [container], "stoppedReason": self.stopped_reason}
+            ]
+        }
+
+
+RUNNING = {"tasks": [{"lastStatus": "RUNNING", "containers": [{}]}]}
+
+
+def botocore_error(name: str) -> Exception:
+    """Erro com o nome e o modulo de uma excecao do botocore, sem exigir o botocore nos testes."""
+    return type(name, (Exception,), {"__module__": "botocore.exceptions"})("falha simulada")
+
+
+class Clock:
+    """Relogio simulado: dormir so avanca o tempo."""
+
+    def __init__(self) -> None:
+        self.now = 0.0
+        self.sleeps: list[float] = []
+
+    def sleep(self, seconds: float) -> None:
+        self.sleeps.append(seconds)
+        self.now += seconds
+
+    def monotonic(self) -> float:
+        return self.now
+
+
+def wait(ecs, clock=None, timeout_minutes=10):
+    clock = clock or Clock()
+    return run_task.wait_for_exit(
+        ecs, "c", ARN, timeout_minutes=timeout_minutes, sleep=clock.sleep, monotonic=clock.monotonic
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -124,17 +157,78 @@ def test_anything_other_than_one_started_task_is_an_error(tasks):
 
 
 def test_waiting_returns_the_exit_code_of_the_container():
-    ecs = FakeEcs(exit_code=3)
-    assert run_task.wait_for_exit(ecs, "c", ARN, timeout_minutes=10) == 3
-    wait = ecs.waiter.kwargs
-    assert wait["cluster"] == "c" and wait["tasks"] == [ARN]
-    assert wait["WaiterConfig"] == {"Delay": 30, "MaxAttempts": 20}
+    assert wait(FakeEcs(exit_code=3)) == 3
+
+
+def test_waiting_polls_every_thirty_seconds_until_the_task_stops():
+    clock = Clock()
+    ecs = FakeEcs(exit_code=0, script=[RUNNING, RUNNING, RUNNING])
+    assert wait(ecs, clock) == 0
+    assert ecs.described == 4
+    assert clock.sleeps == [30, 30, 30]
 
 
 def test_a_task_that_stops_without_an_exit_code_counts_as_a_failure(capsys):
     ecs = FakeEcs(exit_code=None, stopped_reason="Task failed to start")
-    assert run_task.wait_for_exit(ecs, "c", ARN, timeout_minutes=1) == 1
+    assert wait(ecs) == 1
     assert "Task failed to start" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        botocore_error("ConnectTimeoutError"),
+        botocore_error("ReadTimeoutError"),
+        botocore_error("EndpointConnectionError"),
+        ConnectionResetError("reset"),
+        TimeoutError("timeout"),
+    ],
+)
+def test_a_network_failure_while_waiting_is_retried_and_the_task_result_still_arrives(error, capsys):
+    ecs = FakeEcs(exit_code=0, script=[RUNNING, error, error, RUNNING])
+    assert wait(ecs) == 0
+    assert ecs.described == 5
+    assert capsys.readouterr().err.count("tentando de novo") == 2
+
+
+def test_throttling_is_retried():
+    throttled = Exception("Rate exceeded")
+    throttled.response = {"Error": {"Code": "ThrottlingException"}}
+    assert wait(FakeEcs(exit_code=2, script=[throttled])) == 2
+
+
+def test_an_error_that_is_not_transient_is_not_hidden():
+    denied = Exception("AccessDenied")
+    denied.response = {"Error": {"Code": "AccessDeniedException"}}
+    with pytest.raises(Exception, match="AccessDenied"):
+        wait(FakeEcs(script=[denied]))
+    with pytest.raises(KeyError):
+        wait(FakeEcs(script=[KeyError("tasks")]))
+
+
+def test_the_wait_gives_up_after_too_many_failures_in_a_row_and_says_the_task_may_still_run():
+    ecs = FakeEcs(script=[botocore_error("ConnectTimeoutError")] * 50)
+    with pytest.raises(run_task.LaunchError, match="pode continuar rodando"):
+        wait(ecs)
+    assert ecs.described == run_task.MAX_CONSECUTIVE_FAILURES + 1
+
+
+def test_a_success_between_failures_restarts_the_count():
+    flaky = botocore_error("ConnectTimeoutError")
+    script = ([flaky] * run_task.MAX_CONSECUTIVE_FAILURES + [RUNNING]) * 2
+    assert wait(FakeEcs(exit_code=0, script=script), timeout_minutes=600) == 0
+
+
+def test_a_task_the_ecs_no_longer_knows_is_an_error_after_the_retries():
+    ecs = FakeEcs(script=[{"tasks": [], "failures": [{"reason": "MISSING"}]}] * 50)
+    with pytest.raises(run_task.LaunchError, match="nao devolveu a tarefa"):
+        wait(ecs)
+
+
+def test_the_wait_ends_with_an_error_when_the_task_outlives_the_wait_limit():
+    ecs = FakeEcs(script=[RUNNING] * 1000)
+    with pytest.raises(run_task.LaunchError, match="depois de 2 minutos"):
+        wait(ecs, timeout_minutes=2)
 
 
 def test_main_starts_the_task_and_returns_without_waiting(capsys):
@@ -142,7 +236,7 @@ def test_main_starts_the_task_and_returns_without_waiting(capsys):
     assert run_task.main([*ARGS, "--month", "2026-10"], client=ecs) == 0
     out = capsys.readouterr().out
     assert "Tarefa iniciada (pipeline de 2026-10): abc123" in out
-    assert ecs.waiter.kwargs == {}  # nao esperou
+    assert ecs.described == 0  # nao esperou
     call = ecs.started[0]
     assert call["cluster"] == "cnpj-pipeline" and call["taskDefinition"] == "cnpj-pipeline:3"
     assert call["networkConfiguration"]["awsvpcConfiguration"]["subnets"] == ["subnet-a", "subnet-b"]
@@ -155,10 +249,13 @@ def test_main_with_wait_returns_the_exit_code_of_the_pipeline(capsys):
     assert run_task.main([*ARGS, "--month", "2026-10", "--wait"], client=FakeEcs(exit_code=0)) == 0
 
 
-def test_main_waits_for_the_time_limit_asked_plus_a_margin():
-    ecs = FakeEcs()
-    run_task.main([*ARGS, "--month", "2026-10", "--wait", "--timeout-minutes", "50"], client=ecs)
-    assert ecs.waiter.kwargs["WaiterConfig"]["MaxAttempts"] == (60 * 60) // 30
+def test_main_with_wait_ends_with_code_three_and_the_command_to_check_the_task(monkeypatch, capsys):
+    monkeypatch.setattr(run_task.time, "sleep", lambda seconds: None)
+    ecs = FakeEcs(script=[botocore_error("ConnectTimeoutError")] * 50)
+    assert run_task.main([*ARGS, "--month", "2026-10", "--wait"], client=ecs) == 3
+    err = capsys.readouterr().err
+    assert "pode continuar rodando" in err
+    assert "aws ecs describe-tasks --cluster cnpj-pipeline --tasks abc123" in err
 
 
 def test_main_runs_the_access_test_instead_of_the_pipeline(capsys):

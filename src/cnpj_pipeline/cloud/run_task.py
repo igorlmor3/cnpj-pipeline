@@ -16,7 +16,8 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from collections.abc import Sequence
+import time
+from collections.abc import Callable, Sequence
 from typing import Any
 
 from cnpj_pipeline.cloud import common
@@ -25,6 +26,20 @@ from cnpj_pipeline.orchestration import MONTH_PATTERN
 
 CONTAINER_NAME = "pipeline"
 WAIT_DELAY_SECONDS = 30
+# Consultas seguidas ao ECS que podem falhar antes de desistir de esperar (20 x 30 s = 10 minutos sem rede).
+MAX_CONSECUTIVE_FAILURES = 20
+# Erros do botocore que indicam rede ou limite de requisicoes, e nao um pedido errado.
+TRANSIENT_BOTOCORE_ERRORS = frozenset(
+    {
+        "ConnectTimeoutError",
+        "ReadTimeoutError",
+        "EndpointConnectionError",
+        "ConnectionClosedError",
+        "ProxyConnectionError",
+        "SSLError",
+    }
+)
+THROTTLING_CODES = frozenset({"ThrottlingException", "RequestLimitExceeded", "ServiceUnavailableException"})
 
 
 class LaunchError(RuntimeError):
@@ -88,15 +103,61 @@ def start(
     return str(tasks[0]["taskArn"])
 
 
-def wait_for_exit(client: Any, cluster: str, task_arn: str, *, timeout_minutes: int) -> int:
-    """Espera a tarefa parar e devolve o codigo de saida do contêiner (1 se nao houver)."""
-    waiter = client.get_waiter("tasks_stopped")
-    attempts = max(1, (timeout_minutes * 60) // WAIT_DELAY_SECONDS)
-    waiter.wait(
-        cluster=cluster, tasks=[task_arn], WaiterConfig={"Delay": WAIT_DELAY_SECONDS, "MaxAttempts": attempts}
-    )
-    described = client.describe_tasks(cluster=cluster, tasks=[task_arn])
-    task = (described.get("tasks") or [{}])[0]
+def is_transient(error: BaseException) -> bool:
+    """Falha que passa sozinha (rede fora do ar, limite de requisicoes), sem importar o botocore."""
+    if isinstance(error, (ConnectionError, TimeoutError)):
+        return True
+    if type(error).__module__.startswith("botocore") and type(error).__name__ in TRANSIENT_BOTOCORE_ERRORS:
+        return True
+    response = getattr(error, "response", None)
+    code = response.get("Error", {}).get("Code") if isinstance(response, dict) else None
+    return code in THROTTLING_CODES
+
+
+def wait_for_exit(
+    client: Any,
+    cluster: str,
+    task_arn: str,
+    *,
+    timeout_minutes: int,
+    sleep: Callable[[float], None] | None = None,
+    monotonic: Callable[[], float] | None = None,
+) -> int:
+    """Espera a tarefa parar e devolve o codigo de saida do contêiner (1 se nao houver).
+
+    Consulta o ECS a cada WAIT_DELAY_SECONDS. Uma consulta que falha por rede ou por limite de requisicoes
+    e repetida (a tarefa continua rodando na AWS, e uma queda de rede na maquina de quem espera nao deve
+    derrubar a espera). So depois de MAX_CONSECUTIVE_FAILURES falhas seguidas a espera termina com erro.
+    """
+    sleep = sleep or time.sleep
+    monotonic = monotonic or time.monotonic
+    deadline = monotonic() + timeout_minutes * 60
+    failures = 0
+    while True:
+        try:
+            described = client.describe_tasks(cluster=cluster, tasks=[task_arn])
+            tasks = described.get("tasks") or []
+            problem = None if tasks else "o ECS nao devolveu a tarefa"
+        except Exception as error:
+            if not is_transient(error):
+                raise
+            tasks, problem = [], f"{type(error).__name__}"
+        if problem is None:
+            failures = 0
+            task = tasks[0]
+            if task.get("lastStatus") == "STOPPED":
+                break
+            if monotonic() >= deadline:
+                raise LaunchError(f"a tarefa seguia rodando depois de {timeout_minutes} minutos de espera")
+        else:
+            failures += 1
+            if failures > MAX_CONSECUTIVE_FAILURES:
+                raise LaunchError(
+                    f"sem resposta do ECS depois de {failures} consultas seguidas ({problem}); "
+                    "a tarefa pode continuar rodando na AWS"
+                )
+            print(f"Aviso: consulta ao ECS falhou ({problem}); tentando de novo", file=sys.stderr)
+        sleep(WAIT_DELAY_SECONDS)
     containers = task.get("containers") or []
     code = containers[0].get("exitCode") if containers else None
     if code is None:
@@ -183,7 +244,16 @@ def main(argv: Sequence[str] | None = None, *, client: Any | None = None) -> int
     if not args.wait:
         return 0
     wait_minutes = args.timeout_minutes or 400
-    code = wait_for_exit(ecs, args.cluster, arn, timeout_minutes=wait_minutes + 10)
+    try:
+        code = wait_for_exit(ecs, args.cluster, arn, timeout_minutes=wait_minutes + 10)
+    except LaunchError as error:
+        print(f"ERRO: {error}", file=sys.stderr)
+        print(
+            f"Veja o estado da tarefa com: aws ecs describe-tasks --cluster {args.cluster} "
+            f"--tasks {task_id} --profile <perfil>",
+            file=sys.stderr,
+        )
+        return 3
     print("Tarefa concluida com sucesso" if code == 0 else f"Tarefa terminou com codigo {code}")
     return code
 
