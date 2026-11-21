@@ -14,11 +14,22 @@ import os
 import sys
 import time
 from collections.abc import Callable, Sequence
+from pathlib import Path
 from typing import Any
 
-from cnpj_pipeline.cloud import common
-from cnpj_pipeline.cloud.run_task import MAX_CONSECUTIVE_FAILURES, WAIT_DELAY_SECONDS, is_transient
-from cnpj_pipeline.orchestration import MONTH_PATTERN
+# Rodando do repositorio sem o pacote instalado (python experiments/glue_spark/...), usa o src/ do projeto.
+# Na Glue o arquivo fica fora do repositorio e essa pasta nao existe.
+_SRC = Path(__file__).resolve().parents[2] / "src" if len(Path(__file__).resolve().parents) > 2 else None
+if _SRC is not None and (_SRC / "cnpj_pipeline").is_dir() and str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
+
+from cnpj_pipeline.cloud import common  # noqa: E402
+from cnpj_pipeline.cloud.run_task import (  # noqa: E402
+    MAX_CONSECUTIVE_FAILURES,
+    WAIT_DELAY_SECONDS,
+    is_transient,
+)
+from cnpj_pipeline.orchestration import MONTH_PATTERN  # noqa: E402
 
 JOB_ENV = "CNPJ_GLUE_JOB"
 DEFAULT_JOB = "cnpj-gold-spark"

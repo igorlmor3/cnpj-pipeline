@@ -25,7 +25,14 @@ import sys
 import time
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
+
+# Rodando do repositorio sem o pacote instalado (python experiments/glue_spark/...), usa o src/ do projeto.
+# Na Glue o arquivo fica fora do repositorio e essa pasta nao existe.
+_SRC = Path(__file__).resolve().parents[2] / "src" if len(Path(__file__).resolve().parents) > 2 else None
+if _SRC is not None and (_SRC / "cnpj_pipeline").is_dir() and str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
 
 try:
     from cnpj_pipeline import gold_models as gm
