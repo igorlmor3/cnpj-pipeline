@@ -1,9 +1,9 @@
 {
   "suite": "reservado",
   "audience": "all",
-  "generated_on": "2026-11-18",
-  "corpus": "57e545317916",
-  "chunks": 407,
+  "generated_on": "2026-11-19",
+  "corpus": "a515c441a969",
+  "chunks": 410,
   "summary": {
     "cases": 24,
     "answerable": 24,
@@ -80,7 +80,7 @@
       "top": [
         "docs/architecture.md, seção Arquitetura e decisões > Decisões em aberto",
         "docs/architecture.md, seção Arquitetura e decisões > Camadas",
-        "docs/architecture.md, seção Arquitetura e decisões > Decisões em aberto"
+        "orchestration/README.md, seção Orquestração com Airflow > Decisões"
       ],
       "leaked": 0
     },
@@ -94,7 +94,7 @@
       "top": [
         "README.md, seção cnpj-pipeline > Resultados medidos > Agente de texto para SQL",
         "README.md, seção cnpj-pipeline > Qualidade de dados",
-        "README.md, seção cnpj-pipeline > Roadmap"
+        "README.md, seção cnpj-pipeline > Camada bronze"
       ],
       "leaked": 0
     },
@@ -206,7 +206,7 @@
       "top": [
         "infra/README.md, seção Infraestrutura na AWS (nível 1) > API pública do agente > Observabilidade da API",
         "infra/README.md, seção Infraestrutura na AWS (nível 1)",
-        "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Busca na documentação"
+        "docs/architecture.md, seção Arquitetura e decisões > Decisões de plataforma e de produto"
       ],
       "leaked": 0
     },
@@ -233,8 +233,8 @@
       "rank": 1,
       "top": [
         "infra/README.md, seção Infraestrutura na AWS (nível 1) > O que é criado",
-        "docs/architecture.md, seção Arquitetura e decisões > Decisões de plataforma e de produto",
-        "README.md, seção cnpj-pipeline > Resultados medidos > Publicação da gold na AWS"
+        "README.md, seção cnpj-pipeline > Resultados medidos > Publicação da gold na AWS",
+        "docs/architecture.md, seção Arquitetura e decisões > Decisões de plataforma e de produto"
       ],
       "leaked": 0
     },
@@ -246,8 +246,8 @@
       "relevant_chunks": 1,
       "rank": 3,
       "top": [
-        "docs/quality/2026-10.md, seção Qualidade de dados e tempos (2026-10)",
         "orchestration/README.md, seção Orquestração com Airflow",
+        "docs/quality/2026-10.md, seção Qualidade de dados e tempos (2026-10)",
         "orchestration/README.md, seção Orquestração com Airflow > Decisões"
       ],
       "leaked": 0
@@ -386,8 +386,8 @@
       "relevant_chunks": 1,
       "rank": 3,
       "top": [
-        "docs/architecture.md, seção Arquitetura e decisões > Decisões em aberto",
         "README.md, seção cnpj-pipeline > Arquitetura planejada",
+        "docs/architecture.md, seção Arquitetura e decisões > Decisões em aberto",
         "docs/architecture.md, seção Arquitetura e decisões > Decisões em aberto"
       ],
       "leaked": 0

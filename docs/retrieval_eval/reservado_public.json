@@ -1,9 +1,9 @@
 {
   "suite": "reservado",
   "audience": "public",
-  "generated_on": "2026-11-18",
-  "corpus": "57e545317916",
-  "chunks": 407,
+  "generated_on": "2026-11-19",
+  "corpus": "a515c441a969",
+  "chunks": 410,
   "summary": {
     "cases": 24,
     "answerable": 20,
@@ -98,8 +98,8 @@
       "rank": null,
       "top": [
         "README.md, seção cnpj-pipeline > Resultados medidos > Agente de texto para SQL",
-        "README.md, seção cnpj-pipeline > Roadmap",
-        "README.md, seção cnpj-pipeline > Qualidade de dados"
+        "README.md, seção cnpj-pipeline > Qualidade de dados",
+        "site/README.md, seção Site > Dados e configuração"
       ],
       "leaked": 0
     },
@@ -237,8 +237,8 @@
       "relevant_chunks": 0,
       "rank": null,
       "top": [
-        "docs/architecture.md, seção Arquitetura e decisões > Decisões de plataforma e de produto",
         "README.md, seção cnpj-pipeline > Resultados medidos > Publicação da gold na AWS",
+        "docs/architecture.md, seção Arquitetura e decisões > Decisões de plataforma e de produto",
         "README.md, seção cnpj-pipeline > Resultados medidos > Publicação da gold na AWS"
       ],
       "leaked": 0

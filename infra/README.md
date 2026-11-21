@@ -183,7 +183,7 @@ Com `api_alarm_email` preenchido em `terraform.tfvars`, um tópico SNS envia os 
 
 ## Nível 2: o pipeline no ECS Fargate
 
-Estado: o código da tarefa e do disparador tem testes com clientes simulados, e a imagem e o módulo Terraform (`modules/ecs/`) passaram na checagem de formatação e de sintaxe. O módulo ainda não foi aplicado em uma conta, e a tarefa ainda não rodou na AWS.
+Estado: aplicado em uma conta real (11 recursos). A imagem foi enviada ao ECR, o teste de acesso à Receita a partir da AWS passou (HTTP 206 e arquivo zip) e o mês 2026-10 foi processado de ponta a ponta na tarefa, em 2 h 23 min. A gold publicada tem as mesmas 73.809.379 linhas no fato e as 56 UFs no mart `gold_mart_simples_mei_uf` da execução local, conferidas no Athena.
 
 O nível 2 roda o mesmo pipeline (download, bronze, silver, gold, qualidade, publicação e tabelas no Athena) em uma tarefa do ECS Fargate. No lugar de chaves de acesso, a tarefa usa as credenciais temporárias do papel IAM dela. As camadas ficam no disco de trabalho da tarefa e só a gold é publicada no S3, como no nível 1. A exportação para o site é pulada (`--skip-site`), porque a pasta do site some com o container.
 
@@ -243,9 +243,34 @@ O dimensionamento vem do que foi medido no mês real: o DuckDB trabalhou dentro 
 
    Com `--wait`, o comando devolve o código de saída da tarefa (0 se tudo passou). `--force` refaz as camadas que já existem, e `--timeout-minutes` muda o limite desta execução.
 
+   A espera consulta o ECS a cada 30 segundos. Se uma consulta falhar por queda de rede ou por limite de requisições, ela é repetida (até 20 falhas seguidas, cerca de 10 minutos); passado isso, o comando sai com o código 3 e mostra o `aws ecs describe-tasks` para ver a tarefa, que continua rodando na AWS. O ECS deixa de listar uma tarefa parada depois de um tempo (a consulta feita 13 horas depois da execução de 2026-10 não a encontrou), então o código de saída e a duração de uma execução antiga ficam só nos logs, no resumo que a tarefa imprime ao final:
+
+   ```powershell
+   aws logs tail /ecs/cnpj-pipeline --since 16h --profile cnpj-admin | Select-String -Pattern "Resumo \(mes" -Context 0,12
+   ```
+
+### Execução medida: 2026-10
+
+Tarefa com 4 vCPUs, 16 GiB e 120 GiB de disco, iniciada às 15:51 (horário de Brasília). O resumo abaixo é o que a própria tarefa imprimiu ao final.
+
+| Etapa | Tempo |
+| --- | ---: |
+| Download (7,3 GiB, 37 arquivos) | 1 h 20 min |
+| Bronze | 8 min 25 s |
+| Silver | 44 min 09 s |
+| Gold | 5 min 53 s |
+| Qualidade | 3 min 16 s |
+| Publicação no S3 (14 arquivos, 1.586 MB) | 10,3 s |
+| Tabelas no Athena | 15,4 s |
+| **Total** | **2 h 23 min** |
+
+- O download é 56% do tempo e andou a cerca de 1,5 MiB/s, limitado pelo servidor da Receita, que entrega perto de 1 MiB/s por arquivo. A tarefa baixa dois arquivos ao mesmo tempo.
+- A silver levou cerca de 1,5 vez o tempo medido no computador de 12 CPUs lógicas (cerca de 30 min, na tabela de tempos das camadas), o que é coerente com as 4 vCPUs da tarefa. A gold levou menos que nas execuções locais, mas os tempos locais variaram de 694 s a 1.308 s com a carga do computador, então a comparação serve só como ordem de grandeza.
+- Os dados de 2026-10 já estavam no S3 e a execução os publicou de novo (14 arquivos enviados, nenhum pulado). O fato tem as mesmas 73.809.379 linhas da execução local.
+
 ### Custo e limites
 
-- Preço de lista no us-east-1 (Linux x86, [página de preços do Fargate](https://aws.amazon.com/fargate/pricing/)): US$ 0,04048 por vCPU-hora, US$ 0,004445 por GB-hora e US$ 0,000111 por GB-hora de disco acima de 20 GiB, mais o IPv4 público (US$ 0,005 por hora). A tarefa de 4 vCPUs, 16 GiB e 120 GiB custa cerca de US$ 0,25 por hora, cobrados por segundo, e o limite de 300 minutos põe um teto de cerca de US$ 1,25 por execução.
+- Preço de lista no us-east-1 (Linux x86, [página de preços do Fargate](https://aws.amazon.com/fargate/pricing/)): US$ 0,04048 por vCPU-hora, US$ 0,004445 por GB-hora e US$ 0,000111 por GB-hora de disco acima de 20 GiB, mais o IPv4 público (US$ 0,005 por hora). A tarefa de 4 vCPUs, 16 GiB e 120 GiB custa cerca de US$ 0,25 por hora, cobrados por segundo, e o limite de 300 minutos põe um teto de cerca de US$ 1,25 por execução. A execução de 2026-10, de 2 h 23 min, custa cerca de US$ 0,60 por esse preço de lista; o valor é calculado, não tirado da fatura.
 - O ECS não limita a duração de uma tarefa. O limite de tempo é aplicado pela própria tarefa (`CNPJ_TASK_TIMEOUT_MINUTES`): passado o prazo, ela encerra a execução com o código 124 e o Fargate para de cobrar.
 - Antes de começar, a tarefa confere o espaço livre no disco (`CNPJ_MIN_FREE_GIB`, padrão 60 GiB) e recusa a execução se não houver.
 - Um mês por tarefa: as camadas de um mês somam cerca de 47 GiB, e a tarefa não apaga um mês para processar o seguinte.

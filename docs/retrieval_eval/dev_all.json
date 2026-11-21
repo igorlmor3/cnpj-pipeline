@@ -1,9 +1,9 @@
 {
   "suite": "dev",
   "audience": "all",
-  "generated_on": "2026-11-18",
-  "corpus": "57e545317916",
-  "chunks": 407,
+  "generated_on": "2026-11-19",
+  "corpus": "a515c441a969",
+  "chunks": 410,
   "summary": {
     "cases": 24,
     "answerable": 24,
@@ -132,11 +132,11 @@
       "question": "A gold tem nomes, endereços ou telefones?",
       "answerable": true,
       "relevant_chunks": 1,
-      "rank": 2,
+      "rank": 3,
       "top": [
         "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Decisões",
-        "docs/architecture.md, seção Arquitetura e decisões > Camadas",
-        "README.md, seção cnpj-pipeline > Camada gold"
+        "README.md, seção cnpj-pipeline > Camada gold",
+        "docs/architecture.md, seção Arquitetura e decisões > Camadas"
       ],
       "leaked": 0
     },
@@ -146,11 +146,11 @@
       "question": "Por que o site não publica recortes com poucas ocorrências?",
       "answerable": true,
       "relevant_chunks": 1,
-      "rank": 3,
+      "rank": 2,
       "top": [
-        "README.md, seção cnpj-pipeline > Roadmap",
         "site/README.md, seção Site",
-        "docs/site_data.md, seção Dados do site > O que é seguro publicar, e por quê"
+        "docs/site_data.md, seção Dados do site > O que é seguro publicar, e por quê",
+        "README.md, seção cnpj-pipeline > Roadmap"
       ],
       "leaked": 0
     },
@@ -219,8 +219,8 @@
       "rank": null,
       "top": [
         "README.md, seção cnpj-pipeline > Resultados medidos > Camada gold",
-        "README.md, seção cnpj-pipeline > Resultados medidos",
-        "README.md, seção cnpj-pipeline > Camada silver"
+        "infra/README.md, seção Infraestrutura na AWS (nível 1) > Nível 2: o pipeline no ECS Fargate > Execução medida: 2026-10",
+        "README.md, seção cnpj-pipeline > Resultados medidos"
       ],
       "leaked": 0
     },
@@ -304,7 +304,7 @@
       "top": [
         "docs/agent_design.md, seção Agente de perguntas sobre a gold (texto para SQL) > Decisões",
         "docs/site_data.md, seção Dados do site > O que é seguro publicar, e por quê",
-        "README.md, seção cnpj-pipeline > Resultados medidos > Camada gold"
+        "README.md, seção cnpj-pipeline > Resultados medidos > Publicação da gold na AWS"
       ],
       "leaked": 0
     },

@@ -1,6 +1,6 @@
 # Avaliação da recuperação: conjunto dev, público all
 
-Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (407 trechos; versão do corpus `57e545317916`). Sem modelo e sem custo.
+Gerado em 2026-11-19. Busca BM25 sobre a documentação do repositório (410 trechos; versão do corpus `a515c441a969`). Sem modelo e sem custo.
 
 ## Resumo
 
@@ -49,8 +49,8 @@ Gerado em 2026-11-18. Busca BM25 sobre a documentação do repositório (407 tre
 **d_tempo_silver** (fora dos 5 primeiros): Quanto tempo levou a camada silver de Estabelecimentos?
 
 - README.md, seção cnpj-pipeline > Resultados medidos > Camada gold
+- infra/README.md, seção Infraestrutura na AWS (nível 1) > Nível 2: o pipeline no ECS Fargate > Execução medida: 2026-10
 - README.md, seção cnpj-pipeline > Resultados medidos
-- README.md, seção cnpj-pipeline > Camada silver
 
 **d_guarda_recusa** (fora dos 5 primeiros): O que a guarda de SQL recusa?
 
